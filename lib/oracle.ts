@@ -35,10 +35,12 @@ export const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2n;
 export const DEFAULT_REPORT_FIELDS: OracleReport = {
   consensusVersion: 1n,
   refSlot: 0n,
-  numValidators: 0n,
-  clBalanceGwei: 0n,
+  clValidatorsBalanceGwei: 0n,
+  clPendingBalanceGwei: 0n,
   stakingModuleIdsWithNewlyExitedValidators: [],
   numExitedValidatorsByStakingModule: [],
+  stakingModuleIdsWithUpdatedBalance: [],
+  validatorBalancesGweiByStakingModule: [],
   withdrawalVaultBalance: 0n,
   elRewardsVaultBalance: 0n,
   sharesRequestedToBurn: 0n,
@@ -56,10 +58,12 @@ export function getReportDataItems(r: OracleReport) {
   return [
     r.consensusVersion,
     r.refSlot,
-    r.numValidators,
-    r.clBalanceGwei,
+    r.clValidatorsBalanceGwei,
+    r.clPendingBalanceGwei,
     r.stakingModuleIdsWithNewlyExitedValidators,
     r.numExitedValidatorsByStakingModule,
+    r.stakingModuleIdsWithUpdatedBalance,
+    r.validatorBalancesGweiByStakingModule,
     r.withdrawalVaultBalance,
     r.elRewardsVaultBalance,
     r.sharesRequestedToBurn,
@@ -77,7 +81,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, bytes32, string, uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, bytes32, string, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );

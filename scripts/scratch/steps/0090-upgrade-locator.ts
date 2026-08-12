@@ -29,6 +29,7 @@ export async function main() {
     withdrawalVault: getAddress(Sk.withdrawalVault, state),
     validatorExitDelayVerifier: getAddress(Sk.validatorExitDelayVerifier, state),
     triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
+    consolidationGateway: getAddress(Sk.consolidationGateway, state),
     oracleDaemonConfig: getAddress(Sk.oracleDaemonConfig, state),
     accounting: getAddress(Sk.accounting, state),
     predepositGuarantee: getAddress(Sk.predepositGuarantee, state),
@@ -37,7 +38,7 @@ export async function main() {
     vaultFactory: getAddress(Sk.stakingVaultFactory, state),
     lazyOracle: getAddress(Sk.lazyOracle, state),
     operatorGrid: getAddress(Sk.operatorGrid, state),
+    topUpGateway: getAddress(Sk.topUpGateway, state),
   };
-
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locatorAddress, proxyContractsOwner, [locatorConfig]);
 }

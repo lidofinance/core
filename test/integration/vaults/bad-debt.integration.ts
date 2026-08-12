@@ -11,9 +11,9 @@ import {
   getProtocolContext,
   getReportTimeElapsed,
   ProtocolContext,
-  report,
   reportVaultDataWithProof,
   reportVaultsDataWithProof,
+  reportWithoutClActivation,
   resetDefaultTierShareLimit,
   setupLidoForVaults,
   upDefaultTierShareLimit,
@@ -502,7 +502,7 @@ describe("Integration: Vault with bad debt", () => {
       await waitNextAvailableReportTime(ctx);
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares);
 
-      const { reportTx } = await report(ctx, { waitNextReportTime: false });
+      const { reportTx } = await reportWithoutClActivation(ctx, { waitNextReportTime: false });
       await expect(reportTx)
         .to.emit(lido, "ExternalBadDebtInternalized")
         .withArgs(badDebtShares)
@@ -537,7 +537,7 @@ describe("Integration: Vault with bad debt", () => {
       await waitNextAvailableReportTime(ctx);
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(partialAmount);
 
-      const { reportTx } = await report(ctx, { waitNextReportTime: false });
+      const { reportTx } = await reportWithoutClActivation(ctx, { waitNextReportTime: false });
       await expect(reportTx)
         .to.emit(lido, "ExternalBadDebtInternalized")
         .withArgs(partialAmount)
@@ -563,7 +563,7 @@ describe("Integration: Vault with bad debt", () => {
       const externalSharesBefore = await lido.getExternalShares();
 
       // Trigger oracle report
-      const { reportTx } = await report(ctx, { waitNextReportTime: false });
+      const { reportTx } = await reportWithoutClActivation(ctx, { waitNextReportTime: false });
 
       await expect(reportTx)
         .to.emit(lido, "ExternalBadDebtInternalized")
@@ -665,7 +665,7 @@ describe("Integration: Vault with bad debt", () => {
       // Check accumulated amount
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(amountA + amountB, "Amounts accumulated");
 
-      const { reportTx } = await report(ctx, { waitNextReportTime: false });
+      const { reportTx } = await reportWithoutClActivation(ctx, { waitNextReportTime: false });
       await expect(reportTx)
         .to.emit(lido, "ExternalBadDebtInternalized")
         .withArgs(amountA + amountB)
@@ -707,11 +707,12 @@ describe("Integration: Vault with bad debt", () => {
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares, "Bad debt to internalize is the same");
 
       // simulate the report at the refSlot (like the Oracle would do)
-      const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const simulationAtRefSlot = await simulateReport(ctx, {
         refSlot: nextRefSlot,
-        beaconValidators,
-        clBalance: beaconBalance,
+        clValidatorsBalance: clBalance,
+        clPendingBalance: 0n,
         withdrawalVaultBalance: 0n,
         elRewardsVaultBalance: 0n,
       });
@@ -723,8 +724,8 @@ describe("Integration: Vault with bad debt", () => {
       expect(
         await simulateReport(ctx, {
           refSlot: (await hashConsensus.getCurrentFrame()).refSlot,
-          beaconValidators,
-          clBalance: beaconBalance,
+          clValidatorsBalance: clBalance,
+          clPendingBalance: 0n,
           withdrawalVaultBalance: 0n,
           elRewardsVaultBalance: 0n,
         }),

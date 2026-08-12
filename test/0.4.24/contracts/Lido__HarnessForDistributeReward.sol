@@ -13,8 +13,8 @@ contract Lido__HarnessForDistributeReward is Lido {
     uint256 internal constant UNLIMITED_TOKEN_REBASE = uint256(-1);
     uint256 private totalPooledEther;
 
-    function initialize(address _lidoLocator, address _eip712StETH) public payable {
-        super.initialize(_lidoLocator, _eip712StETH);
+    function initialize(address _lidoLocator, address _eip712StETH, uint256 _depositsReserveTarget) public payable {
+        super.initialize(_lidoLocator, _eip712StETH, _depositsReserveTarget);
 
         _resume();
     }

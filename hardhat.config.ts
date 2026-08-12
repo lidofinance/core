@@ -22,6 +22,7 @@ import "./tasks";
 import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
 
 const RPC_URL: string = process.env.RPC_URL || "";
+const HARDHAT_CHAIN_ID = process.env.HARDHAT_CHAIN_ID ? parseInt(process.env.HARDHAT_CHAIN_ID, 10) : undefined;
 
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -42,7 +43,7 @@ const config: HardhatUserConfig = {
       // 31337), and `hardhat node` has no --chainId flag. Set HARDHAT_CHAIN_ID
       // to the source chain's id (e.g. 11155111 for Sepolia) so chainId-keyed
       // deploy branches behave as on the real network. Leave unset for 31337.
-      chainId: process.env.HARDHAT_CHAIN_ID ? Number(process.env.HARDHAT_CHAIN_ID) : 31337,
+      ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
       blockGasLimit: 30000000,
       allowUnlimitedContractSize: true,
       accounts: {
@@ -53,6 +54,13 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
       hardfork: "prague",
+      chains: {
+        32382: {
+          hardforkHistory: {
+            prague: 0,
+          },
+        },
+      },
       mining: {
         mempool: {
           order: "fifo",
@@ -66,11 +74,13 @@ const config: HardhatUserConfig = {
     // local nodes
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
-      timeout: 120_000,
+      timeout: 20 * 60 * 1000, // 20 minutes
     },
     "local-devnet": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
+      chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID || "32382", 10),
     },
     // testnets — long RPC timeout to survive occasional Infura/Alchemy
     // headers stalls during long scratch deploys.
@@ -156,7 +166,9 @@ const config: HardhatUserConfig = {
         },
       },
     ],
-    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL ? "local-devnet" : process.env.ETHERSCAN_API_KEY || "",
+    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL
+      ? { "local-devnet": "local-devnet" }
+      : process.env.ETHERSCAN_API_KEY || "",
   },
   solidity: {
     compilers: [

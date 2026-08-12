@@ -6,3 +6,4 @@ import "./compile";
 import "./check-interfaces";
 import "./validate-configs";
 import "./lint-solidity";
+import "./protocol-get-addresses";

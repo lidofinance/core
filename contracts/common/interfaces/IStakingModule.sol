@@ -75,11 +75,10 @@ interface IStakingModule {
     ///     official Deposit Contract. This value is a cumulative counter: even when the validator
     ///     goes into EXITED state this counter is not decreasing
     /// @return depositableValidatorsCount number of validators in the set available for deposit
-    function getStakingModuleSummary() external view returns (
-        uint256 totalExitedValidators,
-        uint256 totalDepositedValidators,
-        uint256 depositableValidatorsCount
-    );
+    function getStakingModuleSummary()
+        external
+        view
+        returns (uint256 totalExitedValidators, uint256 totalDepositedValidators, uint256 depositableValidatorsCount);
 
     /// @notice Returns all-validators summary belonging to the node operator with the given id
     /// @param _nodeOperatorId id of the operator to return report for
@@ -96,16 +95,21 @@ interface IStakingModule {
     ///     Deposit Contract. This value is a cumulative counter: even when the validator goes into
     ///     EXITED state this counter is not decreasing
     /// @return depositableValidatorsCount number of validators in the set available for deposit
-    function getNodeOperatorSummary(uint256 _nodeOperatorId) external view returns (
-        uint256 targetLimitMode,
-        uint256 targetValidatorsCount,
-        uint256 stuckValidatorsCount,
-        uint256 refundedValidatorsCount,
-        uint256 stuckPenaltyEndTimestamp,
-        uint256 totalExitedValidators,
-        uint256 totalDepositedValidators,
-        uint256 depositableValidatorsCount
-    );
+    function getNodeOperatorSummary(
+        uint256 _nodeOperatorId
+    )
+        external
+        view
+        returns (
+            uint256 targetLimitMode,
+            uint256 targetValidatorsCount,
+            uint256 stuckValidatorsCount,
+            uint256 refundedValidatorsCount,
+            uint256 stuckPenaltyEndTimestamp,
+            uint256 totalExitedValidators,
+            uint256 totalDepositedValidators,
+            uint256 depositableValidatorsCount
+        );
 
     /// @notice Returns a counter that MUST change its value whenever the deposit data set changes.
     ///     Below is the typical list of actions that requires an update of the nonce:
@@ -134,11 +138,10 @@ interface IStakingModule {
     ///     the returned ids is not defined and might change between calls.
     /// @dev This view must not revert in case of invalid data passed. When `_offset` exceeds the
     ///     total node operators count or when `_limit` is equal to 0 MUST be returned empty array.
-    function getNodeOperatorIds(uint256 _offset, uint256 _limit)
-        external
-        view
-        returns (uint256[] memory nodeOperatorIds);
-
+    function getNodeOperatorIds(
+        uint256 _offset,
+        uint256 _limit
+    ) external view returns (uint256[] memory nodeOperatorIds);
 
     /// @notice Called by StakingRouter to signal that stETH rewards were minted for this module.
     /// @param _totalShares Amount of stETH shares that were minted to reward all node operators.
@@ -176,10 +179,7 @@ interface IStakingModule {
     ///      'unsafely' means that this method can both increase and decrease exited and stuck counters
     /// @param _nodeOperatorId Id of the node operator
     /// @param _exitedValidatorsCount New number of EXITED validators for the node operator
-    function unsafeUpdateValidatorsCount(
-        uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount
-    ) external;
+    function unsafeUpdateValidatorsCount(uint256 _nodeOperatorId, uint256 _exitedValidatorsCount) external;
 
     /// @notice Obtains deposit data to be used by StakingRouter to deposit to the Ethereum Deposit
     ///     contract
@@ -189,9 +189,10 @@ interface IStakingModule {
     ///        IMPORTANT: _depositCalldata MUST NOT modify the deposit data set of the staking module
     /// @return publicKeys Batch of the concatenated public validators keys
     /// @return signatures Batch of the concatenated deposit signatures for returned public keys
-    function obtainDepositData(uint256 _depositsCount, bytes calldata _depositCalldata)
-        external
-        returns (bytes memory publicKeys, bytes memory signatures);
+    function obtainDepositData(
+        uint256 _depositsCount,
+        bytes calldata _depositCalldata
+    ) external returns (bytes memory publicKeys, bytes memory signatures);
 
     /// @notice Called by StakingRouter after it finishes updating exited and stuck validators
     /// counts for this module's node operators.

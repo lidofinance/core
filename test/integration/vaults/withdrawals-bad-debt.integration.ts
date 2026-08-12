@@ -12,7 +12,7 @@ import {
   ProtocolContext,
   queueBadDebtInternalization,
   removeStakingLimit,
-  report,
+  reportWithoutClActivation,
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
@@ -29,6 +29,7 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  const DEPOSITS_RESERVE_TARGET = ether("100");
 
   // Helper to capture protocol state
   const captureState = async () => {
@@ -41,6 +42,11 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     const internalEther = totalPooledEther - externalEther;
     const internalShares = totalShares - externalShares;
     const unfinalizedSTETH = await withdrawalQueue.unfinalizedStETH();
+    const depositsReserveTarget = await lido.getDepositsReserveTarget();
+    const depositsReserve = await lido.getDepositsReserve();
+    const withdrawalsReserve = await lido.getWithdrawalsReserve();
+    const bufferedEther = await lido.getBufferedEther();
+    const depositableEther = await lido.getDepositableEther();
     const unfinalizedRequestNumber = await withdrawalQueue.unfinalizedRequestNumber();
     const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     const badDebtToInternalize = await vaultHub.badDebtToInternalize();
@@ -61,7 +67,12 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
       elRewardsVaultBalance,
       withdrawalVaultBalance,
       withdrawalQueueBalance,
+      depositsReserveTarget,
+      depositsReserve,
       unfinalizedSTETH,
+      withdrawalsReserve,
+      bufferedEther,
+      depositableEther,
       unfinalizedRequestNumber,
       lastFinalizedRequestId,
       shareRate: totalShares > 0n ? (totalPooledEther * SHARE_RATE_PRECISION) / totalShares : 0n,
@@ -191,12 +202,11 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     // Perform report which will finalize withdrawals.
     // reportBurner: false — pre-existing Burner balance on the fork must not bleed into
     //   the burn, otherwise totalSharesToBurn no longer matches our threshold model.
-    // excludeVaultsBalances: true — EL/withdrawal vault balances on the fork would be
-    //   added to internal ether by the rebase limiter (increaseEther) and shrink real
-    //   maxSharesToBurn below what the model predicts, breaking the threshold edge.
-    const { reportTx } = await report(ctx, {
-      clDiff: 0n,
-      excludeVaultsBalances: true,
+    // reportElVault: false — keep the report neutral to fork EL rewards, but do not
+    //   zero WithdrawalVault. The migrated checker baseline must still see the actual
+    //   WVB, otherwise sanity checks fail before this threshold scenario is exercised.
+    const { reportTx } = await reportWithoutClActivation(ctx, {
+      reportElVault: false,
       skipWithdrawals: false,
       reportBurner: false,
       waitNextReportTime: true,
@@ -213,6 +223,26 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     const finalizedEvent = events[0];
 
     const stateAfter = await captureState();
+    expect(stateAfter.depositableEther).to.equal(
+      stateAfter.bufferedEther - stateAfter.withdrawalsReserve,
+      "Depositable should equal buffered minus withdrawals reserve after report",
+    );
+    expect(stateAfter.depositsReserveTarget).to.equal(
+      DEPOSITS_RESERVE_TARGET,
+      "Deposits reserve target mismatch after report",
+    );
+    expect(stateAfter.depositsReserve).to.be.lte(
+      stateAfter.depositsReserveTarget,
+      "Deposits reserve should not exceed target after report",
+    );
+
+    const [, , amountOfETHLocked] = finalizedEvent.args;
+    const availableEthForFinalization =
+      stateBefore.withdrawalVaultBalance + stateBefore.elRewardsVaultBalance + stateBefore.withdrawalsReserve;
+    expect(amountOfETHLocked).to.be.lte(
+      availableEthForFinalization,
+      "Finalization should be bounded by vault balances plus withdrawals reserve",
+    );
 
     return { reportTx, finalizedEvent, stateBefore, stateAfter };
   };
@@ -244,6 +274,8 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
       .connect(agent)
       .grantRole(await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(), agent);
     await oracleReportSanityChecker.connect(agent).setMaxPositiveTokenRebase(maxPositiveTokenRebase);
+
+    await lido.connect(agent).setDepositsReserveTarget(DEPOSITS_RESERVE_TARGET);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));

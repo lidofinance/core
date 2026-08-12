@@ -8,24 +8,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      NODE_OPTIONS: --max_old_space_size=7200
+      NODE_OPTIONS: --max_old_space_size=10240
       SKIP_GAS_REPORT: true
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
+    services:
+      hardhat-node:
+        image: ghcr.io/lidofinance/hardhat-node:2.28.0-hoodi
+        env:
+          ETH_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
+        ports:
+          - 8565:8545
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Common setup
         uses: ./.github/workflows/setup
 
+      # https://github.com/foundry-rs/foundry-toolchain
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install just
+        run: cargo install just
+
       - name: Run integration tests
-        run: yarn test:integration
+        # Use the following command if there are not upgrade steps
+        # run: yarn test:integration
+        run: yarn test:integration:upgrade
         env:
-          RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
-          # Last block before the on-chain Lido v4 upgrade (executed at block 2722011 on 2026-04-30).
-          # This branch carries v3 contracts and the v3 deployed-hoodi.json artifact, so the fork
-          # must be pinned to the pre-upgrade state. Same approach as develop, which pins 2722012
-          # (first post-upgrade block) for its v4 contracts.
-          FORKING_BLOCK_NUMBER: "2722010"
-          NETWORK_STATE_FILE: deployed-hoodi.json
+          NETWORK: "hoodi"
+          RPC_URL: "http://localhost:8565"
+          RUN_NETWORK: "local"

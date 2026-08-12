@@ -4,12 +4,13 @@
 pragma solidity ^0.8.9;
 
 import {UnstructuredStorage} from "contracts/common/lib/UnstructuredStorage.sol";
+import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
 
 /**
  * @title PausableUntil
  * @notice allows to pause the contract for a specific duration or indefinitely
  */
-abstract contract PausableUntil {
+abstract contract PausableUntil is IPausableUntil {
     using UnstructuredStorage for bytes32;
 
     /// Contract resume/pause control storage slot

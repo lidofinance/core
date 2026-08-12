@@ -6,7 +6,13 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
-import { getProtocolContext, OracleReportParams, ProtocolContext, report } from "lib/protocol";
+import {
+  getProtocolContext,
+  OracleReportParams,
+  ProtocolContext,
+  reportWithEffectiveClDiff,
+  seedProtocolPendingBaseline,
+} from "lib/protocol";
 import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -14,7 +20,7 @@ import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;
-const MAINNET_NOR_ADDRESS = "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5".toLowerCase();
+const MAIN_REPORT_EFFECTIVE_CL_REWARD = ether("1");
 
 describe("Integration: AccountingOracle extra data", () => {
   let ctx: ProtocolContext;
@@ -32,12 +38,37 @@ describe("Integration: AccountingOracle extra data", () => {
     [stranger] = await ethers.getSigners();
     await setBalance(stranger.address, ether("1000000"));
 
-    async function getExitedCount(nodeOperatorId: bigint): Promise<bigint> {
+    async function getEligibleNodeOperators(limit: number) {
       const { nor } = ctx.contracts;
-      const nodeOperator = await nor.getNodeOperator(nodeOperatorId, false);
-      return nodeOperator.totalExitedValidators;
+      const nodeOperatorsCount = await nor.getNodeOperatorsCount();
+      const operators: { id: bigint; totalExitedValidators: bigint }[] = [];
+
+      for (let i = 0n; i < nodeOperatorsCount && operators.length < limit; i++) {
+        const nodeOperator = await nor.getNodeOperator(i, false);
+        if (nodeOperator.active && nodeOperator.totalDepositedValidators > nodeOperator.totalExitedValidators) {
+          operators.push({ id: i, totalExitedValidators: nodeOperator.totalExitedValidators });
+        }
+      }
+
+      // TODO: This assumes the live/forked NOR still has operators with deposited
+      // non-exited validators. That network-state dependency is brittle and may
+      // stop being true as this module winds down; replace with explicit fixture
+      // setup once the legacy NOR no longer reliably satisfies this predicate.
+      if (operators.length < limit) {
+        throw new Error(`Expected at least ${limit} eligible NOR operators, found ${operators.length}`);
+      }
+
+      return operators;
     }
 
+    {
+      const { lido } = ctx.contracts;
+      const reserveTarget = await lido.getDepositsReserveTarget();
+      if (reserveTarget > 0n) {
+        const agent = await ctx.getSigner("agent");
+        await lido.connect(agent).setDepositsReserveTarget(0n);
+      }
+    }
     {
       // Prepare exited keys extra data for reusing in tests
       const { oracleReportSanityChecker } = ctx.contracts;
@@ -50,23 +81,16 @@ describe("Integration: AccountingOracle extra data", () => {
       // with not that much TVL
       await advanceChainTime(15n * 24n * 60n * 60n);
 
-      let firstNodeOperatorInRange = 0;
-      // Workaround for Mainnet
-      if (ctx.contracts.nor.address.toLowerCase() === MAINNET_NOR_ADDRESS) {
-        firstNodeOperatorInRange = 20;
-      }
-
-      const numNodeOperators = Math.min(10, Number(await ctx.contracts.nor.getNodeOperatorsCount()));
       exitedKeys = {
         moduleId: Number(MODULE_ID),
         nodeOpIds: [],
         keysCounts: [],
       };
       // Add at least 2 node operators with exited validators to test chunking
-      for (let i = firstNodeOperatorInRange; i < firstNodeOperatorInRange + Math.min(2, numNodeOperators); i++) {
-        const oldNumExited = await getExitedCount(BigInt(i));
-        const numExited = oldNumExited + (i === firstNodeOperatorInRange ? NUM_NEWLY_EXITED_VALIDATORS : 1n);
-        exitedKeys.nodeOpIds.push(Number(i));
+      const nodeOperators = await getEligibleNodeOperators(2);
+      for (const [index, nodeOperator] of nodeOperators.entries()) {
+        const numExited = nodeOperator.totalExitedValidators + (index === 0 ? NUM_NEWLY_EXITED_VALIDATORS : 1n);
+        exitedKeys.nodeOpIds.push(Number(nodeOperator.id));
         exitedKeys.keysCounts.push(Number(numExited));
       }
     }
@@ -112,7 +136,21 @@ describe("Integration: AccountingOracle extra data", () => {
     // Add total exited validators for both entries
     const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
-    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData);
+    // The main report in this suite must stay reward-bearing because it drives the
+    // TransferredToModule -> ReadyForDistribution state machine. Snapshot protocol
+    // pending first so the original 1 ETH main report still reaches that phase path.
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
+
+    // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
+    // safety cap enough elapsed time after snapshotting the pending baseline.
+    await advanceChainTime(15n * 24n * 60n * 60n);
+
+    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData, {
+      // Snapshot protocol pending into the previous report first, then run the original
+      // reward-bearing main report so this suite still exercises
+      // TransferredToModule -> ReadyForDistribution.
+      effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
+    });
   }
 
   it("should accept report with multiple keys per node operator (single chunk)", async () => {
@@ -128,19 +166,18 @@ describe("Integration: AccountingOracle extra data", () => {
     expect(extraDataChunkHashes.length).to.equal(1);
 
     const reportData: Partial<OracleReportParams> = {
-      clDiff: 0n,
-      excludeVaultsBalances: true,
       extraDataFormat: EXTRA_DATA_FORMAT_LIST,
       extraDataHash: extraDataChunkHashes[0],
       extraDataItemsCount: BigInt(extraDataItemsCount),
       extraDataList: hexToBytes(extraDataChunks[0]),
       numExitedValidatorsByStakingModule: [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS + 1n], // Both operators
+      reportElVault: false,
       stakingModuleIdsWithNewlyExitedValidators: [NOR_MODULE_ID],
     };
 
     const numExitedBefore = (await nor.getStakingModuleSummary()).totalExitedValidators;
 
-    const { reportTx, extraDataTx } = await report(ctx, reportData);
+    const { reportTx, extraDataTx } = await reportWithEffectiveClDiff(ctx, 0n, reportData);
     const reportReceipt = await reportTx?.wait();
     const extraDataReceipt = await extraDataTx?.wait();
 
@@ -170,6 +207,8 @@ describe("Integration: AccountingOracle extra data", () => {
     const { accountingOracle } = ctx.contracts;
 
     const { submitter, extraDataChunks } = await submitMainReport();
+    // Make the main-report transition explicit before extra data starts changing module state further.
+    await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
     // Submit first chunk of extra data
     await accountingOracle.connect(submitter).submitReportExtraDataList(hexToBytes(extraDataChunks[0]));
@@ -196,6 +235,8 @@ describe("Integration: AccountingOracle extra data", () => {
     const { accountingOracle } = ctx.contracts;
 
     const { submitter, extraDataChunks } = await submitMainReport();
+    // Make the main-report transition explicit before extra data starts changing module state further.
+    await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
     // Submit first chunk of extra data
     await accountingOracle.connect(submitter).submitReportExtraDataList(hexToBytes(extraDataChunks[0]));

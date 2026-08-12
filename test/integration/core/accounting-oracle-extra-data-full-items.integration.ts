@@ -18,16 +18,25 @@ import {
   RewardDistributionState,
   setAnnualBalanceIncreaseLimit,
 } from "lib";
-import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, seedProtocolPendingBaseline, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
-import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
-import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
+import {
+  getOperatorName,
+  getOperatorRewardAddress,
+  norSdvtAddNodeOperator,
+  norSdvtAddOperatorKeys,
+  norSdvtEnsureOperators,
+  norSdvtSetOperatorStakingLimit,
+} from "lib/protocol/helpers/nor-sdvt";
+import { depositAndReportValidators, removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
 import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
+import { LoadedContract as ProtocolLoadedContract, StakingModuleName } from "lib/protocol/types";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MIN_KEYS_PER_OPERATOR = 5n;
 const MIN_OPERATORS_COUNT = 30n;
+const MAIN_REPORT_EFFECTIVE_CL_REWARD = ether("1");
 
 class ListKeyMapHelper<ValueType> {
   private map: Map<string, ValueType> = new Map();
@@ -80,11 +89,11 @@ describe("Integration: AccountingOracle extra data full items", () => {
     // increase limit check in sanity checker for scratch deploy with not that much TVL
     await advanceChainTime(1n * 24n * 60n * 60n);
 
-    await prepareModules();
-
     const limits = await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits();
     maxNodeOperatorsPerExtraDataItem = Number(limits.maxNodeOperatorsPerExtraDataItem);
     maxItemsPerExtraDataTransaction = Number(limits.maxItemsPerExtraDataTransaction);
+
+    await prepareModules();
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -101,10 +110,55 @@ describe("Integration: AccountingOracle extra data full items", () => {
     await setModuleStakeShareLimit(ctx, SDVT_MODULE_ID, 50_00n);
 
     await norSdvtEnsureOperators(ctx, nor, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR, 2n);
+    await ensureEligibleOperators(nor, NOR_MODULE_ID, "nor");
     await advanceChainTime(1n * 24n * 60n * 60n);
 
     await norSdvtEnsureOperators(ctx, sdvt, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR, 2n);
+    await ensureEligibleOperators(sdvt, SDVT_MODULE_ID, "sdvt");
     await advanceChainTime(1n * 24n * 60n * 60n);
+  }
+
+  async function getEligibleOperatorIds(module: ProtocolLoadedContract<NodeOperatorsRegistry>) {
+    const ids: bigint[] = [];
+    const count = Number(await module.getNodeOperatorsCount());
+    for (let i = 0; i < count; i++) {
+      const nodeOperator = await module.getNodeOperator(BigInt(i), false);
+      if (nodeOperator.active && nodeOperator.totalDepositedValidators - nodeOperator.totalExitedValidators >= 1n) {
+        ids.push(BigInt(i));
+      }
+    }
+    return ids;
+  }
+
+  async function ensureEligibleOperators(
+    module: ProtocolLoadedContract<NodeOperatorsRegistry>,
+    moduleId: bigint,
+    moduleName: StakingModuleName,
+  ) {
+    let ids = await getEligibleOperatorIds(module);
+
+    while (ids.length < maxNodeOperatorsPerExtraDataItem) {
+      const numToAdd = maxNodeOperatorsPerExtraDataItem - ids.length;
+      const numBefore = await module.getNodeOperatorsCount();
+
+      for (let i = 0; i < numToAdd; i++) {
+        const operatorId = numBefore + BigInt(i);
+        await norSdvtAddNodeOperator(ctx, module, {
+          name: getOperatorName(moduleName, operatorId, 1n),
+          rewardAddress: getOperatorRewardAddress(moduleName, operatorId, 1n),
+        });
+        await norSdvtAddOperatorKeys(ctx, module, { operatorId, keysToAdd: MIN_KEYS_PER_OPERATOR });
+        await norSdvtSetOperatorStakingLimit(ctx, module, { operatorId, limit: MIN_KEYS_PER_OPERATOR });
+      }
+
+      await depositAndReportValidators(ctx, moduleId, BigInt(numToAdd));
+
+      const nextIds = await getEligibleOperatorIds(module);
+      if (nextIds.length <= ids.length) {
+        throw new Error(`Failed to prepare ${moduleName} operators for full extra-data item`);
+      }
+      ids = nextIds;
+    }
   }
 
   async function distributeReward(module: LoadedContract<NodeOperatorsRegistry>, fromSigner: HardhatEthersSigner) {
@@ -153,18 +207,10 @@ describe("Integration: AccountingOracle extra data full items", () => {
       const noIdsByModule = new Map<bigint, bigint[]>();
       for (const { moduleId, module } of modules) {
         if (moduleId === CSM_MODULE_ID) continue;
-        const ids: bigint[] = [];
-        const count = Number(await module.getNodeOperatorsCount());
-        for (let i = 0; i < count; i++) {
-          const nodeOperator = await (module as unknown as LoadedContract<NodeOperatorsRegistry>).getNodeOperator(
-            BigInt(i),
-            false,
-          );
-          if (nodeOperator.active && nodeOperator.totalDepositedValidators - nodeOperator.totalExitedValidators >= 1n) {
-            ids.push(BigInt(i));
-          }
-        }
-        noIdsByModule.set(moduleId, ids);
+        noIdsByModule.set(
+          moduleId,
+          await getEligibleOperatorIds(module as unknown as ProtocolLoadedContract<NodeOperatorsRegistry>),
+        );
       }
       const norIds = noIdsByModule.get(NOR_MODULE_ID)!;
       const sdvtIds = noIdsByModule.get(SDVT_MODULE_ID)!;
@@ -237,13 +283,29 @@ describe("Integration: AccountingOracle extra data full items", () => {
         );
       }
 
+      // This suite also relies on the reward-bearing main report to enter
+      // TransferredToModule before extra-data finalization. Snapshot protocol
+      // pending first so the original reward-bearing path remains reachable.
+      await seedProtocolPendingBaseline(ctx, SDVT_MODULE_ID);
+
+      // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
+      // safety cap enough elapsed time after snapshotting the pending baseline.
+      await advanceChainTime(15n * 24n * 60n * 60n);
+
       const { submitter, extraDataChunks } = await reportWithoutExtraData(
         ctx,
         numExitedValidatorsByStakingModule,
         modulesWithExited,
         extraData,
+        {
+          // Snapshot protocol pending into the previous report first, then run the original
+          // reward-bearing main report so this suite still exercises
+          // TransferredToModule -> ReadyForDistribution -> Distributed.
+          effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
+        },
       );
 
+      // Make the main-report transition explicit before extra data finalization moves modules to ReadyForDistribution.
       await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
       for (let i = 0; i < extraDataChunks.length; i++) {

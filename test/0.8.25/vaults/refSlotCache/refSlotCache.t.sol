@@ -72,8 +72,6 @@ contract DoubleRefSlotCacheTest is Test {
      * invariant 1. the current value should be equal to the value for the next refSlot
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 32
-     * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = false
      */
     function invariant_currentValue() external {
@@ -84,8 +82,6 @@ contract DoubleRefSlotCacheTest is Test {
      * invariant 2. the value on refSlot should be equal to the previous value
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 128
-     * forge-config: default.invariant.depth = 128
      * forge-config: default.invariant.fail-on-revert = false
      */
     function invariant_valueOnRefSlot() external {

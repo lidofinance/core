@@ -8,6 +8,27 @@ import { randomAddress } from "./address";
 import { getNetworkName } from "./network";
 import { ether } from "./units";
 
+export async function getSignerOrImpersonate(
+  address: string | Addressable,
+  balance?: bigint,
+): Promise<HardhatEthersSigner> {
+  if (typeof address !== "string") {
+    address = await address.getAddress();
+  }
+
+  const signers = await ethers.getSigners();
+  const signer = signers.find((item) => item.address.toLowerCase() === address.toLowerCase());
+  if (signer) {
+    return signer;
+  }
+
+  try {
+    return await impersonate(address, balance);
+  } catch {
+    throw new Error(`Can't get a signer or impersonation for ${address}.`);
+  }
+}
+
 export async function impersonate(address: string | Addressable, balance?: bigint): Promise<HardhatEthersSigner> {
   if (typeof address !== "string") {
     address = await address.getAddress();
@@ -56,4 +77,26 @@ export async function getRandomSigners(amount: number): Promise<HardhatEthersSig
     signers.push(await impersonate(randomAddress(), ether("10000")));
   }
   return signers;
+}
+
+let cachedDeployerSigner: HardhatEthersSigner | undefined;
+let cachedDeployerAddress: string | undefined;
+
+export async function getDeployerSigner() {
+  const deployer = process.env.DEPLOYER;
+  if (!deployer) {
+    throw new Error("Env variable DEPLOYER is not set");
+  }
+
+  const deployerAddress = ethers.getAddress(deployer);
+
+  if (cachedDeployerSigner && cachedDeployerAddress === deployerAddress) {
+    return cachedDeployerSigner;
+  }
+
+  const signer = await getSignerOrImpersonate(deployerAddress, ether("100"));
+  cachedDeployerSigner = signer;
+  cachedDeployerAddress = deployerAddress;
+
+  return signer;
 }

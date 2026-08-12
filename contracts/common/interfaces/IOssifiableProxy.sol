@@ -6,6 +6,7 @@ pragma solidity >=0.4.24;
 
 interface IOssifiableProxy {
     function proxy__upgradeTo(address newImplementation) external;
+    function proxy__upgradeToAndCall(address newImplementation, bytes memory setupCalldata, bool forceCall) external;
     function proxy__changeAdmin(address newAdmin) external;
     function proxy__getAdmin() external view returns (address);
     function proxy__getImplementation() external view returns (address);

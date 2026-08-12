@@ -2,7 +2,7 @@ import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
 import { getMode } from "hardhat.helpers";
 
-import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
+import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log, toBool } from "lib";
 import { isTruthyEnv } from "lib/env-flags";
 
 import { discover } from "./discover";
@@ -18,6 +18,10 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
 
 export const withCSM = () => {
   return process.env.INTEGRATION_WITH_CSM !== "off";
+};
+
+export const withCMv2 = () => {
+  return process.env.INTEGRATION_WITH_CMv2 !== "off";
 };
 
 // Opt-in (default off): when forking a local scratch deploy, run the same
@@ -74,11 +78,11 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
 
   if (deployFromScratch) {
     await deployScratchProtocol();
-  } else if (process.env.UPGRADE) {
+  } else if (toBool(process.env.UPGRADE)) {
     await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
   }
 
-  const { contracts, signers } = await discover(skipV3Contracts);
+  const { contracts, signers, modules } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
   const { chainId } = await hre.ethers.provider.getNetwork();
@@ -86,14 +90,17 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   // By default, all flags are "on"
   const flags = {
     withCSM: withCSM(),
+    withCMv2: withCMv2(),
   } as ProtocolContextFlags;
 
   log.debug("Protocol context flags", {
     "With CSM": flags.withCSM,
+    "With CMv2": flags.withCMv2,
   });
 
   const context = {
     contracts,
+    modules,
     signers,
     interfaces,
     flags,

@@ -5,9 +5,10 @@ import { FactoryOptions } from "hardhat/types";
 import { LidoLocator } from "typechain-types";
 
 import { addContractHelperFields, DeployedContract, getContractPath, loadContract, LoadedContract } from "lib/contract";
-import { ConvertibleToString, cy, log, yl } from "lib/log";
+import { bl, ConvertibleToString, cy, log, yl } from "lib/log";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
+import { getDeployerSigner } from "./account";
 import { keysOf } from "./protocol/types";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
@@ -21,12 +22,38 @@ type TxParams = {
   value?: bigint | string;
 };
 
+type DeployTxParams = {
+  type: 2;
+  maxPriorityFeePerGas: bigint;
+  maxFeePerGas: bigint;
+  gasLimit: string | null;
+};
+
 function logWithConstructorArgs(message: string, constructorArgs: ConvertibleToString[] = []) {
   if (constructorArgs.length > 0) {
     log.withArguments(`${message} with constructor args `, constructorArgs);
   } else {
     log(message);
   }
+}
+
+function isFactoryOptions(signerOrOptions: Signer | FactoryOptions): signerOrOptions is FactoryOptions {
+  return "libraries" in signerOrOptions || "signer" in signerOrOptions;
+}
+
+function withDefaultSigner(
+  signerOrOptions: Signer | FactoryOptions | undefined,
+  signer: Signer,
+): Signer | FactoryOptions {
+  if (!signerOrOptions) {
+    return signer;
+  }
+
+  if (isFactoryOptions(signerOrOptions)) {
+    return { ...signerOrOptions, signer: signerOrOptions.signer ?? signer };
+  }
+
+  return signerOrOptions;
 }
 
 export async function makeTx(
@@ -48,12 +75,16 @@ export async function makeTx(
   return receipt;
 }
 
-async function getDeployTxParams(deployer: string) {
-  const deployerSigner = await ethers.provider.getSigner();
-  if (deployer !== deployerSigner.address) {
-    throw new Error("DEPLOYER set in ENV must correspond to the first signer of hardhat");
+async function getDeploySigner(deployer: string): Promise<Signer> {
+  const deployerSigner = await getDeployerSigner();
+  if (ethers.getAddress(deployer) !== ethers.getAddress(deployerSigner.address)) {
+    throw new Error(`Deployer address mismatch: env DEPLOYER=${deployerSigner.address}, deployer=${deployer}`);
   }
 
+  return deployerSigner;
+}
+
+function getDeployTxParams(): DeployTxParams {
   if (GAS_PRIORITY_FEE !== null && GAS_MAX_FEE !== null) {
     return {
       type: 2,
@@ -66,15 +97,19 @@ async function getDeployTxParams(deployer: string) {
   }
 }
 
-async function deployContractType2(
+export async function deployContract(
   artifactName: string,
   constructorArgs: unknown[],
   deployer: string,
   withStateFile = true,
   signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
-  const txParams = await getDeployTxParams(deployer);
-  const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
+  const txParams = getDeployTxParams();
+  const deployerSigner = await getDeploySigner(deployer);
+  const factory = (await ethers.getContractFactory(
+    artifactName,
+    withDefaultSigner(signerOrOptions, deployerSigner),
+  )) as ContractFactory;
   const contract = await factory.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {
@@ -87,6 +122,7 @@ async function deployContractType2(
   if (!receipt) {
     throw new Error(`Failed to wait till the transaction ${tx.hash} execution!`);
   }
+  log.success(`Deployed: ${yl(artifactName)} at ${bl(receipt.contractAddress)}`);
 
   const gasUsed = receipt.gasUsed;
   incrementGasUsed(gasUsed, withStateFile);
@@ -98,21 +134,6 @@ async function deployContractType2(
   return contract as DeployedContract;
 }
 
-export async function deployContract(
-  artifactName: string,
-  constructorArgs: unknown[],
-  deployer: string,
-  withStateFile = true,
-  signerOrOptions?: Signer | FactoryOptions,
-): Promise<DeployedContract> {
-  const txParams = await getDeployTxParams(deployer);
-  if (txParams.type !== 2) {
-    throw new Error("Only EIP-1559 transactions (type 2) are supported");
-  }
-
-  return await deployContractType2(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
-}
-
 export async function deployWithoutProxy(
   nameInState: Sk,
   artifactName: string,
@@ -120,11 +141,12 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
   withStateFile = true,
+  signerOrOptions?: Signer | FactoryOptions,
   fields: Record<string, unknown> = {},
 ): Promise<DeployedContract> {
   logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
-  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile);
+  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
 
   if (withStateFile) {
     const contractPath = await getContractPath(artifactName);
@@ -257,14 +279,15 @@ async function getLocatorConfig(locatorAddress: string) {
     "oracleDaemonConfig",
     "validatorExitDelayVerifier",
     "triggerableWithdrawalsGateway",
+    "consolidationGateway",
     "accounting",
-    "wstETH",
     "predepositGuarantee",
+    "wstETH",
     "vaultHub",
     "vaultFactory",
     "lazyOracle",
     "operatorGrid",
-    "vaultFactory",
+    "topUpGateway",
   ]) as (keyof LidoLocator.ConfigStruct)[];
 
   const config = await Promise.all(locatorKeys.map((name) => locator[name]()));

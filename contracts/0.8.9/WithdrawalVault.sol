@@ -8,7 +8,7 @@ import {IERC20}  from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 import {Versioned} from "./utils/Versioned.sol";
-import {WithdrawalVaultEIP7002} from "./WithdrawalVaultEIP7002.sol";
+import {WithdrawalVaultEIP7685} from "./WithdrawalVaultEIP7685.sol";
 
 interface ILido {
     /**
@@ -22,12 +22,13 @@ interface ILido {
 /**
  * @title A vault for temporary storage of withdrawals
  */
-contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
+contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     using SafeERC20 for IERC20;
 
     ILido public immutable LIDO;
     address public immutable TREASURY;
     address public immutable TRIGGERABLE_WITHDRAWALS_GATEWAY;
+    address public immutable CONSOLIDATION_GATEWAY;
 
     // Events
     /**
@@ -43,24 +44,37 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
     event ERC721Recovered(address indexed requestedBy, address indexed token, uint256 tokenId);
 
     // Errors
-    error ZeroAddress();
     error NotLido();
     error NotTriggerableWithdrawalsGateway();
+    error NotConsolidationGateway();
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
 
     /**
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
+     * @param _triggerableWithdrawalsGateway the TriggerableWithdrawalsGateway address, the only caller allowed to submit EIP-7002 withdrawal requests
+     * @param _consolidationGateway the ConsolidationGateway address, the only caller allowed to submit EIP-7251 consolidation requests
+     * @param _withdrawalRequest the EIP-7002 withdrawal request predeploy address
+     * @param _consolidationRequest the EIP-7251 consolidation request predeploy address
      */
-    constructor(address _lido, address _treasury, address _triggerableWithdrawalsGateway) {
+    constructor(
+        address _lido,
+        address _treasury,
+        address _triggerableWithdrawalsGateway,
+        address _consolidationGateway,
+        address _withdrawalRequest,
+        address _consolidationRequest
+    ) WithdrawalVaultEIP7685(_withdrawalRequest, _consolidationRequest) {
         _onlyNonZeroAddress(_lido);
         _onlyNonZeroAddress(_treasury);
         _onlyNonZeroAddress(_triggerableWithdrawalsGateway);
+        _onlyNonZeroAddress(_consolidationGateway);
 
         LIDO = ILido(_lido);
         TREASURY = _treasury;
         TRIGGERABLE_WITHDRAWALS_GATEWAY = _triggerableWithdrawalsGateway;
+        CONSOLIDATION_GATEWAY = _consolidationGateway;
     }
 
     /// @dev Ensures the contract’s ETH balance is unchanged.
@@ -73,16 +87,16 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
     /// @notice Initializes the contract. Can be called only once.
     /// @dev Proxy initialization method.
     function initialize() external {
-        // Initializations for v0 --> v2
+        // Initializations for v0 --> v3
         _checkContractVersion(0);
-        _initializeContractVersionTo(2);
+        _initializeContractVersionTo(3);
     }
 
-    /// @notice Finalizes upgrade to v2 (from v1). Can be called only once.
-    function finalizeUpgrade_v2() external {
-        // Finalization for v1 --> v2
-        _checkContractVersion(1);
-        _updateContractVersion(2);
+    /// @notice Finalizes upgrade to v3 (from v2). Can be called only once.
+    function finalizeUpgrade_v3() external {
+        // Finalization for v2 --> v3
+        _checkContractVersion(2);
+        _updateContractVersion(3);
     }
 
     /**
@@ -108,7 +122,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
 
     /**
      * Transfers a given `_amount` of an ERC20-token (defined by the `_token` contract address)
-     * currently belonging to the burner contract address to the Lido treasury address.
+     * currently belonging to this contract address to the Lido treasury address.
      *
      * @param _token an ERC20-compatible token
      * @param _amount token amount
@@ -125,7 +139,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
 
     /**
      * Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
-     * currently belonging to the burner contract address to the Lido treasury address.
+     * currently belonging to this contract address to the Lido treasury address.
      *
      * @param _token an ERC721-compatible token
      * @param _tokenId minted token id
@@ -134,10 +148,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
         emit ERC721Recovered(msg.sender, address(_token), _tokenId);
 
         _token.transferFrom(address(this), TREASURY, _tokenId);
-    }
-
-    function _onlyNonZeroAddress(address _address) internal pure {
-        if (_address == address(0)) revert ZeroAddress();
     }
 
     /**
@@ -172,10 +182,44 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
     }
 
     /**
+     * @dev Submits EIP-7251 consolidation requests, one per (source, target) pair.
+     *      Each request instructs a validator to consolidate its stake to the target validator.
+     *
+     * @param sourcePubkeys An array of 48-byte public keys corresponding to validators requesting the consolidation.
+     *
+     * @param targetPubkeys An array of 48-byte public keys corresponding to validators receiving the consolidation.
+     *
+     * @notice Reverts if:
+     *         - The caller is not ConsolidationGateway.
+     *         - The provided public key array is empty.
+     *         - The provided public key array malformed.
+     *         - The provided source public key and target public key arrays are not of equal length.
+     *         - The provided total consolidation fee value is invalid.
+     */
+    function addConsolidationRequests(
+        bytes[] calldata sourcePubkeys,
+        bytes[] calldata targetPubkeys
+    ) external payable preservesEthBalance {
+        if (msg.sender != CONSOLIDATION_GATEWAY) {
+            revert NotConsolidationGateway();
+        }
+
+        _addConsolidationRequests(sourcePubkeys, targetPubkeys);
+    }
+
+    /**
      * @dev Retrieves the current EIP-7002 withdrawal fee.
      * @return The minimum fee required per withdrawal request.
      */
     function getWithdrawalRequestFee() public view returns (uint256) {
         return _getWithdrawalRequestFee();
+    }
+
+    /**
+     * @dev Retrieves the current EIP-7251 consolidation fee.
+     * @return The minimum fee required per consolidation request.
+     */
+    function getConsolidationRequestFee() external view returns (uint256) {
+        return _getConsolidationRequestFee();
     }
 }

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e +u
 set -o pipefail
 
@@ -58,8 +58,8 @@ bash scripts/dao-deploy.sh
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
 # Run the integration suite against an IN-PROCESS hardhat node that FORKS the
-# anvil we just deployed to (MODE=forking: the default `hardhat` network forks
-# $RPC_URL at latest; the deployment is read from $NETWORK_STATE_FILE). We do
+# anvil we just deployed to (MODE=forking: the `hardhat` network forks $RPC_URL
+# at latest; the deployment is read from $NETWORK_STATE_FILE). We do
 # NOT drive anvil directly (`--network local`): the suite isolates tests with
 # evm_snapshot/evm_revert plus month-scale time jumps, and that isolation is only
 # reliable on the in-process node. Driving the external anvil over a long run
@@ -70,9 +70,17 @@ yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 # dao-deploy.sh exports SKIP_GAS_REPORT only inside its own (child) shell, so
 # set it here too — otherwise the test phase prints the full gas table.
 export SKIP_GAS_REPORT=${SKIP_GAS_REPORT-true}  # re-enable with SKIP_GAS_REPORT=""
+
+# Run acceptance tests
 export INTEGRATION_WITH_CSM="off"
 # PROVISION_ON_FORK: the anvil deploy is deployed-but-not-operational, so the
 # in-process fork provisions itself (oracle committee, hash-consensus initial
 # epoch, unpause, seed TVL) — the same setup a MODE=scratch run does in-process.
 export PROVISION_ON_FORK=1
+# RUN_NETWORK picks the hardhat runtime (`--network`); NETWORK stays `local` to name
+# the deploy artifacts. Must be set explicitly: scripts/utils/migration-env.sh defaults
+# RUN_NETWORK to $NETWORK, which for NETWORK=local would drive the external anvil
+# directly — the topology the note above rules out. Copying deployed-local.json ->
+# deployed-hardhat.json for the in-process node is handled there.
+export RUN_NETWORK=hardhat
 yarn test:integration   # MODE=forking: in-process fork of $RPC_URL, deployment from $NETWORK_STATE_FILE

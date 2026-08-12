@@ -55,7 +55,7 @@ bash scripts/dao-deploy.sh
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
 # Run the integration suite against an IN-PROCESS hardhat node that FORKS the
-# anvil we just deployed to (MODE=forking: the default `hardhat` network forks
+# anvil we just deployed to (MODE=forking: the `hardhat` network forks
 # $RPC_URL at latest; the deployment is read from $NETWORK_STATE_FILE). We do
 # NOT drive anvil directly (`--network local`): the suite isolates tests with
 # evm_snapshot/evm_revert plus month-scale time jumps, and that isolation is only
@@ -77,4 +77,10 @@ export PROVISION_ON_FORK=1
 # (SepoliaDepositAdapter funding, variable-deposit-amount test skips) key off
 # 11155111 exactly as they do against the anvil fork itself.
 export HARDHAT_CHAIN_ID=11155111
+# RUN_NETWORK picks the hardhat runtime (`--network`); NETWORK stays `local` to name
+# the deploy artifacts. Must be set explicitly: scripts/utils/migration-env.sh defaults
+# RUN_NETWORK to $NETWORK, which for NETWORK=local would drive the external anvil
+# directly — the topology the note above rules out. Copying deployed-local.json ->
+# deployed-hardhat.json for the in-process node is handled there.
+export RUN_NETWORK=hardhat
 yarn test:integration   # MODE=forking: in-process fork of $RPC_URL, deployment from $NETWORK_STATE_FILE

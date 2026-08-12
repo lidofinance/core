@@ -4,11 +4,15 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  StakingModule__MockForKeyVerification,
+  ValidatorsExitBus__Harness,
+} from "typechain-types";
 
 import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
+import { DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO, seedMockModuleSigningKeys } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const PUBKEYS = [
@@ -22,6 +26,14 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let originalState: string;
+  let mockModules: {
+    module1: StakingModule__MockForKeyVerification;
+    module2: StakingModule__MockForKeyVerification;
+    module3: StakingModule__MockForKeyVerification;
+    module4: StakingModule__MockForKeyVerification;
+    module5: StakingModule__MockForKeyVerification;
+    module7: StakingModule__MockForKeyVerification;
+  };
 
   let initTx: ContractTransactionResponse;
   let oracleVersion: bigint;
@@ -39,6 +51,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     moduleId: number;
     nodeOpId: number;
     valIndex: number;
+    keyIndex: number;
     valPubkey: string;
   }
 
@@ -58,10 +71,16 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     return reportDataHash;
   };
 
-  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
+  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
     const pubkeyHex = de0x(valPubkey);
     expect(pubkeyHex.length).to.equal(48 * 2);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
+    return (
+      numberToHex(moduleId, 3) +
+      numberToHex(nodeOpId, 5) +
+      numberToHex(valIndex, 8) +
+      numberToHex(keyIndex, 8) +
+      pubkeyHex
+    );
   };
 
   const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
@@ -72,6 +91,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    mockModules = deployed.mockModules;
 
     initTx = await initVEBO({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
 
@@ -83,15 +103,16 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
 
     const { refSlot } = await consensus.getCurrentFrame();
     exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 1, keyIndex: 2, valPubkey: PUBKEYS[2] },
     ];
+    await seedMockModuleSigningKeys(mockModules, exitRequests);
 
     reportFields = {
       consensusVersion: VEBO_CONSENSUS_VERSION,
       refSlot: refSlot,
-      dataFormat: DATA_FORMAT_LIST,
+      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
       requestsCount: exitRequests.length,
       data: encodeExitRequestsDataList(exitRequests),
     };
@@ -118,14 +139,14 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
 
     const { refSlot } = await consensus.getCurrentFrame();
     exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 1, keyIndex: 2, valPubkey: PUBKEYS[2] },
     ];
 
     reportFields = {
       consensusVersion: VEBO_CONSENSUS_VERSION,
-      dataFormat: DATA_FORMAT_LIST,
+      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
       // consensusVersion: CONSENSUS_VERSION,
       refSlot: refSlot,
       requestsCount: exitRequests.length,
@@ -136,6 +157,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
 
     await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
     await consensus.connect(member3).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+    await seedMockModuleSigningKeys(deployed.mockModules, exitRequests);
 
     await deploy();
   });
@@ -164,7 +186,16 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(ZeroAddress, await consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0, 600, 13000, 1, 48),
+          oracle.initialize(
+            ZeroAddress,
+            await consensus.getAddress(),
+            VEBO_CONSENSUS_VERSION,
+            0,
+            600,
+            13_000n, // 13,000 ETH
+            32n, // 32 ETH
+            48,
+          ),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

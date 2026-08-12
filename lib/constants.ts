@@ -14,6 +14,10 @@ export const ERC721METADATA_INTERFACE_ID = "0x5b5e139f";
 // 0x49064906 is magic number ERC4906 interfaceId as defined in the standard https://eips.ethereum.org/EIPS/eip-4906
 export const ERC4906_INTERFACE_ID = "0x49064906";
 
+// HashConsensus farFutureEpoch:
+// (2n ** 64n - 1n - GENESIS_TIME) / SECONDS_PER_SLOT / SLOTS_PER_EPOCH
+export const HASH_CONSENSUS_FAR_FUTURE_EPOCH = 48038396021015343n;
+
 // OZ Interfaces
 export const OZ_ACCESS_CONTROL_INTERFACE_ID = "0x7965db0b";
 export const OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID = "0x5a05180f";
@@ -45,6 +49,12 @@ export const WITHDRAWAL_MAX_BATCHES_LENGTH = 36n;
 export const WITHDRAWAL_MIN_STETH_WITHDRAWAL_AMOUNT = 100n;
 export const WITHDRAWAL_MAX_STETH_WITHDRAWAL_AMOUNT = 10n ** 21n; // 1000 * 1e18
 
+// StakingRouter
+export const MAX_TOP_UP_PER_BLOCK_GWEI = 3200n * 10n ** 9n; // 3200 ETH in gwei
+
+//Lido
+export const DEPOSITS_RESERVE_TARGET = 1500n * 10n ** 18n; // 1500 ETH
+
 // Validator signing keys related
 export const PUBKEY_LENGTH = 48;
 export const SIGNATURE_LENGTH = 96;
@@ -60,8 +70,27 @@ export const TOTAL_BASIS_POINTS = 100_00n;
 export const ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00n;
 
 export const MAX_FEE_BP = 65_535n;
+
 export const MAX_RESERVE_RATIO_BP = 99_99n;
 export const LIMITER_PRECISION_BASE = 10n ** 9n;
 
 export const DISCONNECT_NOT_INITIATED = 2n ** 48n - 1n;
+
+export const WITHDRAWAL_CREDENTIALS_TYPE_01 = 0x01;
+export const WITHDRAWAL_CREDENTIALS_TYPE_02 = 0x02;
+
+export const MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32n * 10n ** 18n; // 32 ETH
+export const MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048n * 10n ** 18n; // 2048 ETH
+
+export enum WithdrawalCredentialsType {
+  WC0x01 = WITHDRAWAL_CREDENTIALS_TYPE_01,
+  WC0x02 = WITHDRAWAL_CREDENTIALS_TYPE_02,
+}
+
+export enum StakingModuleStatus {
+  Active = 0,
+  DepositsPaused = 1,
+  Stopped = 2,
+}
+
 export const MAX_SANE_SETTLED_GROWTH = MAX_INT104;
