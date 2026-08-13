@@ -27,4 +27,4 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Run fuzzing and invariant tests
-        run: yarn hardhat test solidity
+        run: yarn hardhat test solidity -vvv
