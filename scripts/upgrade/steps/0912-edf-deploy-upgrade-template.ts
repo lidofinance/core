@@ -30,7 +30,6 @@ const LOCAL_TEST_EXPIRY_SECONDS = 30 * 24 * 60 * 60;
 
 type ResolvedStoredDelegationContract = StoredDelegationContract & {
   runtimeCodeHash: string;
-  deploymentTx: string;
 };
 
 async function resolveExpiryTimestamp(configuredExpiry: number | undefined): Promise<number> {
@@ -54,8 +53,7 @@ function getStoredDelegationContract(
     !stored.owner ||
     !stored.delegate ||
     stored.cooldown === undefined ||
-    !stored.runtimeCodeHash ||
-    !stored.deploymentTx
+    !stored.runtimeCodeHash
   ) {
     throw new Error(`Delegation contract ${id} is missing its resolved on-chain configuration`);
   }

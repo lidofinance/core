@@ -1,10 +1,13 @@
-# EDF / DSM v5 Hoodi release manifest
+# EDF / DSM v5 Hoodi release manifest.
 #
-# The current file describes the complete source membership that must be migrated.
-# DelegationFactory and DelegationContract live addresses/configuration are intentionally
-# absent until operators publish the approved contracts. On a local Hoodi fork the EDF
-# deploy step fills the missing contracts in isolated deployment state. A direct Hoodi
-# deployment fails until address, owner, delegate and cooldown are configured together.
+# Each guardian and oracle member has the current address removed by the vote
+# and the DelegationContract address added by the vote. An empty
+# delegationContract makes a local Hoodi fork deploy a test contract. A filled
+# address is reused as-is and skips that deployment.
+#
+# When approved contracts exist, replace the empty delegationContract values.
+# owner, delegate, cooldown, runtimeCodeHash and deploymentTx are optional extra
+# checks. Also configure the approved Factory address and runtimeCodeHash.
 
 chainId = 560048
 
@@ -12,266 +15,133 @@ chainId = 560048
 repository = "https://github.com/lidofinance/execution-delegation-framework.git"
 ref = "557299104ad3eb1a74198933bd016328c490e276"
 
-[[executionDelegationFramework.delegationContracts]]
-id = "dsm-guardian-01"
+[executionDelegationFramework.factory]
 
-[[executionDelegationFramework.delegationContracts]]
-id = "dsm-guardian-02"
+[guardians.dsm-guardian-01]
+currentAddress = "0x4E93C8c7B06F1CEEb03A8e13B0371b35F93d3257"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "dsm-guardian-03"
+[guardians.dsm-guardian-02]
+currentAddress = "0x2aD1cBE1109376aD6f9D714c29c9A7FF452300FE"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "dsm-guardian-04"
+[guardians.dsm-guardian-03]
+currentAddress = "0x89C102120452AfdFb63f2D4231C5CE3e939f393b"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "dsm-guardian-05"
+[guardians.dsm-guardian-04]
+currentAddress = "0x1be2A219CBD0F18B825a4dDd580F7b3B33Bacb41"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "dsm-guardian-06"
+[guardians.dsm-guardian-05]
+currentAddress = "0xEf302FFC6830FbC464cDFFA84Fa4d5699aA8f06A"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "dsm-guardian-07"
+[guardians.dsm-guardian-06]
+currentAddress = "0xcc1fFeb60ee3A3Cb6711E5D191339b0aF263328C"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-01"
+[guardians.dsm-guardian-07]
+currentAddress = "0x8C4C15870d27c1194B6893F6B94DD0CE9C2c8ba2"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-02"
+[oracleMembers.oracle-member-01]
+currentAddress = "0x43C45C2455C49eed320F463fF4f1Ece3D2BF5aE2"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-03"
+[oracleMembers.oracle-member-02]
+currentAddress = "0x948A62cc0414979dc7aa9364BA5b96ECb29f8736"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-04"
+[oracleMembers.oracle-member-03]
+currentAddress = "0x1932f53B1457a5987791a40Ba91f71c5Efd5788F"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-05"
+[oracleMembers.oracle-member-04]
+currentAddress = "0xf7aE520e99ed3C41180B5E12681d31Aa7302E4e5"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-06"
+[oracleMembers.oracle-member-05]
+currentAddress = "0x99B2B75F490fFC9A29E4E1f5987BE8e30E690aDF"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-07"
+[oracleMembers.oracle-member-06]
+currentAddress = "0x219743f1911d84B32599BdC2Df21fC8Dba6F81a2"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-08"
+[oracleMembers.oracle-member-07]
+currentAddress = "0xD3b1e36A372Ca250eefF61f90E833Ca070559970"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-09"
+[oracleMembers.oracle-member-08]
+currentAddress = "0x4c75FA734a39f3a21C57e583c1c29942F021C6B7"
+delegationContract = ""
 
-[[executionDelegationFramework.delegationContracts]]
-id = "oracle-member-10"
+[oracleMembers.oracle-member-09]
+currentAddress = "0xfe43A8B0b481Ae9fB1862d31826532047d2d538c"
+delegationContract = ""
+
+[oracleMembers.oracle-member-10]
+currentAddress = "0xcA80ee7313A315879f326105134F938676Cfd7a9"
+delegationContract = ""
 
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200
 pauseIntentValidityPeriodBlocks = 6646
 quorum = 2
 
-[[depositSecurityModule.guardianMappings]]
-oldMember = "0x4E93C8c7B06F1CEEb03A8e13B0371b35F93d3257"
-delegationContractId = "dsm-guardian-01"
-
-[[depositSecurityModule.guardianMappings]]
-oldMember = "0x2aD1cBE1109376aD6f9D714c29c9A7FF452300FE"
-delegationContractId = "dsm-guardian-02"
-
-[[depositSecurityModule.guardianMappings]]
-oldMember = "0x89C102120452AfdFb63f2D4231C5CE3e939f393b"
-delegationContractId = "dsm-guardian-03"
-
-[[depositSecurityModule.guardianMappings]]
-oldMember = "0x1be2A219CBD0F18B825a4dDd580F7b3B33Bacb41"
-delegationContractId = "dsm-guardian-04"
-
-[[depositSecurityModule.guardianMappings]]
-oldMember = "0xEf302FFC6830FbC464cDFFA84Fa4d5699aA8f06A"
-delegationContractId = "dsm-guardian-05"
-
-[[depositSecurityModule.guardianMappings]]
-oldMember = "0xcc1fFeb60ee3A3Cb6711E5D191339b0aF263328C"
-delegationContractId = "dsm-guardian-06"
-
-[[depositSecurityModule.guardianMappings]]
-oldMember = "0x8C4C15870d27c1194B6893F6B94DD0CE9C2c8ba2"
-delegationContractId = "dsm-guardian-07"
-
-[[oracleCommittees]]
-id = "accounting-oracle"
+[oracleCommittees.accounting-oracle]
 consensusContract = "0x32EC59a78abaca3f91527aeB2008925D5AaC1eFC"
 quorum = 6
 
-[[oracleCommittees.memberMappings]]
-oldMember = "0x43C45C2455C49eed320F463fF4f1Ece3D2BF5aE2"
-delegationContractId = "oracle-member-01"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x948A62cc0414979dc7aa9364BA5b96ECb29f8736"
-delegationContractId = "oracle-member-02"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x1932f53B1457a5987791a40Ba91f71c5Efd5788F"
-delegationContractId = "oracle-member-03"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xf7aE520e99ed3C41180B5E12681d31Aa7302E4e5"
-delegationContractId = "oracle-member-04"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x99B2B75F490fFC9A29E4E1f5987BE8e30E690aDF"
-delegationContractId = "oracle-member-05"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x219743f1911d84B32599BdC2Df21fC8Dba6F81a2"
-delegationContractId = "oracle-member-06"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xD3b1e36A372Ca250eefF61f90E833Ca070559970"
-delegationContractId = "oracle-member-07"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x4c75FA734a39f3a21C57e583c1c29942F021C6B7"
-delegationContractId = "oracle-member-08"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xfe43A8B0b481Ae9fB1862d31826532047d2d538c"
-delegationContractId = "oracle-member-09"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xcA80ee7313A315879f326105134F938676Cfd7a9"
-delegationContractId = "oracle-member-10"
-
-[[oracleCommittees]]
-id = "validators-exit-bus-oracle"
+[oracleCommittees.validators-exit-bus-oracle]
 consensusContract = "0x30308CD8844fb2DB3ec4D056F1d475a802DCA07c"
 quorum = 6
+memberIds = [
+  "oracle-member-10",
+  "oracle-member-02",
+  "oracle-member-03",
+  "oracle-member-04",
+  "oracle-member-05",
+  "oracle-member-06",
+  "oracle-member-07",
+  "oracle-member-08",
+  "oracle-member-09",
+  "oracle-member-01",
+]
 
-[[oracleCommittees.memberMappings]]
-oldMember = "0xcA80ee7313A315879f326105134F938676Cfd7a9"
-delegationContractId = "oracle-member-10"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x948A62cc0414979dc7aa9364BA5b96ECb29f8736"
-delegationContractId = "oracle-member-02"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x1932f53B1457a5987791a40Ba91f71c5Efd5788F"
-delegationContractId = "oracle-member-03"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xf7aE520e99ed3C41180B5E12681d31Aa7302E4e5"
-delegationContractId = "oracle-member-04"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x99B2B75F490fFC9A29E4E1f5987BE8e30E690aDF"
-delegationContractId = "oracle-member-05"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x219743f1911d84B32599BdC2Df21fC8Dba6F81a2"
-delegationContractId = "oracle-member-06"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xD3b1e36A372Ca250eefF61f90E833Ca070559970"
-delegationContractId = "oracle-member-07"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x4c75FA734a39f3a21C57e583c1c29942F021C6B7"
-delegationContractId = "oracle-member-08"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xfe43A8B0b481Ae9fB1862d31826532047d2d538c"
-delegationContractId = "oracle-member-09"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x43C45C2455C49eed320F463fF4f1Ece3D2BF5aE2"
-delegationContractId = "oracle-member-01"
-
-[[oracleCommittees]]
-id = "csm-fee-oracle"
+[oracleCommittees.csm-fee-oracle]
 consensusContract = "0x54f74a10e4397dDeF85C4854d9dfcA129D72C637"
 quorum = 6
+memberIds = [
+  "oracle-member-04",
+  "oracle-member-02",
+  "oracle-member-03",
+  "oracle-member-06",
+  "oracle-member-09",
+  "oracle-member-08",
+  "oracle-member-07",
+  "oracle-member-10",
+  "oracle-member-05",
+  "oracle-member-01",
+]
 
-[[oracleCommittees.memberMappings]]
-oldMember = "0xf7aE520e99ed3C41180B5E12681d31Aa7302E4e5"
-delegationContractId = "oracle-member-04"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x948A62cc0414979dc7aa9364BA5b96ECb29f8736"
-delegationContractId = "oracle-member-02"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x1932f53B1457a5987791a40Ba91f71c5Efd5788F"
-delegationContractId = "oracle-member-03"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x219743f1911d84B32599BdC2Df21fC8Dba6F81a2"
-delegationContractId = "oracle-member-06"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xfe43A8B0b481Ae9fB1862d31826532047d2d538c"
-delegationContractId = "oracle-member-09"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x4c75FA734a39f3a21C57e583c1c29942F021C6B7"
-delegationContractId = "oracle-member-08"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xD3b1e36A372Ca250eefF61f90E833Ca070559970"
-delegationContractId = "oracle-member-07"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xcA80ee7313A315879f326105134F938676Cfd7a9"
-delegationContractId = "oracle-member-10"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x99B2B75F490fFC9A29E4E1f5987BE8e30E690aDF"
-delegationContractId = "oracle-member-05"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x43C45C2455C49eed320F463fF4f1Ece3D2BF5aE2"
-delegationContractId = "oracle-member-01"
-
-[[oracleCommittees]]
-id = "curated-module-fee-oracle"
+[oracleCommittees.curated-module-fee-oracle]
 consensusContract = "0x920883908A78c1554f682006a8aB32E62Be09F33"
 quorum = 6
+memberIds = [
+  "oracle-member-04",
+  "oracle-member-02",
+  "oracle-member-03",
+  "oracle-member-06",
+  "oracle-member-09",
+  "oracle-member-08",
+  "oracle-member-07",
+  "oracle-member-10",
+  "oracle-member-05",
+  "oracle-member-01",
+]
 
-[[oracleCommittees.memberMappings]]
-oldMember = "0xf7aE520e99ed3C41180B5E12681d31Aa7302E4e5"
-delegationContractId = "oracle-member-04"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x948A62cc0414979dc7aa9364BA5b96ECb29f8736"
-delegationContractId = "oracle-member-02"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x1932f53B1457a5987791a40Ba91f71c5Efd5788F"
-delegationContractId = "oracle-member-03"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x219743f1911d84B32599BdC2Df21fC8Dba6F81a2"
-delegationContractId = "oracle-member-06"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xfe43A8B0b481Ae9fB1862d31826532047d2d538c"
-delegationContractId = "oracle-member-09"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x4c75FA734a39f3a21C57e583c1c29942F021C6B7"
-delegationContractId = "oracle-member-08"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xD3b1e36A372Ca250eefF61f90E833Ca070559970"
-delegationContractId = "oracle-member-07"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0xcA80ee7313A315879f326105134F938676Cfd7a9"
-delegationContractId = "oracle-member-10"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x99B2B75F490fFC9A29E4E1f5987BE8e30E690aDF"
-delegationContractId = "oracle-member-05"
-
-[[oracleCommittees.memberMappings]]
-oldMember = "0x43C45C2455C49eed320F463fF4f1Ece3D2BF5aE2"
-delegationContractId = "oracle-member-01"
+[topUpGateway]
+address = "0x10DBEb3367876826d00D21718D1d893e0fbD2956"
+depositorContractId = "dsm-guardian-01"

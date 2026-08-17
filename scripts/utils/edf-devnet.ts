@@ -1,7 +1,7 @@
 import { BytesLike, ethers } from "ethers";
 import { encodeCallScript, EvmScriptHex, VoteItem } from "scripts/utils/omnibus";
 
-import { EDFUpgradeParameters, validateEDFUpgradeParameters } from "lib/config-schemas";
+import { EDFUpgradeManifest, EDFUpgradeParameters, validateEDFUpgradeManifest } from "lib/config-schemas";
 
 export type EDFDevnetCommittee = {
   id: EDFUpgradeParameters["oracleCommittees"][number]["id"];
@@ -35,7 +35,7 @@ function memberId(prefix: string, index: number): string {
   return `${prefix}-${String(index + 1).padStart(2, "0")}`;
 }
 
-export function buildEDFDevnetUpgradeParameters(input: EDFDevnetUpgradeInput): EDFUpgradeParameters {
+export function buildEDFDevnetUpgradeParameters(input: EDFDevnetUpgradeInput): EDFUpgradeManifest {
   const owner = normalizeAddress(input.owner);
   const guardians = input.guardians.map(normalizeAddress);
   const guardianDelegates = input.guardianDelegates.map(normalizeAddress);
@@ -72,57 +72,68 @@ export function buildEDFDevnetUpgradeParameters(input: EDFDevnetUpgradeInput): E
     throw new Error(`EDF devnet delegate ${reusedMember} is already a DSM guardian or oracle member`);
   }
 
-  const delegationContracts = [
-    ...guardianDelegates.map((delegate, index) => ({
-      id: memberId("dsm-guardian", index),
-      owner,
-      delegate,
-      cooldown: input.cooldown,
-    })),
-    ...oracleDelegates.map((delegate, index) => ({
-      id: memberId("oracle-member", index),
-      owner,
-      delegate,
-      cooldown: input.cooldown,
-    })),
-    {
-      id: memberId("depositor", 0),
-      owner,
-      delegate: depositorDelegate,
-      cooldown: input.cooldown,
-    },
-  ];
-
-  return validateEDFUpgradeParameters({
+  return validateEDFUpgradeManifest({
     chainId: input.chainId,
     executionDelegationFramework: {
       repository: input.repository,
       ref: input.ref,
       factory: {},
-      delegationContracts,
     },
+    guardians: Object.fromEntries(
+      guardians.map((currentAddress, index) => [
+        memberId("dsm-guardian", index),
+        {
+          currentAddress,
+          owner,
+          delegate: guardianDelegates[index],
+          cooldown: input.cooldown,
+        },
+      ]),
+    ),
+    oracleMembers: Object.fromEntries(
+      oracleMembers.map((currentAddress, index) => [
+        memberId("oracle-member", index),
+        {
+          currentAddress,
+          owner,
+          delegate: oracleDelegates[index],
+          cooldown: input.cooldown,
+        },
+      ]),
+    ),
     depositSecurityModule: {
       maxOperatorsPerUnvetting: input.maxOperatorsPerUnvetting,
       pauseIntentValidityPeriodBlocks: input.pauseIntentValidityPeriodBlocks,
       quorum: input.guardianQuorum,
-      guardianMappings: guardians.map((oldMember, index) => ({
-        oldMember,
-        delegationContractId: memberId("dsm-guardian", index),
-      })),
     },
     topUpGateway: {
       address: normalizeAddress(input.topUpGateway),
-      delegationContractId: memberId("depositor", 0),
+      depositorContract: {
+        id: memberId("depositor", 0),
+        owner,
+        delegate: depositorDelegate,
+        cooldown: input.cooldown,
+      },
     },
-    oracleCommittees: input.oracleCommittees.map((committee) => ({
-      id: committee.id,
-      consensusContract: normalizeAddress(committee.consensusContract),
-      quorum: committee.quorum,
-      memberMappings: committee.members.map((oldMember) => ({
-        oldMember: normalizeAddress(oldMember),
-        delegationContractId: oracleMemberIds.get(normalizeAddress(oldMember).toLowerCase())!,
-      })),
-    })),
+    oracleCommittees: Object.fromEntries(
+      input.oracleCommittees.map((committee) => {
+        const memberIds = committee.members.map(
+          (oldMember) => oracleMemberIds.get(normalizeAddress(oldMember).toLowerCase())!,
+        );
+        const defaultMemberIds = oracleMembers.map((_, index) => memberId("oracle-member", index));
+        return [
+          committee.id,
+          {
+            consensusContract: normalizeAddress(committee.consensusContract),
+            quorum: committee.quorum,
+            ...(memberIds.length === defaultMemberIds.length &&
+            memberIds.every((id, index) => id === defaultMemberIds[index])
+              ? {}
+              : { memberIds }),
+          },
+        ];
+      }),
+    ),
     upgradeVoteScript: {},
   });
 }

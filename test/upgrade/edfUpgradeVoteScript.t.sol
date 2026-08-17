@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {EDFUpgradeConfig} from "contracts/upgrade/EDFUpgradeConfig.sol";
 import {EDFUpgradeTemplate} from "contracts/upgrade/EDFUpgradeTemplate.sol";
 import {EDFUpgradeVoteScript} from "contracts/upgrade/EDFUpgradeVoteScript.sol";
 import {IEDFHashConsensus} from "contracts/upgrade/EDFUpgradeTypes.sol";
@@ -48,6 +49,28 @@ contract EDFUpgradeVoteScriptTest is Test, EDFUpgradeTestBase {
         assertEq(dgItems[0].description, "1. Submit the EDF/DSM v5 upgrade to Dual Governance");
         assertEq(dgItems[0].call.to, AGENT);
         assertEq(dgItems[0].call.data, abi.encodeCall(IForwarder.forward, (_expectedInnerScript())));
+    }
+
+    function test_configPairsExactOldMembersWithNewDelegationContracts() public view {
+        EDFUpgradeConfig config = EDFUpgradeConfig(template.CONFIG());
+
+        assertEq(config.guardiansCount(), GUARDIANS_COUNT);
+        for (uint256 guardianIndex = 0; guardianIndex < GUARDIANS_COUNT; ++guardianIndex) {
+            (address oldGuardian, address newGuardian) = config.guardianMapping(guardianIndex);
+            assertEq(oldGuardian, _oldGuardian(guardianIndex));
+            assertEq(newGuardian, _delegationContract(guardianIndex));
+        }
+
+        assertEq(config.oracleCommitteesCount(), COMMITTEES_COUNT);
+        for (uint256 committeeIndex = 0; committeeIndex < COMMITTEES_COUNT; ++committeeIndex) {
+            assertEq(config.oracleCommitteeMappingsCount(committeeIndex), ORACLE_MEMBERS_COUNT);
+            for (uint256 mappingIndex = 0; mappingIndex < ORACLE_MEMBERS_COUNT; ++mappingIndex) {
+                uint256 memberIndex = _oracleMemberIndex(committeeIndex, mappingIndex);
+                (address oldMember, address newMember) = config.oracleCommitteeMapping(committeeIndex, mappingIndex);
+                assertEq(oldMember, _oldOracleMember(memberIndex));
+                assertEq(newMember, _delegationContract(GUARDIANS_COUNT + memberIndex));
+            }
+        }
     }
 
     function test_exactRawActionsOrderTargetsCalldataAndDescriptions() public view {
