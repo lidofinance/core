@@ -7,12 +7,12 @@ pragma solidity 0.8.9;
 import {
     OracleReportSanityChecker,
     LimitsList,
-    CLBalanceChangeCheckParams,
     AccountingCoreLimitsPacked,
     OperationalLimitsPacked,
     LimitsListPacker,
     LimitsListUnpacker
 } from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
+import {ISecondOpinionOracle} from "contracts/0.8.9/interfaces/ISecondOpinionOracle.sol";
 
 contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
     using LimitsListPacker for LimitsList;
@@ -27,44 +27,8 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         address _accounting,
         address _admin,
         LimitsList memory _limitsList,
-        bool _postMigrationFirstReportDone
-    ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList) {
-        if (_postMigrationFirstReportDone) {
-            _finalizePostReportState(0, 0);
-        }
-    }
-
-    function addReportData(uint256 _timestamp, uint256 _clBalance, uint256 _deposits, uint256 _clWithdrawals) public {
-        _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
-    }
-
-    function harness__setLastReportTimestamp(uint256 _timestamp) external {
-        lastReportTimestamp = _timestamp;
-    }
-
-    function harness__checkCLPendingAndValidatorsBalanceIncrease(
-        uint256 _timeElapsed,
-        uint256 _preCLValidatorsBalance,
-        uint256 _preCLPendingBalance,
-        uint256 _postCLValidatorsBalance,
-        uint256 _postCLPendingBalance,
-        uint256 _withdrawalVaultBalance,
-        uint256 _deposits
-    ) external view {
-        CLBalanceChangeCheckParams memory checkParams = CLBalanceChangeCheckParams({
-            timeElapsed: _timeElapsed,
-            preCLValidatorsBalance: _preCLValidatorsBalance,
-            preCLPendingBalance: _preCLPendingBalance,
-            postCLValidatorsBalance: _postCLValidatorsBalance,
-            postCLPendingBalance: _postCLPendingBalance,
-            deposits: _deposits
-        });
-        _checkCLPendingAndValidatorsBalanceIncrease(
-            getOracleReportLimits().packAccountingCore(),
-            checkParams,
-            _getCLWithdrawals(_withdrawalVaultBalance)
-        );
-    }
+        bool
+    ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList, ISecondOpinionOracle(address(0))) {}
 
     function harness__checkCLBalancesConsistency(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,

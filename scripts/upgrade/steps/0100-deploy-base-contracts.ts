@@ -15,6 +15,7 @@ import {
   LidoLocator,
   LidoLocator__factory,
   OracleReportSanityChecker__factory,
+  SecondOpinionOracle__factory,
   StakingRouter__factory,
   TopUpGateway,
   TopUpGateway__factory,
@@ -72,6 +73,13 @@ export async function main() {
   const locatorAddress = getAddress(Sk.lidoLocator, state);
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
 
+  const secondOpinionCommitteeAddress = parameters.secondOpinionOracle?.committee;
+  if (!secondOpinionCommitteeAddress) {
+    throw new Error(
+      "Missing secondOpinionOracle.committee in upgrade parameters: set the approved committee address before deployment",
+    );
+  }
+
   const lidoAddress = await locator.lido();
   const stakingRouterAddress = await locator.stakingRouter();
   const accountingAddress = await locator.accounting();
@@ -87,13 +95,10 @@ export async function main() {
   );
   const oldCheckerLimits = await oldSanityChecker.getOracleReportLimits();
   const sanityCheckerLimits = OracleReportSanityCheckerSchema.parse({
-    annualBalanceIncreaseBPLimit: Number(oldCheckerLimits.annualBalanceIncreaseBPLimit),
     simulatedShareRateDeviationBPLimit: Number(oldCheckerLimits.simulatedShareRateDeviationBPLimit),
     maxItemsPerExtraDataTransaction: Number(oldCheckerLimits.maxItemsPerExtraDataTransaction),
     maxNodeOperatorsPerExtraDataItem: Number(oldCheckerLimits.maxNodeOperatorsPerExtraDataItem),
     requestTimestampMargin: Number(oldCheckerLimits.requestTimestampMargin),
-    maxPositiveTokenRebase: Number(oldCheckerLimits.maxPositiveTokenRebase),
-    clBalanceOraclesErrorUpperBPLimit: Number(oldCheckerLimits.clBalanceOraclesErrorUpperBPLimit),
     ...parameters.oracleReportSanityChecker, // apply new items
   });
 
@@ -110,6 +115,21 @@ export async function main() {
     "UpgradeTemporaryAdmin",
     deployer,
     tempAdminConstructorArgs,
+  );
+
+  const secondOpinionOracleConstructorArgs: ConstructorArgs<SecondOpinionOracle__factory> = [
+    agentAddress,
+    secondOpinionCommitteeAddress,
+  ];
+  logStartReview();
+  await logArgs("SecondOpinionOracle", secondOpinionOracleConstructorArgs);
+  await logConfirmReview();
+
+  const secondOpinionOracle = await deployWithoutProxy(
+    Sk.secondOpinionOracle,
+    "SecondOpinionOracle",
+    deployer,
+    secondOpinionOracleConstructorArgs,
   );
 
   const constructorArgs: {
@@ -147,7 +167,13 @@ export async function main() {
       parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
       parameters.depositSecurityModule.maxOperatorsPerUnvetting,
     ],
-    OracleReportSanityChecker: [locatorAddress, accountingAddress, agentAddress, sanityCheckerLimits],
+    OracleReportSanityChecker: [
+      locatorAddress,
+      accountingAddress,
+      agentAddress,
+      sanityCheckerLimits,
+      secondOpinionOracle.address,
+    ],
     ConsolidationGateway: [
       tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin,
       locatorAddress,

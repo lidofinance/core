@@ -2,6 +2,10 @@ import { z } from "zod";
 
 // Common schemas
 const EthereumAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
+const NonZeroEthereumAddressSchema = EthereumAddressSchema.refine(
+  (address) => !/^0x0{40}$/i.test(address),
+  "Ethereum address cannot be zero",
+);
 const HexStringSchema = z.string().regex(/^0x[a-fA-F0-9]+$/, "Invalid hex string");
 const BigIntStringSchema = z.string().regex(/^\d+$/, "Invalid BigInt string");
 const BasisPointsSchema = z.number().int().min(0).max(10000);
@@ -292,13 +296,10 @@ const DepositSecurityModuleSchema = z.object({
 
 // Oracle report sanity checker schema
 export const OracleReportSanityCheckerBaseScheme = z.object({
-  annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
-  maxPositiveTokenRebase: PositiveIntSchema,
-  clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
 });
 
 export const OracleReportSanityCheckerUpgradeScheme = z.object({
@@ -310,12 +311,19 @@ export const OracleReportSanityCheckerUpgradeScheme = z.object({
   externalPendingBalanceCapEth: NonNegativeIntSchema,
   consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
   exitedValidatorEthAmountLimit: PositiveIntSchema,
-  maxCLBalanceDecreaseBP: BasisPointsSchema,
+  annualCLRebaseIncreaseSoftBPLimit: BasisPointsSchema,
+  annualCLRebaseIncreaseHardBPLimit: BasisPointsSchema,
+  clRebaseDecreaseSoftBPLimit: BasisPointsSchema,
+  clRebaseDecreaseHardBPLimit: BasisPointsSchema,
 });
 
 export const OracleReportSanityCheckerSchema = z.object({
   ...OracleReportSanityCheckerBaseScheme.shape,
   ...OracleReportSanityCheckerUpgradeScheme.shape,
+});
+
+const SecondOpinionOracleSchema = z.object({
+  committee: NonZeroEthereumAddressSchema,
 });
 
 // Oracle daemon config schema
@@ -398,6 +406,8 @@ export const UpgradeParametersSchema = z.object({
   easyTrack: EasyTrackSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerUpgradeScheme,
+  // Optional until the committee address is approved. The deployment step refuses to proceed without it.
+  secondOpinionOracle: SecondOpinionOracleSchema.optional(),
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
   consolidationMigrator: ConsolidationMigratorSchema,

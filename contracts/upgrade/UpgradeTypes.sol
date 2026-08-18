@@ -71,10 +71,6 @@ interface IStakingRouterUpgrade is IAccessControlEnumerable {
     function STAKING_MODULE_UNVETTING_ROLE() external view returns (bytes32);
 }
 
-interface IOracleReportSanityCheckerUpgrade {
-    function migrateBaselineSnapshot() external;
-}
-
 interface IDepositSecurityModule {
     function VERSION() external view returns (uint256);
     function getOwner() external view returns (address);

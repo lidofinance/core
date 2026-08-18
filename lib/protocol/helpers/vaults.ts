@@ -38,11 +38,7 @@ import {
 import { ether } from "../../units";
 import { LoadedContract, ProtocolContext } from "../types";
 
-import {
-  ensureFirstPostMigrationReport,
-  normalizeWithdrawalVaultBaseline,
-  waitNextAvailableReportTime,
-} from "./accounting";
+import { setWithdrawalVaultBalance, waitNextAvailableReportTime } from "./accounting";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -220,10 +216,7 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
     log.success("Setting max external ratio to 20%");
   }
 
-  // Initialize LazyOracle timestamp after the upgrade without activating
-  // existing CL pending validators from the migrated state.
-  await ensureFirstPostMigrationReport(ctx);
-  await normalizeWithdrawalVaultBaseline(ctx, 0n);
+  await setWithdrawalVaultBalance(ctx, 0n);
 }
 
 export type VaultReportItem = {

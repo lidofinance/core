@@ -5,70 +5,59 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, impersonate, LIMITER_PRECISION_BASE, ONE_GWEI } from "lib";
+import { ether, impersonate, ONE_GWEI } from "lib";
 import {
-  getNextReportContext,
   getProtocolContext,
   ProtocolContext,
   queueBadDebtInternalization,
   removeStakingLimit,
-  report,
   reportWithoutClActivation,
-  resetCLBalanceDecreaseWindow,
-  seedProtocolPendingBaseline,
   setupLidoForVaults,
   setupVaultWithBadDebt,
+  updateOracleReportLimits,
   upDefaultTierShareLimit,
 } from "lib/protocol";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 import { SHARE_RATE_PRECISION } from "test/suite/constants";
+
+const FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE = 750_000n;
+const FORMER_REBASE_PRECISION_BASE = 1_000_000_000n;
 
 describe("Integration: Sanity checker with bad debt internalization", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
-
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  // Get shares burn limit from sanity checker when NO changes in pooled Ether are expected
-  const sharesToBurnToReachRebaseLimit = async () => {
-    const { lido, oracleReportSanityChecker } = ctx.contracts;
-
-    const rebaseLimit = await oracleReportSanityChecker.getMaxPositiveTokenRebase();
-    const rebaseLimitPlus1 = rebaseLimit + LIMITER_PRECISION_BASE;
-
-    const internalShares = (await lido.getTotalShares()) - (await lido.getExternalShares());
-
-    // Derived from: rebaseLimit = (postShareRate - preShareRate) / preShareRate
-    return (internalShares * rebaseLimit) / rebaseLimitPlus1;
+  const formerPositiveRebaseLimitWei = async () => {
+    const { lido } = ctx.contracts;
+    const internalEther = (await lido.getTotalPooledEther()) - (await lido.getExternalEther());
+    return (internalEther * FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE) / FORMER_REBASE_PRECISION_BASE;
   };
 
-  // Helper to capture protocol state
-  const captureState = async () => {
-    const { lido, vaultHub, burner, elRewardsVault, withdrawalVault } = ctx.contracts;
+  const sharesToReachFormerPositiveRebaseLimit = async () => {
+    const { lido } = ctx.contracts;
+    const internalShares = (await lido.getTotalShares()) - (await lido.getExternalShares());
+    return (
+      (internalShares * FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE) /
+      (FORMER_REBASE_PRECISION_BASE + FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE)
+    );
+  };
 
+  const captureState = async () => {
+    const { lido, vaultHub, burner, elRewardsVault } = ctx.contracts;
     const totalPooledEther = await lido.getTotalPooledEther();
     const totalShares = await lido.getTotalShares();
-    const externalShares = await lido.getExternalShares();
-    const externalEther = await lido.getExternalEther();
-    const badDebtToInternalize = await vaultHub.badDebtToInternalize();
     const [coverShares, nonCoverShares] = await burner.getSharesRequestedToBurn();
-    const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault);
-    const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
 
     return {
-      totalPooledEther,
-      totalShares,
-      externalShares,
-      externalEther,
-      badDebtToInternalize,
+      externalShares: await lido.getExternalShares(),
+      badDebtToInternalize: await vaultHub.badDebtToInternalize(),
       burnerShares: coverShares + nonCoverShares,
-      elRewardsVaultBalance,
-      withdrawalVaultBalance,
+      elRewardsVaultBalance: await ethers.provider.getBalance(elRewardsVault),
       shareRate: totalShares > 0n ? (totalPooledEther * SHARE_RATE_PRECISION) / totalShares : 0n,
     };
   };
@@ -76,329 +65,129 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
   before(async () => {
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
-
     [, owner, nodeOperator, , , stranger] = await ethers.getSigners();
-    const { withdrawalVault } = ctx.contracts;
 
     await setupLidoForVaults(ctx);
     await upDefaultTierShareLimit(ctx, ether("1000"));
-    await setBalance(await withdrawalVault.getAddress(), 0n);
+    await setBalance(await ctx.contracts.withdrawalVault.getAddress(), 0n);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
   afterEach(async () => await Snapshot.restore(snapshot));
   after(async () => await Snapshot.restore(originalSnapshot));
 
-  describe("Smoothing rebase with bad debt internalization", () => {
-    it("No smoothing", async () => {
-      const { lido, burner } = ctx.contracts;
+  it("internalizes queued bad debt during a neutral report", async () => {
+    const { lido } = ctx.contracts;
+    const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
+    await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+    const stateBefore = await captureState();
 
-      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-      const stateBefore = await captureState();
+    const { reportTx } = await reportWithoutClActivation(ctx, {
+      reportElVault: false,
+      skipWithdrawals: true,
+      reportBurner: false,
+    });
 
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+    await expect(reportTx).to.emit(lido, "ExternalBadDebtInternalized").withArgs(badDebtShares);
+    await expect(reportTx).to.emit(lido, "ExternalSharesBurnt").withArgs(badDebtShares);
+    const stateAfter = await captureState();
+    expect(stateAfter.badDebtToInternalize).to.equal(0n);
+    expect(stateAfter.externalShares).to.equal(stateBefore.externalShares - badDebtShares);
+  });
 
-      // Report with zero CL diff, skip withdrawals, don't report burner
-      const { reportTx } = await reportWithoutClActivation(ctx, {
+  it("collects the full EL rewards balance while internalizing bad debt", async () => {
+    const { lido, elRewardsVault } = ctx.contracts;
+    const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
+    await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+
+    const rewards = (await formerPositiveRebaseLimitWei()) + ether("10");
+    await setBalance(await elRewardsVault.getAddress(), rewards);
+
+    const { reportTx } = await reportWithoutClActivation(ctx, {
+      reportElVault: true,
+      skipWithdrawals: true,
+      reportBurner: false,
+    });
+
+    await expect(reportTx).to.emit(lido, "ExternalBadDebtInternalized").withArgs(badDebtShares);
+    expect(await ethers.provider.getBalance(elRewardsVault)).to.equal(0n);
+    expect((await captureState()).badDebtToInternalize).to.equal(0n);
+  });
+
+  it("burns all requested Burner shares while internalizing bad debt", async () => {
+    const { lido, burner, accounting } = ctx.contracts;
+    const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
+    await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+
+    const sharesToRequest = (await sharesToReachFormerPositiveRebaseLimit()) + ether("10");
+    const pooledEthToSubmit = (await lido.getPooledEthByShares(sharesToRequest)) + ether("1");
+    await removeStakingLimit(ctx);
+    await setBalance(stranger.address, pooledEthToSubmit + ether("1"));
+    await lido.connect(stranger).submit(ZeroAddress, { value: pooledEthToSubmit });
+
+    await lido.connect(stranger).approve(burner, await lido.getPooledEthByShares(sharesToRequest));
+    const accountingSigner = await impersonate(accounting.address, ether("1"));
+    await burner.connect(accountingSigner).requestBurnShares(stranger, sharesToRequest);
+    expect((await captureState()).burnerShares).to.be.gte(sharesToRequest);
+
+    const { reportTx } = await reportWithoutClActivation(ctx, {
+      reportElVault: false,
+      skipWithdrawals: true,
+      reportBurner: true,
+    });
+
+    await expect(reportTx).to.emit(lido, "ExternalBadDebtInternalized").withArgs(badDebtShares);
+    const stateAfter = await captureState();
+    expect(stateAfter.burnerShares).to.equal(0n);
+    expect(stateAfter.badDebtToInternalize).to.equal(0n);
+  });
+
+  it("accepts a CL decrease below the soft limit while internalizing bad debt", async () => {
+    const { lido } = ctx.contracts;
+    await updateOracleReportLimits(ctx, {
+      clRebaseDecreaseSoftBPLimit: 500n,
+      clRebaseDecreaseHardBPLimit: 500n,
+    });
+
+    const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
+    await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+    const stateBefore = await captureState();
+
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
+    const decrease = ((preCLBalance * 100n) / 10_000n / ONE_GWEI) * ONE_GWEI;
+    expect(decrease).to.be.gt(0n);
+
+    await reportWithoutClActivation(ctx, {
+      effectiveClDiff: -decrease,
+      reportElVault: false,
+      skipWithdrawals: true,
+      reportBurner: false,
+    });
+
+    const stateAfter = await captureState();
+    expect(stateAfter.badDebtToInternalize).to.equal(0n);
+    expect(stateAfter.externalShares).to.equal(stateBefore.externalShares - badDebtShares);
+    expect(stateAfter.shareRate).to.be.lt(stateBefore.shareRate);
+  });
+
+  it("rejects a CL increase above the hard limit even with queued bad debt", async () => {
+    const { oracleReportSanityChecker } = ctx.contracts;
+    await updateOracleReportLimits(ctx, {
+      annualCLRebaseIncreaseSoftBPLimit: 0n,
+      annualCLRebaseIncreaseHardBPLimit: 0n,
+    });
+
+    const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
+    await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+
+    await expect(
+      reportWithoutClActivation(ctx, {
+        effectiveClDiff: ONE_GWEI,
         reportElVault: false,
         skipWithdrawals: true,
         reportBurner: false,
-        waitNextReportTime: true,
-      });
-
-      const receipt = await reportTx!.wait();
-
-      // Verify nothing was burned on burner contract (check SharesBurnt events)
-      const sharesBurntEvents = ctx.getEvents(receipt!, "SharesBurnt");
-      const burnerAddress = await burner.getAddress();
-      const burnerSharesBurnt = sharesBurntEvents.filter((e) => e.args.account === burnerAddress);
-      expect(burnerSharesBurnt.length).to.equal(0, "No shares should be burnt from burner");
-
-      // Verify bad debt was internalized
-      await expect(reportTx).to.emit(lido, "ExternalBadDebtInternalized").withArgs(badDebtShares);
-      await expect(reportTx).to.emit(lido, "ExternalSharesBurnt").withArgs(badDebtShares);
-
-      const stateAfter = await captureState();
-
-      // External shares decreased by bad debt
-      expect(stateAfter.externalShares).to.equal(
-        stateBefore.externalShares - badDebtShares,
-        "External shares should decrease by bad debt amount",
-      );
-
-      // Bad debt queue cleared
-      expect(stateAfter.badDebtToInternalize).to.equal(0n, "Bad debt should be cleared");
-    });
-
-    it("Smoothing due to large rewards", async () => {
-      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-
-      const reportWithLargeElRewardsEnsureSmoothing = async (badDebtToInternalize: bigint) => {
-        const { lido, elRewardsVault } = ctx.contracts;
-
-        const stateBefore = await captureState();
-
-        // Add large EL rewards (will be limited by smoothing)
-        const largeRewards = ether("10000");
-        await setBalance(await elRewardsVault.getAddress(), largeRewards);
-
-        const { reportTx } = await reportWithoutClActivation(ctx, {
-          excludeVaultsBalances: false, // Include vault balances to collect rewards
-          skipWithdrawals: true,
-          waitNextReportTime: true,
-        });
-
-        // Verify bad debt was fully applied
-        await expect(reportTx).to.emit(lido, "ExternalBadDebtInternalized").withArgs(badDebtToInternalize);
-
-        const stateAfter = await captureState();
-
-        // Bad debt fully cleared
-        expect(stateAfter.badDebtToInternalize).to.equal(0n, "Bad debt should be fully cleared");
-        expect(stateAfter.externalShares).to.equal(
-          stateBefore.externalShares - badDebtToInternalize,
-          "External shares should decrease by full bad debt amount",
-        );
-
-        // Smoothing applied: not all rewards collected (some left on vault)
-        expect(stateAfter.elRewardsVaultBalance).to.be.lt(largeRewards, "Some EL rewards should be collected");
-        expect(stateAfter.elRewardsVaultBalance).to.be.gt(0n, "Some EL rewards should remain due to smoothing");
-
-        return stateAfter;
-      };
-
-      const beforeReportSnapshot = await Snapshot.take();
-
-      // Report with smoothen token rebase with small bad debt internalization
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares / 10n); // Internalize part
-      const stateAfter1 = await reportWithLargeElRewardsEnsureSmoothing(badDebtShares / 10n);
-
-      await Snapshot.restore(beforeReportSnapshot);
-
-      // Report with smoothen token rebase with larger bad debt internalization
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares); // Internalize all
-      const stateAfter2 = await reportWithLargeElRewardsEnsureSmoothing(badDebtShares);
-
-      expect(stateAfter1.shareRate).to.be.gt(
-        stateAfter2.shareRate,
-        "Share rate should be higher after less bad debt internalized",
-      );
-
-      expect(stateAfter1.elRewardsVaultBalance).to.be.eq(
-        stateAfter2.elRewardsVaultBalance,
-        "Smoothing should not be affected by bad debt amount",
-      );
-    });
-
-    it("Smoothing due to large shares to burn", async () => {
-      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-
-      const reportWithLargeSharesToBurnEnsureSmoothing = async (badDebtToInternalize: bigint) => {
-        const { lido, burner, accounting } = ctx.contracts;
-
-        // Calculate shares limit and add excess to ensure smoothing kicks in
-        const sharesLimit = await sharesToBurnToReachRebaseLimit();
-        const excess = ether("100"); // Large excess to ensure smoothing
-        const sharesToRequest = sharesLimit + excess;
-
-        // Ensure whale has enough stETH
-        const whaleBalance = (await lido.getPooledEthByShares(sharesToRequest)) + ether("100");
-        await removeStakingLimit(ctx);
-        await setBalance(stranger.address, whaleBalance + ether("1"));
-        await lido.connect(stranger).submit(ZeroAddress, { value: whaleBalance });
-
-        // Request burn of large amount of shares
-        await lido.connect(stranger).approve(burner, await lido.getPooledEthByShares(sharesToRequest));
-
-        const accountingSigner = await impersonate(accounting.address, ether("1"));
-        await burner.connect(accountingSigner).requestBurnShares(stranger, sharesToRequest);
-
-        const stateBefore = await captureState();
-
-        // Verify burner has shares to burn
-        expect(stateBefore.burnerShares).to.be.gte(sharesToRequest, "Burner should have shares to burn");
-
-        const { reportTx } = await reportWithoutClActivation(ctx, {
-          reportElVault: false,
-          skipWithdrawals: true,
-          waitNextReportTime: true,
-        });
-
-        // Verify bad debt was fully applied regardless of burner shares
-        await expect(reportTx).to.emit(lido, "ExternalBadDebtInternalized").withArgs(badDebtToInternalize);
-
-        const stateAfter = await captureState();
-
-        // Bad debt fully cleared
-        expect(stateAfter.badDebtToInternalize).to.equal(0n, "Bad debt should be fully cleared");
-        expect(stateAfter.externalShares).to.equal(
-          stateBefore.externalShares - badDebtToInternalize,
-          "External shares should decrease by full bad debt amount",
-        );
-
-        // Verify smoothing was applied: not all shares were burned (some remain on burner)
-        expect(stateAfter.burnerShares).to.be.lt(stateBefore.burnerShares, "Some shares should be burned from burner");
-        expect(stateAfter.burnerShares).to.be.gt(0n, "Some shares should remain on burner due to smoothing");
-
-        return stateAfter;
-      };
-
-      const beforeReportSnapshot = await Snapshot.take();
-
-      // Report with smoothen token rebase with small bad debt internalization
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares / 10n); // Internalize part
-      const stateAfter1 = await reportWithLargeSharesToBurnEnsureSmoothing(badDebtShares / 10n);
-
-      await Snapshot.restore(beforeReportSnapshot);
-
-      // Report with smoothen token rebase with larger bad debt internalization
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares); // Internalize all
-      const stateAfter2 = await reportWithLargeSharesToBurnEnsureSmoothing(badDebtShares);
-
-      expect(stateAfter1.shareRate).to.be.gt(
-        stateAfter2.shareRate,
-        "Share rate should be higher after less bad debt internalized",
-      );
-
-      expect(stateAfter1.burnerShares).to.be.eq(
-        stateAfter2.burnerShares,
-        "Smoothing should not be affected by bad debt amount",
-      );
-    });
-  });
-
-  describe("CL balance decrease check with bad debt internalization", () => {
-    it("Small CL balance decrease", async () => {
-      await resetCLBalanceDecreaseWindow(ctx, { waitNextReportTime: true });
-
-      const stateBefore = await captureState();
-
-      // Queue bad debt internalization
-      await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-
-      // Small negative CL diff (within allowed limits)
-      const smallDecrease = ether("-1");
-
-      await reportWithoutClActivation(ctx, {
-        effectiveClDiff: smallDecrease,
-        reportElVault: false,
-        skipWithdrawals: true,
-        // Burner state on the fork can hold pending cover/non-cover shares; burning them
-        // produces a positive rebase that masks the share-rate drop we want to observe here.
-        reportBurner: false,
-        waitNextReportTime: true,
-      });
-
-      const stateAfter = await captureState();
-
-      expect(stateAfter.badDebtToInternalize).to.equal(0n, "Bad debt should be cleared");
-      expect(stateAfter.shareRate).to.be.lt(stateBefore.shareRate, "Share rate should decrease");
-    });
-
-    it("Max allowed CL balance decrease", async () => {
-      // Bad debt internalization does not affect calculation of dynamic slashing limit
-      // so the report with max allowed CL decrease should still pass with bad debt internalization
-
-      const { oracleReportSanityChecker, lido } = ctx.contracts;
-
-      // Move past the migrated checker bootstrap entries so this test exercises the per-window max decrease.
-      await resetCLBalanceDecreaseWindow(ctx);
-
-      // Get current protocol state to calculate dynamic slashing limit
-      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
-      const limits = await oracleReportSanityChecker.getOracleReportLimits();
-      const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;
-
-      // Oracle reports CL balances in gwei, so keep the reported decrease below the limit after gwei rounding.
-      const clSlashing = -(maxAllowedNegativeRebase - ONE_GWEI);
-
-      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
-
-      const stateBefore = await captureState();
-      expect(stateBefore.badDebtToInternalize).to.equal(badDebtShares, "Bad debt should be queued");
-
-      const { reportTx } = await reportWithoutClActivation(ctx, {
-        effectiveClDiff: clSlashing,
-        reportElVault: false,
-        skipWithdrawals: true,
-        waitNextReportTime: true,
-      });
-
-      // Report should pass - CL decrease is under the limit
-      // Bad debt should also be internalized in the same report
-      await expect(reportTx).to.emit(lido, "ExternalBadDebtInternalized").withArgs(badDebtShares);
-
-      const stateAfter = await captureState();
-      expect(stateAfter.badDebtToInternalize).to.equal(0n, "Bad debt should be cleared");
-      expect(stateAfter.externalShares).to.equal(
-        stateBefore.externalShares - badDebtShares,
-        "External shares should decrease by bad debt amount",
-      );
-    });
-  });
-
-  describe("Annual balance increase check with bad debt internalization", () => {
-    it("CL balance increase over limit reverts, bad debt does not compensate", async () => {
-      // Bad debt internalization does not affect positive CL growth checks,
-      // so even with bad debt queued, a report exceeding the activated-pending
-      // plus validators-based safety cap should revert.
-
-      const { oracleReportSanityChecker, lido } = ctx.contracts;
-
-      const { clPendingBalanceAtLastReport: carriedPendingBeforeSeed } = await lido.getBalanceStats();
-      await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
-
-      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
-
-      // Get current protocol state
-      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-      const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-      const { reportTimeElapsed } = await getNextReportContext(ctx);
-      const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
-      const MAX_BASIS_POINTS = 10000n;
-      const maxBalanceIncrease =
-        ((annualBalanceIncreaseBPLimit *
-          (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) *
-          reportTimeElapsed) /
-          (SECONDS_PER_YEAR * MAX_BASIS_POINTS) /
-          ONE_GWEI) *
-        ONE_GWEI;
-
-      const stateBefore = await captureState();
-      expect(stateBefore.badDebtToInternalize).to.equal(badDebtShares, "Bad debt should be queued");
-
-      // `report()` consumes the seeded pending baseline inside the same report, so the
-      // raw CL delta under test is the safety-cap component computed from the
-      // post-activation validators base.
-      // Bad debt still must not compensate an over-limit report.
-      expect(clPendingBalanceAtLastReport).to.be.gt(0n, "test precondition failed: pending baseline must be non-zero");
-      const carriedPendingBalanceGwei = carriedPendingBeforeSeed / ONE_GWEI;
-      await expect(
-        report(ctx, {
-          clDiff: maxBalanceIncrease + ONE_GWEI,
-          clPendingBalanceGwei: carriedPendingBalanceGwei,
-          reportElVault: false,
-          skipWithdrawals: true,
-        }),
-      ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
-
-      // Report exactly at the limit should pass despite bad debt internalization
-      await report(ctx, {
-        clDiff: maxBalanceIncrease,
-        clPendingBalanceGwei: carriedPendingBalanceGwei,
-        reportElVault: false,
-        skipWithdrawals: true,
-      });
-
-      const stateAfter = await captureState();
-      expect(stateAfter.badDebtToInternalize).to.equal(0n, "Bad debt should be cleared");
-      expect(stateAfter.externalShares).to.equal(
-        stateBefore.externalShares - badDebtShares,
-        "External shares should decrease by bad debt amount",
-      );
-    });
+      }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "AnnualCLRebaseIncreaseAboveHardLimit");
   });
 });

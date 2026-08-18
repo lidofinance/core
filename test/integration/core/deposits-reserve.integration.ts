@@ -8,14 +8,13 @@ import { advanceChainTime, ether, updateBalance } from "lib";
 import {
   depositAllocatedValidatorsFromBuffer,
   depositValidatorsWithoutReport,
-  ensureFirstPostMigrationReport,
   finalizeWQViaSubmit,
   getProtocolContext,
-  normalizeWithdrawalVaultBaseline,
   ProtocolContext,
   report,
   reportWithoutClActivation,
   setStakingLimit,
+  setWithdrawalVaultBalance,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -38,14 +37,11 @@ describe("Integration: Deposits reserve", () => {
   /**
    * Prepare a report that must not include WVB rewards.
    *
-   * Deposits-reserve cases check buffer and reserve math. On a fork, ORSC can
-   * already remember a non-zero WithdrawalVault balance from history. This setup
-   * moves past the migration-only report if needed and aligns WVB history to
-   * zero, so the next report cannot collect unrelated WVB rewards.
+   * Deposits-reserve cases check buffer and reserve math. Clear unrelated WVB
+   * value in local/fork state so the next report remains isolated.
    */
   const prepareNoWvbReport = async () => {
-    await ensureFirstPostMigrationReport(ctx);
-    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    await setWithdrawalVaultBalance(ctx, 0n);
   };
 
   /**

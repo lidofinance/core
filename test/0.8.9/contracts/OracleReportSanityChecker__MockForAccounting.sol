@@ -7,10 +7,6 @@ contract OracleReportSanityChecker__MockForAccounting {
     bool private checkAccountingOracleReportReverts;
     bool private checkWithdrawalQueueOracleReportReverts;
     bool private checkSimulatedShareRateReverts;
-    uint256 private _withdrawals;
-    uint256 private _elRewards;
-    uint256 private _sharesFromWQToBurn;
-    uint256 private _sharesToBurn;
 
     error CheckAccountingOracleReportReverts();
     error CheckWithdrawalQueueOracleReportReverts();
@@ -25,8 +21,7 @@ contract OracleReportSanityChecker__MockForAccounting {
         uint256, //_withdrawalVaultBalance,
         uint256, //_elRewardsVaultBalance,
         uint256, //_sharesRequestedToBurn,
-        uint256, //_deposits
-        uint256 //_withdrawalsVaultTransfer
+        uint256 //_deposits
     ) external view {
         if (checkAccountingOracleReportReverts) revert CheckAccountingOracleReportReverts();
     }
@@ -36,23 +31,6 @@ contract OracleReportSanityChecker__MockForAccounting {
         uint256 //_reportTimestamp
     ) external view {
         if (checkWithdrawalQueueOracleReportReverts) revert CheckWithdrawalQueueOracleReportReverts();
-    }
-
-    function smoothenTokenRebase(
-        uint256, // _preInternalEther,
-        uint256, // _preInternalShares,
-        uint256, // _preCLBalance,
-        uint256, // _postCLBalance,
-        uint256, // _withdrawalVaultBalance,
-        uint256, // _elRewardsVaultBalance,
-        uint256, // _sharesRequestedToBurn,
-        uint256, // _etherToFinalizeWithdrawals,
-        uint256 // _sharesToBurnFromWithdrawalQueue
-    ) external view returns (uint256 withdrawals, uint256 elRewards, uint256 sharesFromWQToBurn, uint256 sharesToBurn) {
-        withdrawals = _withdrawals;
-        elRewards = _elRewards;
-        sharesFromWQToBurn = _sharesFromWQToBurn;
-        sharesToBurn = _sharesToBurn;
     }
 
     function checkSimulatedShareRate(
@@ -77,17 +55,5 @@ contract OracleReportSanityChecker__MockForAccounting {
 
     function mock__checkSimulatedShareRateReverts(bool reverts) external {
         checkSimulatedShareRateReverts = reverts;
-    }
-
-    function mock__smoothenTokenRebaseReturn(
-        uint256 withdrawals,
-        uint256 elRewards,
-        uint256 sharesFromWQToBurn,
-        uint256 sharesToBurn
-    ) external {
-        _withdrawals = withdrawals;
-        _elRewards = elRewards;
-        _sharesFromWQToBurn = sharesFromWQToBurn;
-        _sharesToBurn = sharesToBurn;
     }
 }

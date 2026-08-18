@@ -9,10 +9,8 @@ import {
   adjustReportModuleBalances,
   buildModuleAccountingReportParams,
   depositAllocatedValidatorsFromBuffer,
-  ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
-  normalizeWithdrawalVaultBaseline,
   norSdvtEnsureOperators,
   OracleReportParams,
   ProtocolContext,
@@ -20,6 +18,7 @@ import {
   report,
   reportWithoutClActivation,
   setStakingLimit,
+  setWithdrawalVaultBalance,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
@@ -74,10 +73,15 @@ describe("Scenario: Protocol Happy Path", () => {
     const stEthHolderAmount = ether("1000");
 
     // Deposit some eth
+    const stEthHolderBalanceBefore = await lido.balanceOf(stEthHolder.address);
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: stEthHolderAmount });
 
-    const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
-    expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
+    const stEthHolderBalanceAfter = await lido.balanceOf(stEthHolder.address);
+    expect(stEthHolderBalanceAfter - stEthHolderBalanceBefore).to.approximately(
+      stEthHolderAmount,
+      10n,
+      "stETH balance increased",
+    );
 
     await finalizeWQViaElVault(ctx);
 
@@ -239,8 +243,7 @@ describe("Scenario: Protocol Happy Path", () => {
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
-    await ensureFirstPostMigrationReport(ctx);
-    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    await setWithdrawalVaultBalance(ctx, 0n);
 
     const depositResult = await depositAllocatedValidatorsFromBuffer(ctx, 1n, NOR_MODULE_ID);
     depositCount = depositResult.depositsCount;
