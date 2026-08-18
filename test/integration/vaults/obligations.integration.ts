@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, LazyOracle, Lido, StakingVault, VaultHub } from "typechain-types";
 
-import { days, ether, updateBalance } from "lib";
+import { days, ether, getRandomSigners, updateBalance } from "lib";
 import {
   calculateLockedValue,
   createVaultWithDashboard,
@@ -47,7 +47,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
     ({ vaultHub, lazyOracle, lido } = ctx.contracts);
 
-    [owner, nodeOperator, redemptionMaster, validatorExit, stranger] = await ethers.getSigners();
+    [owner, nodeOperator, redemptionMaster, validatorExit, stranger] = await getRandomSigners(5);
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, dashboard } = await createVaultWithDashboard(

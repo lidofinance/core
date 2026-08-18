@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, batch, ether, log, ONE_GWEI, updateBalance } from "lib";
+import { advanceChainTime, batch, ether, getRandomSigners, log, ONE_GWEI, updateBalance } from "lib";
 import {
   adjustReportModuleBalances,
   buildModuleAccountingReportParams,
@@ -46,7 +46,7 @@ describe("Scenario: Protocol Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, stranger] = await ethers.getSigners();
+    [stEthHolder, stranger] = await getRandomSigners(2);
     await updateBalance(stranger.address, ether("100000000"));
     await updateBalance(stEthHolder.address, ether("100000000"));
 
