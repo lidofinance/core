@@ -34,8 +34,7 @@ jobs:
       - name: Set env
         run: |
           cp .env.example .env
-          # HH3's configVariable() reads process.env; load .env into the job
-          # environment so all subsequent steps inherit the values.
+          # configVariable() reads process.env; expose .env to the following steps
           grep -v '^#' .env | grep -v '^[[:space:]]*$' >> "$GITHUB_ENV"
 
       - name: Run scratch deployment

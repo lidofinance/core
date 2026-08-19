@@ -38,8 +38,7 @@ jobs:
           echo "slither $(poetry run slither --version)"
 
       - name: Run slither
-        # Runs Slither through a shim that teaches crytic-compile to resolve this repo's
-        # yarn version-aliased OZ deps under Hardhat 3 (see ci/slither_hh3_alias_shim.py).
+        # The shim teaches crytic-compile to resolve the repo's yarn version-aliased OZ deps.
         run: >
           poetry run python ci/slither_hh3_alias_shim.py . --no-fail-pedantic --sarif results.sarif
 

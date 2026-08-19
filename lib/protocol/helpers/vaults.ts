@@ -232,12 +232,9 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
 
 /**
  * Anchor LazyOracle's latestReportTimestamp close to the current block time.
- *
- * On a live-network fork the last real oracle report can be up to a frame old
- * (or older when the testnet oracle lags). Tests that advance time by a frame
- * via waitNextAvailableReportTime would then cross VaultHub's
- * REPORT_FRESHNESS_DELTA (2 days) and flake on isReportFresh checks, so bring
- * the report age back under half a day before running vault suites.
+ * On a live fork the last real report can be a frame old or more (a lagging
+ * testnet oracle); advancing time by a frame would then cross VaultHub's
+ * REPORT_FRESHNESS_DELTA (2 days) and flake isReportFresh checks.
  */
 async function anchorFreshReport(ctx: ProtocolContext) {
   const latestReportTimestamp = await ctx.contracts.lazyOracle.latestReportTimestamp();

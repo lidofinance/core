@@ -15,9 +15,7 @@ export const mochaRootHooks: Mocha.RootHookObject = {
    * This is also used to add custom assertions to the Chai assertion library in the test suite when it's run in parallel mode.
    */
   async beforeAll() {
-    // Dynamic import to avoid a circular dependency at config load time:
-    // hardhat.config.ts imports these root hooks, so this module must not import
-    // the hardhat runtime at module top level.
+    // Lazy import: hardhat.config.ts imports these hooks, so no top-level hardhat import
     const hre = (await import("hardhat")).default;
     const { ethers, networkHelpers } = await hre.network.getOrCreate();
 

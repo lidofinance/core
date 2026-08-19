@@ -25,9 +25,7 @@ jobs:
         run: NODE_OPTIONS="--max-old-space-size=10240" yarn test:coverage
         timeout-minutes: 30
 
-      # Hardhat 3's native coverage emits coverage/lcov.info (not the Cobertura
-      # XML that solidity-coverage produced on HH2). Convert it so the publish
-      # step below can keep consuming ./coverage/cobertura-coverage.xml.
+      # HH3's native coverage emits lcov; the publish step consumes Cobertura XML.
       - name: Convert lcov to Cobertura
         run: pipx run lcov_cobertura coverage/lcov.info --output coverage/cobertura-coverage.xml --base-dir .
 

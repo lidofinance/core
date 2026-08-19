@@ -179,8 +179,7 @@ prepare_migration_env() {
 }
 
 prepare_trace_args() {
-  # Hardhat 3 exposes tracing through the global verbosity option (-v...),
-  # so there is no separate tracer to enable/disable: 'all' behaves like 'fulltrace'.
+  # HH3 exposes tracing via verbosity flags; 'all' behaves like 'fulltrace'
   case "${TRACE:-}" in
     "")
       TRACE_ARGS=()

@@ -15,10 +15,8 @@ async function getBlockExplorer(): Promise<ExplorerConfig | null> {
     return cachedExplorer;
   }
 
-  // Dynamic import to avoid a circular dependency at config load time: hardhat.config.ts
-  // pulls in the tasks barrel, which transitively imports lib/log.ts -> this module. Importing
-  // the hardhat runtime at module top level here would close that loop while the config is
-  // still loading.
+  // Lazy import: hardhat.config.ts transitively imports this module (tasks -> lib/log.ts),
+  // so a top-level hardhat import would be circular while the config is loading.
   const hre = (await import("hardhat")).default;
   const { ethers } = await hre.network.getOrCreate();
   const network = await ethers.provider.getNetwork();

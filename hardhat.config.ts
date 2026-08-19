@@ -34,9 +34,7 @@ export default defineConfig({
     verifyDeployedTask,
   ],
   coverage: {
-    // Ported from the former .solcover.js (HH2 / solidity-coverage). HH3's native
-    // coverage reads exclusions from here, not .solcover.js. Globs are relative to
-    // the project root (note the `contracts/` prefix and `/**` for directories).
+    // globs are relative to the project root: `contracts/` prefix, `/**` for directories
     skipFiles: [
       "contracts/common/interfaces/**",
       "contracts/0.4.24/template/**",
@@ -48,8 +46,7 @@ export default defineConfig({
       "contracts/0.8.9/lib/UnstructuredStorage.sol", // covered by test/0.8.9/unstructuredStorage.t.sol
       "contracts/openzeppelin/**",
       "contracts/upgrade/**",
-      // Test-only mocks and harnesses. HH3 instruments these because `paths.sources`
-      // includes `test`; solidity-coverage (HH2) only ever counted `contracts/`.
+      // mocks and harnesses: `paths.sources` includes `test`, so they would be instrumented
       "test/**",
     ],
   },
@@ -68,10 +65,8 @@ export default defineConfig({
       rootHooks: mochaRootHooks,
       parallel: process.env.PARALLEL === "true",
     },
-    // The certification fuzzing mode formerly provided by foundry.toml's [profile.deep]
-    // (FOUNDRY_PROFILE=deep). HH3 only supports the `default` solidity-test profile so
-    // far, hence the env switch. Inline `forge-config: default.*` comments in *.t.sol
-    // still take precedence over these values.
+    // Certification fuzzing. HH3 supports only the `default` solidity-test profile,
+    // hence the env switch; inline `forge-config` comments override these values.
     solidity:
       process.env.FUZZ_PROFILE === "deep"
         ? {
@@ -219,8 +214,7 @@ export default defineConfig({
     },
     "node": {
       type: "edr-simulated",
-      // `hardhat node` serves this network; without the override a fork node
-      // reports chainId 31337 instead of the forked chain's id (see run-fork-node.sh)
+      // without this a forked `hardhat node` reports chainId 31337 (see run-fork-node.sh)
       ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
       blockGasLimit: 30000000,
       allowUnlimitedContractSize: true,
@@ -295,9 +289,6 @@ export default defineConfig({
   chainDescriptors: {
     [LOCAL_DEVNET_CHAIN_ID]: {
       name: "local-devnet",
-      // Ported from the HH2 `networks.hardhat.chains[32382].hardforkHistory`:
-      // in HH3 the hardfork history of a (forked) chain lives in its chain
-      // descriptor, and activations are objects, not bare block numbers.
       hardforkHistory: {
         prague: { blockNumber: 0 },
       },
