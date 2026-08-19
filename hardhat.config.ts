@@ -219,6 +219,9 @@ export default defineConfig({
     },
     "node": {
       type: "edr-simulated",
+      // `hardhat node` serves this network; without the override a fork node
+      // reports chainId 31337 instead of the forked chain's id (see run-fork-node.sh)
+      ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
       blockGasLimit: 30000000,
       allowUnlimitedContractSize: true,
       accounts: {
