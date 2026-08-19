@@ -18,6 +18,7 @@ jobs:
 
   test_solidity_fuzzing:
     name: Solidity / Fuzzing & Invariants
+    if: github.ref_name != 'develop' && github.ref_name != 'master'
     runs-on: ubuntu-latest
 
     steps:
@@ -28,3 +29,17 @@ jobs:
 
       - name: Run fuzzing and invariant tests
         run: yarn hardhat test solidity -vvv
+
+  test_solidity_fuzzing_deep:
+    name: Solidity / Fuzzing & Invariants (deep)
+    if: github.ref_name == 'develop' || github.ref_name == 'master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Run fuzzing and invariant tests (deep profile, 10k runs)
+        run: FUZZ_PROFILE=deep yarn hardhat test solidity

@@ -186,8 +186,8 @@ contract GIndexTest is Test {
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
      * The concat overflow guard below rejects the vast majority of random inputs, so the
-     * cumulative reject budget must scale with the number of runs.
-     * forge-config: default.fuzz.max-test-rejects = 1000000
+     * cumulative reject budget must scale with the number of runs (FUZZ_PROFILE=deep: 10k runs).
+     * forge-config: default.fuzz.max-test-rejects = 10000000
      */
     function testFuzz_shr_OffTheWidth_AfterConcat(GIndex lhs, GIndex rhs, uint256 shift) public {
         // Indices concatenation overflow protection.
@@ -267,8 +267,8 @@ contract GIndexTest is Test {
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
      * The concat overflow guard below rejects the vast majority of random inputs, so the
-     * cumulative reject budget must scale with the number of runs.
-     * forge-config: default.fuzz.max-test-rejects = 1000000
+     * cumulative reject budget must scale with the number of runs (FUZZ_PROFILE=deep: 10k runs).
+     * forge-config: default.fuzz.max-test-rejects = 10000000
      */
     function testFuzz_shl_OffTheWidth_AfterConcat(GIndex lhs, GIndex rhs, uint256 shift) public {
         // Indices concatenation overflow protection.

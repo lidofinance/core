@@ -68,6 +68,17 @@ export default defineConfig({
       rootHooks: mochaRootHooks,
       parallel: process.env.PARALLEL === "true",
     },
+    // The certification fuzzing mode formerly provided by foundry.toml's [profile.deep]
+    // (FOUNDRY_PROFILE=deep). HH3 only supports the `default` solidity-test profile so
+    // far, hence the env switch. Inline `forge-config: default.*` comments in *.t.sol
+    // still take precedence over these values.
+    solidity:
+      process.env.FUZZ_PROFILE === "deep"
+        ? {
+            fuzz: { runs: 10_000, maxTestRejects: 10_000_000 },
+            invariant: { runs: 10_000, depth: 500 },
+          }
+        : {},
   },
   paths: {
     sources: {
