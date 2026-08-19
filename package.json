@@ -35,7 +35,6 @@
     "test:sequential": "hardhat test test/**/*.test.ts --gas-stats",
     "test:trace": "hardhat test test/**/*.test.ts -vvv --gas-stats",
     "test:fulltrace": "hardhat test test/**/*.test.ts -vvvvv --gas-stats",
-    "test:watch": "SKIP_CONTRACT_SIZE=true hardhat watch test",
     "test:integration": "bash scripts/run-test-integration.sh",
     "test:integration:local": "RUN_NETWORK=local yarn test:integration",
     "test:integration:trace": "TRACE=trace yarn test:integration",
