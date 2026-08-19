@@ -25,8 +25,6 @@ const ValidatorExitDelayVerifierSchema = z.object({
   gIFirstHistoricalSummaryCurr: HexStringSchema,
   gIFirstBlockRootInSummaryPrev: HexStringSchema,
   gIFirstBlockRootInSummaryCurr: HexStringSchema,
-  gIBlockRootsPreGloas: HexStringSchema,
-  gIBlockRoots: HexStringSchema,
   firstSupportedSlot: NonNegativeIntSchema,
   pivotSlot: NonNegativeIntSchema,
   capellaSlot: NonNegativeIntSchema,

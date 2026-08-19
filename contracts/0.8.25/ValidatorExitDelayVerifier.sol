@@ -4,12 +4,12 @@
 pragma solidity 0.8.25;
 
 import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
-import {GIndex, pack, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
+import {GIndex, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 
 interface ILidoLocator {
-    function stakingRouter() external view returns(address);
-    function validatorsExitBusOracle() external view returns(address);
+    function stakingRouter() external view returns (address);
+    function validatorsExitBusOracle() external view returns (address);
 }
 
 interface IStakingRouter {
@@ -62,12 +62,6 @@ struct HistoricalHeaderWitness {
     bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
 }
 
-// A witness for a block header whose root is accessible via the `block_roots` field.
-struct BlockRootsHeaderWitness {
-    BeaconBlockHeader header;
-    bytes32[] proof;
-}
-
 struct GIndices {
     GIndex gIFirstValidatorPreGloas;
     GIndex gIValidators;
@@ -75,8 +69,6 @@ struct GIndices {
     GIndex gIFirstHistoricalSummaryCurr;
     GIndex gIFirstBlockRootInSummaryPrev;
     GIndex gIFirstBlockRootInSummaryCurr;
-    GIndex gIBlockRootsPreGloas;
-    GIndex gIBlockRoots;
 }
 
 /**
@@ -118,12 +110,6 @@ contract ValidatorExitDelayVerifier {
     /// @dev This index is relative to HistoricalSummary like: HistoricalSummary.blockRoots[0].
     GIndex public immutable GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR;
 
-    /// @dev This index is relative to a pre-Gloas state like: `BeaconState.block_roots`.
-    GIndex public immutable GI_BLOCK_ROOTS_PRE_GLOAS;
-
-    /// @dev This index is relative to a Gloas state like: `BeaconState.block_roots`.
-    GIndex public immutable GI_BLOCK_ROOTS;
-
     /// @notice The first slot this verifier will accept proofs for.
     uint64 public immutable FIRST_SUPPORTED_SLOT;
 
@@ -152,7 +138,6 @@ contract ValidatorExitDelayVerifier {
     );
     error InvalidCapellaSlot();
     error HistoricalSummaryDoesNotExist();
-    error BlockRootNotInRange();
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -193,8 +178,6 @@ contract ValidatorExitDelayVerifier {
         GI_FIRST_HISTORICAL_SUMMARY_CURR = gIndices.gIFirstHistoricalSummaryCurr;
         GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = gIndices.gIFirstBlockRootInSummaryPrev;
         GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = gIndices.gIFirstBlockRootInSummaryCurr;
-        GI_BLOCK_ROOTS_PRE_GLOAS = gIndices.gIBlockRootsPreGloas;
-        GI_BLOCK_ROOTS = gIndices.gIBlockRoots;
 
         FIRST_SUPPORTED_SLOT = firstSupportedSlot;
         PIVOT_SLOT = pivotSlot;
@@ -211,21 +194,18 @@ contract ValidatorExitDelayVerifier {
     /**
      * @notice Verifies that the provided validators were not requested to exit on the CL after a VEB exit request.
      *         Reports exit delays to the Staking Router.
-     * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the target block.
-     * @param recentBlock The recent block header anchored through EIP-4788.
-     * @param targetBlock The target block header and its proof against recentBlock.header.stateRoot.
-     * @param validatorWitnesses Array of validator proofs against targetBlock.header.stateRoot.
+     * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the given beacon block.
+     * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
+     * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
      * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      */
     function verifyValidatorExitDelay(
-        ProvableBeaconBlockHeader calldata recentBlock,
-        BlockRootsHeaderWitness calldata targetBlock,
+        ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness[] calldata validatorWitnesses,
         ExitRequestData calldata exitRequests
     ) external {
-        _verifyBeaconBlockRoot(recentBlock);
-        _verifyBlockRootsBeaconBlockRoot(recentBlock, targetBlock);
-        _reportValidatorExitDelays(targetBlock.header, validatorWitnesses, exitRequests);
+        _verifyBeaconBlockRoot(beaconBlock);
+        _reportValidatorExitDelays(beaconBlock.header, validatorWitnesses, exitRequests);
     }
 
     /**
@@ -318,22 +298,6 @@ contract ValidatorExitDelayVerifier {
         });
     }
 
-    function _verifyBlockRootsBeaconBlockRoot(
-        ProvableBeaconBlockHeader calldata recentBlock,
-        BlockRootsHeaderWitness calldata targetBlock
-    ) internal view {
-        if (targetBlock.header.slot < FIRST_SUPPORTED_SLOT) {
-            revert UnsupportedSlot(targetBlock.header.slot);
-        }
-
-        SSZ.verifyProof({
-            proof: targetBlock.proof,
-            root: recentBlock.header.stateRoot,
-            leaf: targetBlock.header.hashTreeRoot(),
-            gI: _getBlockRootsBlockGI(recentBlock.header.slot, targetBlock.header.slot)
-        });
-    }
-
     /**
      * @notice Proves—via an SSZ Merkle proof—that the validator
      *         has not scheduled nor completed an exit.
@@ -405,10 +369,7 @@ contract ValidatorExitDelayVerifier {
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(offset));
     }
 
-    function _getHistoricalBlockRootGI(
-        uint64 recentSlot,
-        uint64 targetSlot
-    ) internal view returns (GIndex gI) {
+    function _getHistoricalBlockRootGI(uint64 recentSlot, uint64 targetSlot) internal view returns (GIndex gI) {
         uint64 targetSlotShifted = targetSlot - CAPELLA_SLOT;
         uint64 summaryIndex = targetSlotShifted / SLOTS_PER_HISTORICAL_ROOT;
         uint64 rootIndex = targetSlot % SLOTS_PER_HISTORICAL_ROOT;
@@ -418,9 +379,7 @@ contract ValidatorExitDelayVerifier {
             revert HistoricalSummaryDoesNotExist();
         }
 
-        gI = recentSlot < PIVOT_SLOT
-            ? GI_FIRST_HISTORICAL_SUMMARY_PREV
-            : GI_FIRST_HISTORICAL_SUMMARY_CURR;
+        gI = recentSlot < PIVOT_SLOT ? GI_FIRST_HISTORICAL_SUMMARY_PREV : GI_FIRST_HISTORICAL_SUMMARY_CURR;
 
         gI = gI.shr(summaryIndex); // historicalSummaries[summaryIndex]
         gI = gI.concat(
@@ -429,18 +388,6 @@ contract ValidatorExitDelayVerifier {
                 : GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR
         ); // historicalSummaries[summaryIndex].blockRoots[0]
         gI = gI.shr(rootIndex); // historicalSummaries[summaryIndex].blockRoots[rootIndex]
-    }
-
-    /// @dev Generalized index of `targetSlot` in the `recentSlot` state `block_roots` ring.
-    function _getBlockRootsBlockGI(uint64 recentSlot, uint64 targetSlot) internal view returns (GIndex gI) {
-        // The post-state contains roots for [recentSlot - SLOTS_PER_HISTORICAL_ROOT, recentSlot - 1].
-        if (targetSlot >= recentSlot || recentSlot - targetSlot > SLOTS_PER_HISTORICAL_ROOT) {
-            revert BlockRootNotInRange();
-        }
-
-        uint64 rootIndex = targetSlot % SLOTS_PER_HISTORICAL_ROOT;
-        gI = recentSlot < PIVOT_SLOT ? GI_BLOCK_ROOTS_PRE_GLOAS : GI_BLOCK_ROOTS;
-        gI = gI.concat(pack(SLOTS_PER_HISTORICAL_ROOT | rootIndex, 0));
     }
 
     function _getExitRequestDeliveryTimestamp(

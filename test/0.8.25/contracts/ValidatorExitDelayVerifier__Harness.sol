@@ -39,8 +39,4 @@ contract ValidatorExitDelayVerifier__Harness is ValidatorExitDelayVerifier {
     function getValidatorGI(uint256 offset, uint64 stateSlot) external view returns (GIndex) {
         return _getValidatorGI(offset, stateSlot);
     }
-
-    function getBlockRootsBlockGI(uint64 recentSlot, uint64 targetSlot) external view returns (GIndex) {
-        return _getBlockRootsBlockGI(recentSlot, targetSlot);
-    }
 }
