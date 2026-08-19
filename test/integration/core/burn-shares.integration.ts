@@ -49,10 +49,14 @@ describe("Scenario: Burn Shares", () => {
     await ensureFirstPostMigrationReport(ctx);
     await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
+    // The stranger is a well-known hardhat account that may already hold stETH on a live fork,
+    // so check the balance delta rather than the absolute value.
+    const stEthBefore = await lido.balanceOf(stranger.address);
+
     await lido.connect(stranger).submit(ZeroAddress, { value: amount });
 
-    const stEthBefore = await lido.balanceOf(stranger.address);
-    expect(stEthBefore).to.be.approximately(amount, 10n, "Incorrect stETH balance after submit");
+    const stEthAfter = await lido.balanceOf(stranger.address);
+    expect(stEthAfter - stEthBefore).to.be.approximately(amount, 10n, "Incorrect stETH balance after submit");
 
     sharesToBurn = await lido.sharesOf(stranger.address);
     internalEth = (await lido.totalSupply()) - (await lido.getExternalEther());

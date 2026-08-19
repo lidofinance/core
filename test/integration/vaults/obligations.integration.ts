@@ -192,11 +192,15 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
     context("Decreases on liability shares change", () => {
       let redemptionShares: bigint;
+      let ownerSharesBeforeMint: bigint;
 
       beforeEach(async () => {
         redemptionShares = ether("1");
 
         await dashboard.fund({ value: ether("2") });
+        // The owner is a well-known hardhat account that may already hold stETH on a live fork,
+        // so track the shares delta rather than the absolute value.
+        ownerSharesBeforeMint = await lido.sharesOf(owner);
         await dashboard.mintShares(owner, redemptionShares);
 
         await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVault, 0n);
@@ -206,7 +210,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         const recordBefore = await vaultHub.vaultRecord(stakingVault);
         expect(recordBefore.redemptionShares).to.equal(redemptionShares);
 
-        expect(await lido.sharesOf(owner)).to.equal(redemptionShares);
+        expect((await lido.sharesOf(owner)) - ownerSharesBeforeMint).to.equal(redemptionShares);
         await lido.connect(owner).approve(dashboard, redemptionShares);
 
         const parts = 2n;
