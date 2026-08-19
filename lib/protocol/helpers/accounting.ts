@@ -373,6 +373,24 @@ export const reportWithoutClActivation = async (
 };
 
 /**
+ * Submit the current frame report if it has not been processed yet.
+ *
+ * This keeps time-sensitive fork tests independent of how old the latest
+ * on-chain report was when the fork block was captured.
+ */
+export const ensureCurrentAccountingReport = async (ctx: ProtocolContext): Promise<void> => {
+  const { accountingOracle, hashConsensus } = ctx.contracts;
+  const { refSlot } = await hashConsensus.getCurrentFrame();
+
+  if ((await accountingOracle.getLastProcessingRefSlot()) >= refSlot) return;
+
+  await reportWithoutClActivation(ctx, {
+    skipWithdrawals: true,
+    waitNextReportTime: false,
+  });
+};
+
+/**
  * Finish the one-time post-migration Accounting report, if needed.
  *
  * ORSC treats the first report after migration as a special baseline report.
