@@ -15,7 +15,7 @@ describe("AccountingOracle.sol:upgrade", () => {
     ({ ethers } = await hre.network.getOrCreate());
   });
 
-  context("finalizeUpgrade_v3", () => {
+  context("finalizeUpgrade_v5", () => {
     let admin: HardhatEthersSigner;
     let oracle: AccountingOracle__Harness;
     const NEW_CONSENSUS_VERSION = 42n; // Just a test value

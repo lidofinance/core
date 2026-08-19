@@ -11,7 +11,7 @@ import { EPOCHS_PER_FRAME, INITIAL_FAST_LANE_LENGTH_SLOTS, SLOTS_PER_EPOCH, VEBO
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
 import { Snapshot } from "#test/suite";
 
-describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
+describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
   let ethers: HardhatEthers;
   let networkHelpers: NetworkHelpers;
 
