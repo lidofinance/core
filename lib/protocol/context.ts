@@ -1,5 +1,4 @@
 import { ContractTransactionReceipt, Interface } from "ethers";
-import hre from "hardhat";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log, toBool } from "#lib";
 
@@ -63,8 +62,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   if (isScratch) {
     await deployScratchProtocol();
   } else if (toBool(process.env.UPGRADE)) {
-    const { networkName } = await hre.network.getOrCreate();
-    await deployUpgrade(networkName, process.env.STEPS_FILE!);
+    await deployUpgrade(process.env.STEPS_FILE!);
   }
 
   const { contracts, signers, modules } = await discover(skipV3Contracts);
