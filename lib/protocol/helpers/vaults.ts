@@ -41,6 +41,7 @@ import type { LoadedContract, ProtocolContext } from "../types.js";
 import {
   ensureFirstPostMigrationReport,
   normalizeWithdrawalVaultBaseline,
+  reportWithoutClActivation,
   waitNextAvailableReportTime,
 } from "./accounting.js";
 
@@ -225,7 +226,32 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
   // Initialize LazyOracle timestamp after the upgrade without activating
   // existing CL pending validators from the migrated state.
   await ensureFirstPostMigrationReport(ctx);
+  await anchorFreshReport(ctx);
   await normalizeWithdrawalVaultBaseline(ctx, 0n);
+}
+
+/**
+ * Anchor LazyOracle's latestReportTimestamp close to the current block time.
+ *
+ * On a live-network fork the last real oracle report can be up to a frame old
+ * (or older when the testnet oracle lags). Tests that advance time by a frame
+ * via waitNextAvailableReportTime would then cross VaultHub's
+ * REPORT_FRESHNESS_DELTA (2 days) and flake on isReportFresh checks, so bring
+ * the report age back under half a day before running vault suites.
+ */
+async function anchorFreshReport(ctx: ProtocolContext) {
+  const latestReportTimestamp = await ctx.contracts.lazyOracle.latestReportTimestamp();
+  const now = await getCurrentBlockTimestamp();
+
+  if (now - latestReportTimestamp <= days(1n) / 2n) return;
+
+  await reportWithoutClActivation(ctx, {
+    reportBurner: false,
+    reportElVault: false,
+    reportWithdrawalsVault: true,
+    skipWithdrawals: true,
+  });
+  log.success("Anchored a fresh oracle report for vault freshness checks");
 }
 
 export type VaultReportItem = {
