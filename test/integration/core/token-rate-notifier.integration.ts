@@ -1,22 +1,22 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { TokenRateNotifier, TokenRatePusher__Mock, TokenRatePusherWithArgs__Mock } from "typechain-types";
+import type { TokenRateNotifier, TokenRatePusher__Mock, TokenRatePusherWithArgs__Mock } from "typechain-types/index.js";
 
-import { ether } from "lib";
+import { ether } from "#lib";
 import {
   ensureFirstPostMigrationReport,
   getProtocolContext,
   normalizeWithdrawalVaultBaseline,
-  ProtocolContext,
+  type ProtocolContext,
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
-} from "lib/protocol";
+} from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 // End-to-end coverage for the TokenRateNotifier as wired into the live protocol: a real oracle
 // report flows through `Accounting.handleOracleReport` → `postTokenRebaseReceiver` (this notifier)
@@ -28,6 +28,7 @@ const KIND_NO_ARGS = 0n;
 const KIND_WITH_ARGS = 1n;
 
 describe("Integration: TokenRateNotifier rebase dispatch", () => {
+  let ethers: HardhatEthers;
   let ctx: ProtocolContext;
   let suiteSnapshot: string;
   let testSnapshot: string;
@@ -37,6 +38,7 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
   let agent: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
     ctx = await getProtocolContext();
 
     const { locator } = ctx.contracts;
