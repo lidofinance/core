@@ -132,7 +132,7 @@ export async function createVaultWithDashboard(
   expect(adminAddress).to.equal(owner.address);
 
   const stakingVault = await ethers.getContractAt("StakingVault", vaultAddress);
-  const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress)).connect(owner);
+  const dashboard = await ethers.getContractAt("Dashboard", dashboardAddress);
   const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vaultAddress)) as PinnedBeaconProxy;
 
   return {

@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ether, getRandomSigners, impersonate, log } from "lib";
+import { ether, impersonate, log } from "lib";
 import {
   ensureFirstPostMigrationReport,
   getProtocolContext,
@@ -29,7 +29,7 @@ describe("Scenario: Burn Shares", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stranger] = await getRandomSigners(1);
+    [stranger] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
