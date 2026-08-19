@@ -9,7 +9,7 @@ derive_rpc_url() {
   load_env_var RPC_URL && return 0
 
   local network="$1"
-  if [[ $network == "hardhat" ]]; then
+  if [[ $network == "default" ]]; then
     return 0
   fi
 
@@ -86,10 +86,10 @@ prepare_migration_env() {
   normalize_bool_env UPGRADE "false"
   echo "UPGRADE: $UPGRADE"
 
-  load_env_var NETWORK "hardhat"
+  load_env_var NETWORK "default"
   load_env_var RUN_NETWORK || {
     if [[ $NETWORK != "local" && $MODE == "forking" ]]; then
-      export RUN_NETWORK="hardhat"
+      export RUN_NETWORK="default"
       load_env_var FORKING_BLOCK_NUMBER ""
     else
       export RUN_NETWORK="$NETWORK"
@@ -98,7 +98,7 @@ prepare_migration_env() {
   echo "NETWORK: $NETWORK"
   echo "RUN_NETWORK: $RUN_NETWORK"
 
-  if [[ $RUN_NETWORK == "hardhat" ]]; then
+  if [[ $RUN_NETWORK == "default" ]]; then
     derive_rpc_url "$NETWORK"
   else
     derive_rpc_url "$RUN_NETWORK"
@@ -123,7 +123,7 @@ prepare_migration_env() {
     if [[ $NETWORK != $RUN_NETWORK ]]; then
       local remove_dst_file="false"
       # always delete any files from previous runs of HardHat in-process node
-      if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
+      if [[ $RUN_NETWORK == "default" || $command == "test" ]]; then
         remove_dst_file="true"
       fi
 
@@ -140,7 +140,7 @@ prepare_migration_env() {
       if [[ $NETWORK != $RUN_NETWORK ]]; then
         local remove_dst_file="false"
         # always delete any files from previous runs of HardHat in-process node
-        if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
+        if [[ $RUN_NETWORK == "default" || $command == "test" ]]; then
           remove_dst_file="true"
         fi
 

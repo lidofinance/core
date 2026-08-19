@@ -10,8 +10,8 @@ load_env_var NETWORK || {
 }
 echo "NETWORK: $NETWORK"
 
-if [[ $NETWORK == "local" || $NETWORK == "hardhat" ]]; then
-  echo "Error: Network cannot be $(${NETWORK})"
+if [[ $NETWORK == "local" || $NETWORK == "default" ]]; then
+  echo "Error: Network cannot be ${NETWORK}"
   exit 1
 fi
 
