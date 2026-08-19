@@ -1,13 +1,11 @@
 import hre from "hardhat";
 
-import { gr, log } from "#lib";
+import { bl, getDeployerSigner, gr, log } from "#lib";
 
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
-  const deployer = (await ethers.provider.getSigner()).address;
-  if (deployer !== process.env.DEPLOYER) {
-    throw new Error(`Deployer address mismatch: env DEPLOYER=${process.env.DEPLOYER}, signer=${deployer}`);
-  }
+  const deployer = (await getDeployerSigner()).address;
+  log(`Using deployer: ${bl(deployer)}`);
 
   if (!process.env.NETWORK_STATE_FILE) {
     throw new Error("Env variable NETWORK_STATE_FILE is not set");
