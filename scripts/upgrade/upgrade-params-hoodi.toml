@@ -16,6 +16,8 @@ repository = "https://github.com/lidofinance/execution-delegation-framework.git"
 ref = "557299104ad3eb1a74198933bd016328c490e276"
 
 [executionDelegationFramework.factory]
+address = "0xEb49f72DB1546B0E63e1114E2e403edbcE722AE6"
+runtimeCodeHash = "0x0898ad72098301345c44103c8aca22cd8a0a02a339bffe222c6487ec25ff3591"
 
 [guardians.dsm-guardian-01]
 currentAddress = "0x4E93C8c7B06F1CEEb03A8e13B0371b35F93d3257"
