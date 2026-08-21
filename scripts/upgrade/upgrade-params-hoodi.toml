@@ -40,7 +40,8 @@ currentAddress = "0xcc1fFeb60ee3A3Cb6711E5D191339b0aF263328C"
 delegationContract = "0x4EEC6BEd8d5E45f0a6a99F067bC5F6370f2f7221"
 
 [guardians.stakely]
-currentAddress = "0x2C04277d39A1850D07Cca81071E34ce5F2865525"
+# Kiln's old DSM guardian address; the upgrade replaces it with the Stakely holder's delegation contract.
+currentAddress = "0x8C4C15870d27c1194B6893F6B94DD0CE9C2c8ba2"
 delegationContract = "0x03224cFc446F3166c83E875095e872DD1E098076"
 
 [oracleMembers.oracle-member-01]

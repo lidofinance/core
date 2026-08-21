@@ -144,13 +144,20 @@ async function validateSourceMembership(state: DeploymentState, parameters: EDFU
   const activeDSMAddress = await locator.depositSecurityModule();
   const dsm = new ethers.Contract(activeDSMAddress, DSM_MEMBERSHIP_ABI, ethers.provider);
   const guardianMappings = parameters.depositSecurityModule.guardianMappings;
-  await validateMembership(
-    "DepositSecurityModule",
-    await dsm.getGuardians(),
-    await dsm.getGuardianQuorum(),
-    guardianMappings.map(({ oldMember }) => oldMember),
-    parameters.depositSecurityModule.quorum,
-  );
+  const guardians = await dsm.getGuardians();
+  // The target maps Kiln's old address to the Stakely holder. The old DSM also has one extra Lido dev council member
+  // that the upgrade removes, so its source count must be exactly one greater than the target count.
+  if (guardians.length !== guardianMappings.length + 1) {
+    throw new Error(
+      `DepositSecurityModule guardian count mismatch: expected ${guardianMappings.length + 1}, got ${guardians.length}`,
+    );
+  }
+  const quorum = await dsm.getGuardianQuorum();
+  if (quorum !== BigInt(parameters.depositSecurityModule.quorum)) {
+    throw new Error(
+      `DepositSecurityModule quorum mismatch: expected ${parameters.depositSecurityModule.quorum}, got ${quorum}`,
+    );
+  }
 
   for (const committee of parameters.oracleCommittees) {
     const code = await ethers.provider.getCode(committee.consensusContract);

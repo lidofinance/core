@@ -188,11 +188,8 @@ contract EDFUpgradeTemplate {
 
         address[] memory guardians = oldDSM.getGuardians();
         uint256 guardiansCount = config.guardiansCount();
-        if (guardians.length != guardiansCount) revert InvalidMembers(address(oldDSM));
-        for (uint256 i = 0; i < guardiansCount; ++i) {
-            (address oldGuardian,) = config.guardianMapping(i);
-            if (!oldDSM.isGuardian(oldGuardian)) revert InvalidMembers(address(oldDSM));
-        }
+        // The target maps Kiln's old address to the Stakely holder. The extra old Lido dev council member is removed.
+        if (guardians.length != guardiansCount + 1) revert InvalidMembers(address(oldDSM));
     }
 
     function _validateNewDSM(EDFUpgradeConfig config) internal view {

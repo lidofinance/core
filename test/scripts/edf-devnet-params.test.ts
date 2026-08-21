@@ -43,7 +43,8 @@ describe("EDF devnet parameters", () => {
       },
       {
         id: "stakely",
-        oldMember: "0x2C04277d39A1850D07Cca81071E34ce5F2865525",
+        // Kiln's old DSM guardian address is replaced by the Stakely holder's delegation contract.
+        oldMember: "0x8C4C15870d27c1194B6893F6B94DD0CE9C2c8ba2",
         address: "0x03224cFc446F3166c83E875095e872DD1E098076",
       },
     ];

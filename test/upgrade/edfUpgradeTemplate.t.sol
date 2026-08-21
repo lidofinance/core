@@ -38,6 +38,8 @@ contract EDFUpgradeTemplateTest is Test {
 
     address internal constant DEPOSIT_CONTRACT = address(0xD001);
     address internal constant OLD_GUARDIAN = address(0x5001);
+    // Models the extra Lido dev council member that the upgrade removes from the old DSM.
+    address internal constant REMOVED_DEV_COUNCIL_MEMBER = address(0x5002);
 
     EDFUpgradeExecutor internal executor;
     EDFUpgradeTemplate__Harness internal template;
@@ -60,8 +62,9 @@ contract EDFUpgradeTemplateTest is Test {
         stakingRouter = new EDFStakingRouter__Mock();
         topUpGateway = new EDFStakingRouter__Mock();
 
-        address[] memory oldGuardians = new address[](1);
+        address[] memory oldGuardians = new address[](2);
         oldGuardians[0] = OLD_GUARDIAN;
+        oldGuardians[1] = REMOVED_DEV_COUNCIL_MEMBER;
         oldDSM = new EDFDepositSecurityModule__Mock(
             4,
             address(stakingRouter),
