@@ -43,6 +43,8 @@ export type DelegationDeploymentPlanItem = {
   deploymentTx?: string;
 };
 
+export type EDFDelegationContractScope = "all" | "protocol";
+
 type ValidatedDelegationContract = {
   owner: string;
   delegate: string;
@@ -139,7 +141,11 @@ async function validateMembership(
   }
 }
 
-async function validateSourceMembership(state: DeploymentState, parameters: EDFUpgradeParameters) {
+async function validateSourceMembership(
+  state: DeploymentState,
+  parameters: EDFUpgradeParameters,
+  validateOracleCommittees: boolean,
+) {
   const locator = new ethers.Contract(getAddress(Sk.lidoLocator, state), LOCATOR_ABI, ethers.provider);
   const activeDSMAddress = await locator.depositSecurityModule();
   const dsm = new ethers.Contract(activeDSMAddress, DSM_MEMBERSHIP_ABI, ethers.provider);
@@ -159,6 +165,8 @@ async function validateSourceMembership(state: DeploymentState, parameters: EDFU
     );
   }
 
+  if (!validateOracleCommittees) return;
+
   for (const committee of parameters.oracleCommittees) {
     const code = await ethers.provider.getCode(committee.consensusContract);
     if (code === "0x") throw new Error(`${committee.id} consensus contract has no bytecode`);
@@ -172,6 +180,19 @@ async function validateSourceMembership(state: DeploymentState, parameters: EDFU
       committee.quorum,
     );
   }
+}
+
+export function getDelegationContractsForScope(
+  parameters: EDFUpgradeParameters,
+  scope: EDFDelegationContractScope,
+): EDFDelegationContract[] {
+  if (scope === "all") return parameters.executionDelegationFramework.delegationContracts;
+
+  const protocolContractIds = new Set([
+    ...parameters.depositSecurityModule.guardianMappings.map(({ delegationContractId }) => delegationContractId),
+    parameters.topUpGateway.delegationContractId,
+  ]);
+  return parameters.executionDelegationFramework.delegationContracts.filter(({ id }) => protocolContractIds.has(id));
 }
 
 async function validateDelegationContract(
@@ -308,6 +329,7 @@ function persistDelegationContract(
 export async function deployOrReuseEDFDelegationContracts(
   state: DeploymentState,
   parameters: EDFUpgradeParameters,
+  scope: EDFDelegationContractScope = "all",
 ): Promise<Record<string, StoredDelegationContract>> {
   await validateChainState(state, parameters.chainId);
   const framework = parameters.executionDelegationFramework;
@@ -317,18 +339,20 @@ export async function deployOrReuseEDFDelegationContracts(
     );
   }
 
+  const delegationContracts = getDelegationContractsForScope(parameters, scope);
+
   const canDeployPrerequisites = hardhatNetwork.name === "local" || hardhatNetwork.name === "local-devnet";
   if (!canDeployPrerequisites) {
     if (!framework.factory.address || !framework.factory.runtimeCodeHash) {
       throw new Error("DelegationFactory address and runtime code hash are required on this network");
     }
-    const incompleteContract = framework.delegationContracts.find(({ address }) => !address);
+    const incompleteContract = delegationContracts.find(({ address }) => !address);
     if (incompleteContract) {
       throw new Error(`Delegation contract ${incompleteContract.id} requires an address on this network`);
     }
   }
   if (hardhatNetwork.name === "local-devnet") {
-    const incompleteContract = framework.delegationContracts.find(
+    const incompleteContract = delegationContracts.find(
       ({ address, owner, delegate, cooldown }) => !address && (!owner || !delegate || cooldown === undefined),
     );
     if (incompleteContract) {
@@ -338,7 +362,7 @@ export async function deployOrReuseEDFDelegationContracts(
     }
   }
 
-  await validateSourceMembership(state, parameters);
+  await validateSourceMembership(state, parameters, scope === "all");
 
   const factoryAddress = await deployExecutionDelegationFramework(state, {
     expectedAddress: framework.factory.address,
@@ -350,7 +374,7 @@ export async function deployOrReuseEDFDelegationContracts(
   const stored = {
     ...((state[Sk.delegationFactory]?.delegationContracts ?? {}) as Record<string, StoredDelegationContract>),
   };
-  const plan = buildDelegationDeploymentPlan(framework.delegationContracts, stored);
+  const plan = buildDelegationDeploymentPlan(delegationContracts, stored);
 
   const needsTestConfiguration = plan.some((item) => item.action === "deploy" && (!item.owner || !item.delegate));
   const testSigners = needsTestConfiguration ? await ethers.getSigners() : [];

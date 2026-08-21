@@ -71,7 +71,7 @@
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
     "upgrade:edf:mock-voting": "MODE=forking STEPS_FILE=upgrade/steps-edf-enact.json yarn deploy:upgrade",
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
-    "deploy:upgrade:edf:protocol:hoodi": "NETWORK=hoodi yarn deploy:upgrade:edf:protocol",
+    "deploy:upgrade:edf:protocol:hoodi": "NETWORK=hoodi NETWORK_STATE_FILE=deployed-hoodi.json UPGRADE_PARAMETERS_FILE=scripts/upgrade/upgrade-params-hoodi.toml yarn deploy:upgrade:edf:protocol",
     "deploy:upgrade:edf:voting:hoodi": "NETWORK=hoodi yarn deploy:upgrade:edf:voting",
     "deploy:upgrade:edf:all:hoodi": "NETWORK=hoodi yarn deploy:upgrade:edf:all",
     "upgrade:edf:fork-node:hoodi": "NETWORK=hoodi yarn upgrade:fork-node",

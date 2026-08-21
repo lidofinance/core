@@ -5,7 +5,7 @@ import {
   buildEDFDevnetNewVoteScript,
   buildEDFDevnetUpgradeParameters,
 } from "scripts/utils/edf-devnet";
-import { buildDelegationDeploymentPlan } from "scripts/utils/edf-upgrade";
+import { buildDelegationDeploymentPlan, getDelegationContractsForScope } from "scripts/utils/edf-upgrade";
 
 import * as toml from "@iarna/toml";
 
@@ -91,6 +91,10 @@ describe("EDF devnet parameters", () => {
       ...guardians.map(({ id }) => ({ id, action: "reuse" })),
       ...oracleMemberIds.map((id) => ({ id, action: "deploy" })),
       { id: depositor.id, action: "reuse" },
+    ]);
+    expect(getDelegationContractsForScope(hoodi, "protocol").map(({ id }) => id)).to.deep.equal([
+      ...guardians.map(({ id }) => id),
+      depositor.id,
     ]);
     expect(hoodi.depositSecurityModule.guardianMappings).to.deep.equal(guardianMappings);
     expect(hoodi.oracleCommittees.map(({ memberMappings: mappings }) => mappings)).to.deep.equal([
