@@ -15,15 +15,46 @@ describe("EDF devnet parameters", () => {
   it("expands the maintained manifests to the expected voting topology", () => {
     const hoodiManifest = toml.parse(fs.readFileSync("scripts/upgrade/upgrade-params-hoodi.toml", "utf8"));
     const hoodi = validateEDFUpgradeParameters(hoodiManifest);
-    const guardianMappings = [
-      ["dsm-guardian-01", "0x4E93C8c7B06F1CEEb03A8e13B0371b35F93d3257"],
-      ["dsm-guardian-02", "0x2aD1cBE1109376aD6f9D714c29c9A7FF452300FE"],
-      ["dsm-guardian-03", "0x89C102120452AfdFb63f2D4231C5CE3e939f393b"],
-      ["dsm-guardian-04", "0x1be2A219CBD0F18B825a4dDd580F7b3B33Bacb41"],
-      ["dsm-guardian-05", "0xEf302FFC6830FbC464cDFFA84Fa4d5699aA8f06A"],
-      ["dsm-guardian-06", "0xcc1fFeb60ee3A3Cb6711E5D191339b0aF263328C"],
-      ["dsm-guardian-07", "0x8C4C15870d27c1194B6893F6B94DD0CE9C2c8ba2"],
-    ].map(([delegationContractId, oldMember]) => ({ oldMember, delegationContractId }));
+    const guardians = [
+      {
+        id: "lido-dev-team",
+        oldMember: "0x4E93C8c7B06F1CEEb03A8e13B0371b35F93d3257",
+        address: "0x56a1B0b5074818D568D6608dc07353e81b4b53ec",
+      },
+      {
+        id: "p2p",
+        oldMember: "0x89C102120452AfdFb63f2D4231C5CE3e939f393b",
+        address: "0x89e1bEBAf6857312bCDc313B93F29aB9cA98000f",
+      },
+      {
+        id: "staking-facilities",
+        oldMember: "0x1be2A219CBD0F18B825a4dDd580F7b3B33Bacb41",
+        address: "0x901789EA029B3c7CEa47019d6Df3C5973212976D",
+      },
+      {
+        id: "blockscape",
+        oldMember: "0xEf302FFC6830FbC464cDFFA84Fa4d5699aA8f06A",
+        address: "0xa66FDd65Cfc78964A62b5Ec50E5b0Afd0e52D610",
+      },
+      {
+        id: "stakefish",
+        oldMember: "0xcc1fFeb60ee3A3Cb6711E5D191339b0aF263328C",
+        address: "0x4EEC6BEd8d5E45f0a6a99F067bC5F6370f2f7221",
+      },
+      {
+        id: "stakely",
+        oldMember: "0x2C04277d39A1850D07Cca81071E34ce5F2865525",
+        address: "0x03224cFc446F3166c83E875095e872DD1E098076",
+      },
+    ];
+    const guardianMappings = guardians.map(({ id: delegationContractId, oldMember }) => ({
+      oldMember,
+      delegationContractId,
+    }));
+    const depositor = {
+      id: "depositor-bot",
+      address: "0x25636798f6E716b2e6b7dEA8ED52a45271768D7A",
+    };
     const oracleMembers = Object.fromEntries([
       ["oracle-member-01", "0x43C45C2455C49eed320F463fF4f1Ece3D2BF5aE2"],
       ["oracle-member-02", "0x948A62cc0414979dc7aa9364BA5b96ECb29f8736"],
@@ -41,22 +72,25 @@ describe("EDF devnet parameters", () => {
       ids.map((delegationContractId) => ({ oldMember: oracleMembers[delegationContractId], delegationContractId }));
 
     expect(hoodi.executionDelegationFramework.delegationContracts.map(({ id }) => id)).to.deep.equal([
-      ...guardianMappings.map(({ delegationContractId }) => delegationContractId),
+      ...guardians.map(({ id }) => id),
       ...oracleMemberIds,
+      depositor.id,
     ]);
-    const configuredMembers = [
-      ...Object.values(hoodiManifest.guardians),
-      ...Object.values(hoodiManifest.oracleMembers),
-    ] as Array<{ delegationContract: string }>;
-    expect(configuredMembers.map(({ delegationContract }) => delegationContract)).to.deep.equal(
-      Array(configuredMembers.length).fill(""),
-    );
-    expect(hoodi.executionDelegationFramework.delegationContracts.map(({ address }) => address)).to.deep.equal(
-      Array(configuredMembers.length).fill(undefined),
-    );
-    expect(buildDelegationDeploymentPlan(hoodi.executionDelegationFramework.delegationContracts)).to.satisfy(
-      (plan: ReturnType<typeof buildDelegationDeploymentPlan>) => plan.every(({ action }) => action === "deploy"),
-    );
+    expect(hoodi.executionDelegationFramework.delegationContracts.map(({ address }) => address)).to.deep.equal([
+      ...guardians.map(({ address }) => address),
+      ...Array(oracleMemberIds.length).fill(undefined),
+      depositor.address,
+    ]);
+    expect(
+      buildDelegationDeploymentPlan(hoodi.executionDelegationFramework.delegationContracts).map(({ id, action }) => ({
+        id,
+        action,
+      })),
+    ).to.deep.equal([
+      ...guardians.map(({ id }) => ({ id, action: "reuse" })),
+      ...oracleMemberIds.map((id) => ({ id, action: "deploy" })),
+      { id: depositor.id, action: "reuse" },
+    ]);
     expect(hoodi.depositSecurityModule.guardianMappings).to.deep.equal(guardianMappings);
     expect(hoodi.oracleCommittees.map(({ memberMappings: mappings }) => mappings)).to.deep.equal([
       memberMappings(oracleMemberIds),
@@ -99,7 +133,7 @@ describe("EDF devnet parameters", () => {
     ]);
     expect(hoodi.topUpGateway).to.deep.equal({
       address: "0x10DBEb3367876826d00D21718D1d893e0fbD2956",
-      delegationContractId: "dsm-guardian-01",
+      delegationContractId: "depositor-bot",
     });
   });
 
