@@ -1,8 +1,8 @@
 import { expect } from "chai";
 import {
+  Addressable,
   concat,
   ContractTransactionResponse,
-  encodeBytes32String,
   keccak256,
   solidityPacked,
   Wallet,
@@ -19,6 +19,7 @@ import { mineUpTo, setBalance, time } from "@nomicfoundation/hardhat-network-hel
 import {
   DepositContract__MockForDepositSecurityModule,
   DepositSecurityModule,
+  ERC1271Guardian__Mock,
   StakingRouter__MockForDepositSecurityModule,
 } from "typechain-types";
 
@@ -34,7 +35,14 @@ const PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS = 10;
 const MAX_OPERATORS_PER_UNVETTING = 20;
 const MODULE_NONCE = 12;
 const DEPOSIT_ROOT = "0xd151867719c94ad8458feaf491809f9bc8096c702a72747403ecaac30c179137";
-const DSM_VERSION = 4;
+const DSM_VERSION = 5;
+
+type Guardian = Addressable & {
+  address: string;
+  privateKey: string;
+  delegate: Wallet;
+  contract: ERC1271Guardian__Mock;
+};
 
 type Params = {
   depositContract: string;
@@ -68,11 +76,11 @@ describe("DepositSecurityModule.sol", () => {
 
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let guardian1: Wallet;
-  let guardian2: Wallet;
-  let guardian3: Wallet;
-  let unrelatedGuardian1: Wallet;
-  let unrelatedGuardian2: Wallet;
+  let guardian1: Guardian;
+  let guardian2: Guardian;
+  let guardian3: Guardian;
+  let unrelatedGuardian1: Guardian;
+  let unrelatedGuardian2: Guardian;
 
   let originalState: string;
   let provider: typeof ethers.provider;
@@ -110,34 +118,52 @@ describe("DepositSecurityModule.sol", () => {
   }
 
   async function deposit(
-    sortedGuardianWallets: Wallet[],
+    sortedGuardians: Guardian[],
     overridingArgs?: DepositArgs,
   ): Promise<ContractTransactionResponse> {
     const signingArgs = await getDepositArgs(overridingArgs);
 
-    const sortedGuardianSignatures = sortedGuardianWallets.map((guardian) => {
-      const validAttestMessage = new DSMAttestMessage(...signingArgs);
+    const sortedGuardianSignatures = sortedGuardians.map((guardian) => {
+      const validAttestMessage = new DSMAttestMessage(guardian.address, ...signingArgs);
       return validAttestMessage.sign(guardian.privateKey);
     });
 
     return await dsm.depositBufferedEther(...signingArgs, sortedGuardianSignatures);
   }
 
+  const emptyGuardianSignature = (guardian = ZeroAddress): DepositSecurityModule.GuardianSignatureStruct => ({
+    guardian,
+    signature: "0x",
+  });
+
+  async function executeAsGuardian(guardian: Guardian, data: string) {
+    return await guardian.contract.connect(guardian.delegate).execute(await dsm.getAddress(), data);
+  }
+
   before(async () => {
     ({ provider } = ethers);
     [admin, stranger] = await ethers.getSigners();
 
-    guardian1 = new Wallet(streccak("guardian1"), provider);
-    guardian2 = new Wallet(streccak("guardian2"), provider);
-    guardian3 = new Wallet(streccak("guardian3"), provider);
-    unrelatedGuardian1 = new Wallet(streccak("unrelatedGuardian1"), provider);
-    unrelatedGuardian2 = new Wallet(streccak("unrelatedGuardian2"), provider);
+    const deployGuardian = async (name: string): Promise<Guardian> => {
+      const delegate = new Wallet(streccak(name), provider);
+      await setBalance(delegate.address, ether("100"));
+      const contract = await ethers.deployContract("ERC1271Guardian__Mock", [delegate.address]);
+      const address = await contract.getAddress();
+      return { address, privateKey: delegate.privateKey, delegate, contract, getAddress: async () => address };
+    };
 
-    await setBalance(guardian1.address, ether("100"));
-    await setBalance(guardian2.address, ether("100"));
-    await setBalance(guardian3.address, ether("100"));
-    await setBalance(unrelatedGuardian1.address, ether("100"));
-    await setBalance(unrelatedGuardian2.address, ether("100"));
+    const guardians = [
+      await deployGuardian("guardian1"),
+      await deployGuardian("guardian2"),
+      await deployGuardian("guardian3"),
+    ].sort((a, b) => a.address.toLowerCase().localeCompare(b.address.toLowerCase()));
+    [guardian1, guardian2, guardian3] = guardians;
+
+    const unrelatedGuardians = [
+      await deployGuardian("unrelatedGuardian1"),
+      await deployGuardian("unrelatedGuardian2"),
+    ].sort((a, b) => a.address.toLowerCase().localeCompare(b.address.toLowerCase()));
+    [unrelatedGuardian1, unrelatedGuardian2] = unrelatedGuardians;
 
     stakingRouter = await ethers.deployContract("StakingRouter__MockForDepositSecurityModule", [STAKING_MODULE_ID]);
     depositContract = await ethers.deployContract("DepositContract__MockForDepositSecurityModule");
@@ -456,6 +482,28 @@ describe("DepositSecurityModule.sol", () => {
         await expect(dsm.addGuardian(ZeroAddress, 0)).to.be.revertedWithCustomError(dsm, "ZeroAddress");
       });
 
+      it("Reverts if added guardian is an EOA", async () => {
+        await expect(dsm.addGuardian(stranger.address, 0)).to.be.revertedWithCustomError(
+          dsm,
+          "GuardianDoesNotSupportERC1271",
+        );
+      });
+
+      it("Reverts if added guardian does not support ERC-1271", async () => {
+        await guardian3.contract.setInterfaceResponseMode(1);
+        await expect(dsm.addGuardian(guardian3, 0)).to.be.revertedWithCustomError(dsm, "GuardianDoesNotSupportERC1271");
+      });
+
+      it("Reverts if guardian ERC-165 check reverts", async () => {
+        await guardian3.contract.setInterfaceResponseMode(2);
+        await expect(dsm.addGuardian(guardian3, 0)).to.be.revertedWithCustomError(dsm, "GuardianDoesNotSupportERC1271");
+      });
+
+      it("Reverts if guardian ERC-165 check returns malformed data", async () => {
+        await guardian3.contract.setInterfaceResponseMode(3);
+        await expect(dsm.addGuardian(guardian3, 0)).to.be.revertedWithCustomError(dsm, "GuardianDoesNotSupportERC1271");
+      });
+
       it("Reverts if added duplicate address", async () => {
         await dsm.addGuardian(guardian1, 0);
 
@@ -635,18 +683,14 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Reverts if signature is invalid", async () => {
       const blockNumber = 1;
-
-      const sig: DepositSecurityModule.SignatureStruct = {
-        r: encodeBytes32String(""),
-        vs: encodeBytes32String(""),
-      };
-
-      await expect(dsm.pauseDeposits(blockNumber, sig)).to.be.revertedWith("ECDSA: invalid signature");
+      await expect(
+        dsm.pauseDeposits(blockNumber, emptyGuardianSignature(guardian1.address)),
+      ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
     });
 
     it("Reverts if signature is not guardian", async () => {
       const blockNumber = await time.latestBlock();
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(guardian3.address, blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
 
@@ -655,7 +699,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Reverts if called by an anon submitting an unrelated sig", async () => {
       const blockNumber = await time.latestBlock();
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(guardian3.address, blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
 
@@ -665,24 +709,68 @@ describe("DepositSecurityModule.sol", () => {
       );
     });
 
+    it("Reverts if guardian returns a non-magic ERC-1271 value", async () => {
+      const blockNumber = await time.latestBlock();
+      const sig = new DSMPauseMessage(guardian1.address, blockNumber).sign(guardian1.privateKey);
+      await guardian1.contract.setSignatureResponseMode(1);
+
+      await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
+        dsm,
+        "InvalidSignature",
+      );
+    });
+
+    it("Reverts if guardian ERC-1271 validation reverts", async () => {
+      const blockNumber = await time.latestBlock();
+      const sig = new DSMPauseMessage(guardian1.address, blockNumber).sign(guardian1.privateKey);
+      await guardian1.contract.setSignatureResponseMode(2);
+
+      await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
+        dsm,
+        "InvalidSignature",
+      );
+    });
+
+    it("Reverts if guardian ERC-1271 validation returns malformed data", async () => {
+      const blockNumber = await time.latestBlock();
+      const sig = new DSMPauseMessage(guardian1.address, blockNumber).sign(guardian1.privateKey);
+      await guardian1.contract.setSignatureResponseMode(3);
+
+      await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
+        dsm,
+        "InvalidSignature",
+      );
+    });
+
+    it("Reverts if a signature bound to one guardian is submitted for another guardian", async () => {
+      const blockNumber = await time.latestBlock();
+      await guardian2.contract.setDelegate(guardian1.delegate.address);
+
+      const sig = new DSMPauseMessage(guardian1.address, blockNumber).sign(guardian1.privateKey);
+      await expect(
+        dsm.connect(stranger).pauseDeposits(blockNumber, { ...sig, guardian: guardian2.address }),
+      ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
+    });
+
+    it("Reverts if the delegate calls DSM directly without a guardian signature", async () => {
+      await expect(
+        dsm.connect(guardian1.delegate).pauseDeposits(await time.latestBlock(), emptyGuardianSignature()),
+      ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
+    });
+
     it("Reverts if called with an expired `blockNumber` by a guardian", async () => {
       const blockNumber = await time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const data = dsm.interface.encodeFunctionData("pauseDeposits", [staleBlockNumber, emptyGuardianSignature()]);
 
-      const sig = validPauseMessage.sign(guardian1.privateKey);
-
-      await expect(dsm.connect(guardian1).pauseDeposits(staleBlockNumber, sig)).to.be.revertedWithCustomError(
-        dsm,
-        "PauseIntentExpired",
-      );
+      await expect(executeAsGuardian(guardian1, data)).to.be.revertedWithCustomError(dsm, "PauseIntentExpired");
     });
 
     it("Reverts if called with an expired `blockNumber` by an anon submitting a guardian's sig", async () => {
       const blockNumber = await time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
 
-      const stalePauseMessage = new DSMPauseMessage(staleBlockNumber);
+      const stalePauseMessage = new DSMPauseMessage(guardian1.address, staleBlockNumber);
       const sig = stalePauseMessage.sign(guardian1.privateKey);
 
       await expect(dsm.connect(stranger).pauseDeposits(staleBlockNumber, sig)).to.be.revertedWithCustomError(
@@ -694,20 +782,15 @@ describe("DepositSecurityModule.sol", () => {
     it("Reverts if called with a future `blockNumber` by a guardian", async () => {
       const futureBlockNumber = (await time.latestBlock()) + 100;
 
-      const sig: DepositSecurityModule.SignatureStruct = {
-        r: encodeBytes32String(""),
-        vs: encodeBytes32String(""),
-      };
+      const data = dsm.interface.encodeFunctionData("pauseDeposits", [futureBlockNumber, emptyGuardianSignature()]);
 
-      await expect(dsm.connect(guardian1).pauseDeposits(futureBlockNumber, sig)).to.be.revertedWithPanic(
-        PANIC_CODES.ARITHMETIC_OVERFLOW,
-      );
+      await expect(executeAsGuardian(guardian1, data)).to.be.revertedWithPanic(PANIC_CODES.ARITHMETIC_OVERFLOW);
     });
 
     it("Reverts if called with a future `blockNumber` by an anon submitting a guardian's sig", async () => {
       const futureBlockNumber = (await time.latestBlock()) + 100;
 
-      const futurePauseMessage = new DSMPauseMessage(futureBlockNumber);
+      const futurePauseMessage = new DSMPauseMessage(guardian1.address, futureBlockNumber);
       const sig = futurePauseMessage.sign(guardian1.privateKey);
 
       await expect(dsm.connect(stranger).pauseDeposits(futureBlockNumber, sig)).to.be.revertedWithPanic(
@@ -717,12 +800,8 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Pause if called by guardian and fires `DepositsPaused` event", async () => {
       const blockNumber = await time.latestBlock();
-      const sig: DepositSecurityModule.SignatureStruct = {
-        r: encodeBytes32String(""),
-        vs: encodeBytes32String(""),
-      };
-
-      const tx = await dsm.connect(guardian1).pauseDeposits(blockNumber, sig);
+      const data = dsm.interface.encodeFunctionData("pauseDeposits", [blockNumber, emptyGuardianSignature()]);
+      const tx = await executeAsGuardian(guardian1, data);
 
       await expect(tx).to.emit(dsm, "DepositsPaused").withArgs(guardian1.address);
     });
@@ -730,7 +809,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Pause if called by anon submitting sig of guardian", async () => {
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(guardian2.address, blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -741,7 +820,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Do not pause and emits events if was paused before", async () => {
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(guardian2.address, blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx1 = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -762,7 +841,7 @@ describe("DepositSecurityModule.sol", () => {
 
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(guardian2.address, blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -1014,10 +1093,8 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(1);
         expect(await dsm.getGuardianQuorum()).to.equal(1);
 
-        await dsm.connect(guardian1).pauseDeposits(blockNumber, {
-          r: encodeBytes32String(""),
-          vs: encodeBytes32String(""),
-        });
+        const pauseData = dsm.interface.encodeFunctionData("pauseDeposits", [blockNumber, emptyGuardianSignature()]);
+        await executeAsGuardian(guardian1, pauseData);
         expect(await dsm.isDepositsPaused()).to.equal(true);
 
         await expect(deposit([guardian1])).to.be.revertedWithCustomError(dsm, "DepositsArePaused");
@@ -1081,7 +1158,7 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(3);
         expect(await dsm.getGuardianQuorum()).to.equal(2);
 
-        await expect(deposit([guardian1, unrelatedGuardian1, unrelatedGuardian2])).to.be.revertedWithCustomError(
+        await expect(deposit([unrelatedGuardian1, unrelatedGuardian2])).to.be.revertedWithCustomError(
           dsm,
           "InvalidSignature",
         );
@@ -1141,9 +1218,9 @@ describe("DepositSecurityModule.sol", () => {
     const defaultNodeOperatorIds = concat([operatorId1, operatorId2]);
     const defaultVettedSigningKeysCounts = concat([vettedSigningKeysCount1, vettedSigningKeysCount2]);
 
-    const invalidSig: DepositSecurityModule.SignatureStruct = {
-      r: encodeBytes32String(""),
-      vs: encodeBytes32String(""),
+    const invalidSig: DepositSecurityModule.GuardianSignatureStruct = {
+      guardian: ZeroAddress,
+      signature: "0x",
     };
 
     type UnvetArgs = {
@@ -1153,10 +1230,10 @@ describe("DepositSecurityModule.sol", () => {
       nonce?: number;
       nodeOperatorIds?: string;
       vettedSigningKeysCounts?: string;
-      sig?: DepositSecurityModule.SignatureStruct;
+      sig?: DepositSecurityModule.GuardianSignatureStruct;
     };
 
-    type UnvetSignedArgs = UnvetArgs & { sig?: DepositSecurityModule.SignatureStruct };
+    type UnvetSignedArgs = UnvetArgs & { sig?: DepositSecurityModule.GuardianSignatureStruct };
 
     async function getUnvetArgs(overridingArgs?: UnvetArgs) {
       const latestBlock = await getLatestBlock();
@@ -1171,16 +1248,23 @@ describe("DepositSecurityModule.sol", () => {
       return [blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts] as const;
     }
 
-    async function getUnvetSignature(from: Wallet, overridingArgs?: UnvetArgs) {
+    async function getUnvetSignature(from: Guardian, overridingArgs?: UnvetArgs) {
       const args = await getUnvetArgs(overridingArgs);
-      const validUnvetMessage = new DSMUnvetMessage(...args);
+      const validUnvetMessage = new DSMUnvetMessage(from.address, ...args);
       return validUnvetMessage.sign(from.privateKey);
     }
 
-    async function unvetSigningKeys(from: Wallet, overridingArgs?: UnvetSignedArgs) {
+    async function unvetSigningKeys(from: Guardian, overridingArgs?: UnvetSignedArgs) {
       const unvetArgs = await getUnvetArgs(overridingArgs);
       const sig = overridingArgs?.sig ?? (await getUnvetSignature(from, overridingArgs));
-      return await dsm.connect(from).unvetSigningKeys(...unvetArgs, sig);
+      return await dsm.connect(from.delegate).unvetSigningKeys(...unvetArgs, sig);
+    }
+
+    async function unvetSigningKeysDirect(from: Guardian, overridingArgs?: UnvetSignedArgs) {
+      const unvetArgs = await getUnvetArgs(overridingArgs);
+      const sig = overridingArgs?.sig ?? emptyGuardianSignature();
+      const data = dsm.interface.encodeFunctionData("unvetSigningKeys", [...unvetArgs, sig]);
+      return await executeAsGuardian(from, data);
     }
 
     beforeEach(async () => {
@@ -1238,9 +1322,11 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if it's called by stranger with invalid signature", async () => {
-      await expect(unvetSigningKeys(unrelatedGuardian1, { sig: invalidSig })).to.be.revertedWith(
-        "ECDSA: invalid signature",
-      );
+      await expect(
+        unvetSigningKeys(unrelatedGuardian1, {
+          sig: { ...invalidSig, guardian: guardian1.address },
+        }),
+      ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
     });
 
     it("Reverts if called with zero `block.hash`", async () => {
@@ -1288,7 +1374,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Unvets keys if it's called by guardian", async () => {
-      const tx = await unvetSigningKeys(guardian1);
+      const tx = await unvetSigningKeysDirect(guardian1);
 
       await expect(tx)
         .to.emit(stakingRouter, "StakingModuleVettedKeysDecreased")
@@ -1297,7 +1383,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Unvets keys if it's called by guardian with valid signature", async () => {
       const sig = await getUnvetSignature(guardian1);
-      const tx = await unvetSigningKeys(guardian1, { sig });
+      const tx = await unvetSigningKeysDirect(guardian1, { sig });
 
       await expect(tx)
         .to.emit(stakingRouter, "StakingModuleVettedKeysDecreased")
@@ -1306,7 +1392,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Unvets keys if it's called by guardian with invalid signature", async () => {
       const sig = await getUnvetSignature(unrelatedGuardian1);
-      const tx = await unvetSigningKeys(guardian1, { sig });
+      const tx = await unvetSigningKeysDirect(guardian1, { sig });
 
       await expect(tx)
         .to.emit(stakingRouter, "StakingModuleVettedKeysDecreased")
