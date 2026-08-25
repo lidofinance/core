@@ -56,6 +56,10 @@ contract ReportProcessor__Mock is IReportAsyncProcessor {
         return _consensusVersion;
     }
 
+    function getConsensusContract() external view returns (address) {
+        return address(0);
+    }
+
     function submitConsensusReport(bytes32 report, uint256 refSlot, uint256 deadline) external {
         _submitReportLastCall.report = report;
         _submitReportLastCall.refSlot = refSlot;
