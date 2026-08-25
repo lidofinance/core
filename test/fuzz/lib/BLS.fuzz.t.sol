@@ -1,0 +1,902 @@
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
+
+import "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
+import {Test} from "forge-std/Test.sol";
+import {CommonBase} from "forge-std/Base.sol";
+import {StdAssertions} from "forge-std/StdAssertions.sol";
+
+import {BLS12_381, SSZ} from "contracts/common/lib/BLS.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+
+struct PrecomputedDepositMessage {
+    IStakingVault.Deposit deposit;
+    BLS12_381.DepositY depositYComponents;
+    bytes32 withdrawalCredentials;
+}
+
+// harness to test methods with calldata args
+contract BLSHarness {
+    function verifyDepositMessage(PrecomputedDepositMessage calldata message) public view {
+        BLS12_381.verifyDepositMessage(
+            message.deposit.pubkey,
+            message.deposit.signature,
+            message.deposit.amount,
+            message.depositYComponents,
+            message.withdrawalCredentials,
+            0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+        );
+    }
+
+    function depositMessageSigningRoot(PrecomputedDepositMessage calldata message) public view returns (bytes32) {
+        return
+            BLS12_381.depositMessageSigningRoot(
+                message.deposit.pubkey,
+                message.deposit.amount,
+                message.withdrawalCredentials,
+                0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+            );
+    }
+
+    function validateCompressedPubkeyFlags(bytes calldata pubkey, BLS12_381.Fp calldata pubkeyY) external pure {
+        BLS12_381.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    function validateCompressedSignatureFlags(
+        bytes calldata signature,
+        BLS12_381.Fp2 calldata signatureY
+    ) external pure {
+        BLS12_381.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    function hashToG2(bytes32 message) external view returns (BLS12_381.G2Point memory) {
+        return BLS12_381.hashToG2(message);
+    }
+
+    function computeDepositDomain(bytes4 genesisForkVersion) external view returns (bytes32) {
+        return BLS12_381.computeDepositDomain(genesisForkVersion);
+    }
+}
+
+contract BLSVerifyingKeyTest is Test {
+    BLSHarness harness;
+
+    constructor() {
+        harness = new BLSHarness();
+    }
+
+    function test_verifySigningRoot() external view {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+        bytes32 root = harness.depositMessageSigningRoot(message);
+        StdAssertions.assertEq(root, 0xa0ea5aa96388d0375c9181eac29fa198cea873c818efe7442bd49c03948f2a69);
+    }
+
+    function test_revertOnInCorrectDeposit() external {
+        PrecomputedDepositMessage memory deposit = CORRUPTED_MESSAGE();
+        vm.expectRevert(BLS12_381.InvalidSignature.selector);
+        harness.verifyDepositMessage(deposit);
+    }
+
+    function test_revertOnInfinityPubkey() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Make pubkey decode to the "infinity" representation expected by EIP-2537 pairing ABI
+        // (all-zero uncompressed point) while keeping service bits valid for the flag checks.
+        message.deposit.pubkey = new bytes(48);
+        message.deposit.pubkey[0] = 0x80; // compressed=1, infinity=0, sign=0
+        message.depositYComponents.pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(0));
+
+        vm.expectRevert(BLS12_381.InputHasInfinityPoints.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnInfinitySignature() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Make signature decode to the "infinity" representation expected by EIP-2537 pairing ABI.
+        message.deposit.signature = new bytes(96);
+        message.deposit.signature[0] = 0x80; // compressed=1, infinity=0, sign=0
+        message.depositYComponents.signatureY = BLS12_381.Fp2(bytes32(0), bytes32(0), bytes32(0), bytes32(0));
+
+        vm.expectRevert(BLS12_381.InputHasInfinityPoints.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function _withValidPubkeySignBit(bytes memory pubkey, BLS12_381.Fp memory pubkeyY) internal returns (bytes memory) {
+        // Ensure compression=1, infinity=0, sign=0 while preserving x high bits (lower 5 bits of the first byte).
+        pubkey[0] = bytes1((uint8(pubkey[0]) & 0x1f) | 0x80);
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            return pubkey;
+        } catch {
+            // Flip sign bit and require it to pass.
+            pubkey[0] = bytes1(uint8(pubkey[0]) | 0x20);
+            harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+            return pubkey;
+        }
+    }
+
+    function test_revertOnPubkeyXOutOfField() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // BLS12-381 base field modulus p (48 bytes, from EIP-2537). Any x >= p is an invalid field element.
+        bytes
+            memory badPubkey = hex"1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab";
+
+        // Set the header bits so the flags validation passes for the provided pubkeyY.
+        badPubkey = _withValidPubkeySignBit(badPubkey, message.depositYComponents.pubkeyY);
+        message.deposit.pubkey = badPubkey;
+
+        // EIP-2537 pairing precompile must fail (STATICCALL returns 0) on invalid field elements.
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnPubkeyYOutOfField() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // BLS12-381 base field modulus p.
+        // P is 48 bytes: 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+        // Fp struct has 2 bytes32: a (upper 32 bytes) and b (lower 32 bytes).
+        // Since P is 48 bytes, 'a' has 16 bytes of padding (zeros) followed by top 16 bytes of P.
+
+        bytes32 P_A = bytes32(uint256(0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7));
+        bytes32 P_B = bytes32(uint256(0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab));
+
+        message.depositYComponents.pubkeyY = BLS12_381.Fp(P_A, P_B);
+
+        // We need to ensure the sign bit check passes.
+        // P >= P/2, so computed sign bit will be 1.
+        // We need pubkey to have sign bit 1.
+        message.deposit.pubkey = _withValidPubkeySignBit(message.deposit.pubkey, message.depositYComponents.pubkeyY);
+
+        // Pairing check should fail because Y is not a valid field element (< P).
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_verifyDeposit_LOCAL_1() external view {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_verifyDeposit_LOCAL_2() external view {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_2();
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_verifyDeposit_MAINNET() external view {
+        PrecomputedDepositMessage memory message = BENCHMARK_MAINNET_MESSAGE();
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_computeDepositDomainMainnet() public view {
+        bytes32 depositDomain = BLS12_381.computeDepositDomain(bytes4(0));
+        assertEq(depositDomain, hex"03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9");
+    }
+
+    function test_computeDepositDomainHoodi() public view {
+        bytes32 depositDomain = BLS12_381.computeDepositDomain(bytes4(hex"10000910"));
+        assertEq(depositDomain, hex"03000000719103511efa4f1362ff2a50996cccf329cc84cb410c5e5c7d351d03");
+    }
+
+    function test_zeroingForStaticArrays() public view {
+        assembly {
+            // Get the current free memory pointer
+            let freeMemPtr := mload(0x40)
+
+            // Write dirty bits to the memory location where the array will be allocated
+            // We'll write a pattern of 0xDEADBEEF... to multiple slots
+            // The array will be 24 * 32 = 768 bytes (0x300 bytes)
+            for {
+                let i := 0
+            } lt(i, 0x300) {
+                i := add(i, 0x20)
+            } {
+                mstore(add(freeMemPtr, i), 0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF)
+            }
+
+            // Also write some dirty bits to a few more slots beyond the array size
+            mstore(add(freeMemPtr, 0x300), 0xCAFEBABECAFEBABECAFEBABECAFEBABECAFEBABECAFEBABECAFEBABECAFEBABE)
+        }
+
+        // Declare the array - this should zero-initialize it despite the dirty memory
+        bytes32[24] memory array;
+
+        // Verify that all elements are zero-initialized
+        for (uint256 i = 0; i < 24; i++) {
+            assertEq(array[i], bytes32(0), "Array element should be zero-initialized");
+        }
+    }
+
+    function LOCAL_MESSAGE_1() internal pure returns (PrecomputedDepositMessage memory) {
+        return
+            PrecomputedDepositMessage(
+                IStakingVault.Deposit(
+                    hex"b79902f435d268d6d37ac3ab01f4536a86c192fa07ba5b63b5f8e4d0e05755cfeab9d35fbedb9c02919fe02a81f8b06d",
+                    hex"b357f146f53de27ae47d6d4bff5e8cc8342d94996143b2510452a3565701c3087a0ba04bed41d208eb7d2f6a50debeac09bf3fcf5c28d537d0fe4a52bb976d0c19ea37a31b6218f321a308f8017e5fd4de63df270f37df58c059c75f0f98f980",
+                    1 ether,
+                    bytes32(0) // deposit data root is not checked
+                ),
+                BLS12_381.DepositY(
+                    BLS12_381.Fp(
+                        0x0000000000000000000000000000000019b71bd2a9ebf09809b6c380a1d1de0c,
+                        0x2d9286a8d368a2fc75ad5ccc8aec572efdff29d50b68c63e00f6ce017c24e083
+                    ),
+                    BLS12_381.Fp2(
+                        0x00000000000000000000000000000000160f8d804d277c7a079f451bce224fd4,
+                        0x2397e75676d965a1ebe79e53beeb2cb48be01f4dc93c0bad8ae7560c3e8048fb,
+                        0x0000000000000000000000000000000010d96c5dcc6e32bcd43e472317e18ad9,
+                        0x4dde89c9361d79bec5378c72214083ea40f3dc43ee759025eb4c25150e1943bf
+                    )
+                ),
+                0xf3d93f9fbc6a229f3b11340b4b52ae53833813efab76e812d1d014163259ef1f
+            );
+    }
+
+    function LOCAL_MESSAGE_2() internal pure returns (PrecomputedDepositMessage memory) {
+        return
+            PrecomputedDepositMessage(
+                IStakingVault.Deposit(
+                    hex"95886cccfd40156b84b29e22098f3b1b3d1811275507cdf10a3d4c29217635cc389156565a9e156c6f4797602520d959",
+                    hex"87eb3d449f8b70f6aa46f7f204cdb100bdc2742fae3176cec9b864bfc5460907deed2bbb7dac911b4e79d5c9df86483c013c5ba55ab4691b6f8bd16197538c3f2413dc9c56f37cb6bd78f72dbe876f8ae2a597adbf7574eadab2dd2aad59a291",
+                    1 ether,
+                    bytes32(0xe019f8a516377a7bd24e571ddf9410a73e7f11968515a0241bb7993a72a9a846) // deposit data root is not checked
+                ),
+                BLS12_381.DepositY(
+                    BLS12_381.Fp(
+                        0x00000000000000000000000000000000065bd597c1126394e2c2e357f9bde064,
+                        0xfe5928f590adac55563d299c738458f9fb15494364ce3ee4a0a45190853f63fe
+                    ),
+                    BLS12_381.Fp2(
+                        0x000000000000000000000000000000000f20e48e1255852b16cb3bc79222d426,
+                        0x8eed3a566036b5608775e10833dc043b33c1f762eff29fb75c4479bea44ead3d,
+                        0x000000000000000000000000000000000a9fffa1483846f01e6dd1a3212afb14,
+                        0x6a523aec73dcb6c8a5a97b42b037162fb7767df9e4e11fc9e89f4c4ff0f37a42
+                    )
+                ),
+                0x0200000000000000000000008daf17a20c9dba35f005b6324f493785d239719d
+            );
+    }
+
+    function CORRUPTED_MESSAGE() internal pure returns (PrecomputedDepositMessage memory message) {
+        message = LOCAL_MESSAGE_1();
+        message.withdrawalCredentials = bytes32(0x0);
+    }
+
+    function BENCHMARK_MAINNET_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
+        return
+            PrecomputedDepositMessage(
+                IStakingVault.Deposit(
+                    hex"88841e426f271030ad2257537f4eabd216b891da850c1e0e2b92ee0d6e2052b1dac5f2d87bef51b8ac19d425ed024dd1",
+                    hex"99a9e9abd7d4a4de2d33b9c3253ff8440ad237378ce37250d96d5833fe84ba87bbf288bf3825763c04c3b8cdba323a3b02d542cdf5940881f55e5773766b1b185d9ca7b6e239bdd3fb748f36c0f96f6a00d2e1d314760011f2f17988e248541d",
+                    32 ether,
+                    bytes32(0)
+                ),
+                BLS12_381.DepositY(
+                    BLS12_381.Fp(
+                        0x0000000000000000000000000000000004c46736f0aa8ec7e6e4c1126c12079f,
+                        0x09dc28657695f13154565c9c31907422f48df41577401bab284458bf4ebfb45d
+                    ),
+                    BLS12_381.Fp2(
+                        0x0000000000000000000000000000000010e7847980f47ceb3f994a97e246aa1d,
+                        0x563dfb50c372156b0eaee0802811cd62da8325ebd37a1a498ad4728b5852872f,
+                        0x0000000000000000000000000000000000c4aac6c84c230a670b4d4c53f74c0b,
+                        0x2ca4a6a86fe720d0640d725d19d289ce4ac3a9f8a9c8aa345e36577c117e7dd6
+                    )
+                ),
+                0x004AAD923FC63B40BE3DDE294BDD1BBB064E34A4A4D51B68843FEA44532D6147
+            );
+    }
+
+    /// @notice Slices a byte array
+    function slice(bytes memory data, uint256 start, uint256 end) internal pure returns (bytes32 result) {
+        uint256 len = end - start;
+        // Slice length exceeds 32 bytes"
+        assert(len <= 32);
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // The bytes array in memory begins with its length at the first 32 bytes.
+            // So we add 32 to get the pointer to the actual data.
+            let ptr := add(data, 32)
+            // Load 32 bytes from memory starting at dataPtr+start.
+            let word := mload(add(ptr, start))
+            // Shift right by (32 - len)*8 bits to discard any extra bytes.
+            result := shr(mul(sub(32, len), 8), word)
+        }
+    }
+
+    function wrapFp(bytes memory data) internal pure returns (BLS12_381.Fp memory) {
+        require(data.length == 48, "Invalid Fp length");
+
+        bytes32 a = slice(data, 0, 16);
+        bytes32 b = slice(data, 16, 48);
+
+        return BLS12_381.Fp(a, b);
+    }
+
+    function wrapFp2(bytes memory x, bytes memory y) internal pure returns (BLS12_381.Fp2 memory) {
+        return BLS12_381.Fp2(wrapFp(x).a, wrapFp(x).b, wrapFp(y).a, wrapFp(y).b);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    hashToG2 EDGE CASES                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_hashToG2_ZeroMessage() external view {
+        // hashToG2 must handle any 32-byte input including zero
+        BLS12_381.G2Point memory result = harness.hashToG2(bytes32(0));
+        // Verify result is not infinity (all zeros would indicate infinity)
+        assertTrue(
+            result.x_c0_a != 0 || result.x_c0_b != 0 || result.x_c1_a != 0 || result.x_c1_b != 0,
+            "hashToG2 should not return infinity for zero message"
+        );
+    }
+
+    function test_hashToG2_MaxMessage() external view {
+        // hashToG2 must handle the maximum possible 32-byte value
+        BLS12_381.G2Point memory result = harness.hashToG2(bytes32(type(uint256).max));
+        // Verify result is not infinity
+        assertTrue(
+            result.x_c0_a != 0 || result.x_c0_b != 0 || result.x_c1_a != 0 || result.x_c1_b != 0,
+            "hashToG2 should not return infinity for max message"
+        );
+    }
+
+    function test_hashToG2_Deterministic() external view {
+        // Same input should always produce the same output
+        bytes32 message = keccak256("test message");
+        BLS12_381.G2Point memory result1 = harness.hashToG2(message);
+        BLS12_381.G2Point memory result2 = harness.hashToG2(message);
+
+        assertEq(result1.x_c0_a, result2.x_c0_a, "x_c0_a should be deterministic");
+        assertEq(result1.x_c0_b, result2.x_c0_b, "x_c0_b should be deterministic");
+        assertEq(result1.x_c1_a, result2.x_c1_a, "x_c1_a should be deterministic");
+        assertEq(result1.x_c1_b, result2.x_c1_b, "x_c1_b should be deterministic");
+        assertEq(result1.y_c0_a, result2.y_c0_a, "y_c0_a should be deterministic");
+        assertEq(result1.y_c0_b, result2.y_c0_b, "y_c0_b should be deterministic");
+        assertEq(result1.y_c1_a, result2.y_c1_a, "y_c1_a should be deterministic");
+        assertEq(result1.y_c1_b, result2.y_c1_b, "y_c1_b should be deterministic");
+    }
+
+    function test_hashToG2_DifferentMessages() external view {
+        // Different inputs should produce different outputs
+        BLS12_381.G2Point memory result1 = harness.hashToG2(bytes32(uint256(1)));
+        BLS12_381.G2Point memory result2 = harness.hashToG2(bytes32(uint256(2)));
+
+        bool isDifferent = result1.x_c0_a != result2.x_c0_a ||
+            result1.x_c0_b != result2.x_c0_b ||
+            result1.x_c1_a != result2.x_c1_a ||
+            result1.x_c1_b != result2.x_c1_b;
+
+        assertTrue(isDifferent, "Different messages should produce different G2 points");
+    }
+
+    function test_revertOnSha256PrecompileFailure() external {
+        vm.mockCallRevert(address(0x02), bytes(""), bytes("boom")); // 0x02 = SHA256 precompile
+        vm.expectRevert(BLS12_381.Sha256PrecompileFailed.selector);
+        harness.hashToG2(bytes32(uint256(1)));
+        vm.clearMockedCalls();
+    }
+
+    function test_revertOnModExpPrecompileFailure() external {
+        vm.mockCallRevert(address(0x05), bytes(""), bytes("boom")); // 0x05 = ModExp precompile (EIP-198)
+        vm.expectRevert(BLS12_381.ModExpPrecompileFailed.selector);
+        harness.hashToG2(bytes32(uint256(1)));
+        vm.clearMockedCalls();
+    }
+
+    function test_revertOnModExpPrecompileReturnSizeMismatch() external {
+        vm.mockCall(address(0x05), bytes(""), bytes("")); // 0x05 = ModExp precompile (EIP-198)
+        vm.expectRevert(BLS12_381.ModExpPrecompileFailed.selector);
+        harness.hashToG2(bytes32(uint256(1)));
+        vm.clearMockedCalls();
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  DEPOSIT DOMAIN EDGE CASES                  */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_computeDepositDomain_AllOnesForkVersion() external view {
+        // Edge case: maximum fork version value
+        bytes32 depositDomain = harness.computeDepositDomain(bytes4(0xffffffff));
+        // Should not be zero and should have correct domain type prefix
+        assertTrue(uint256(depositDomain) != 0, "Domain should not be zero");
+        assertEq(bytes4(depositDomain), bytes4(0x03000000), "Domain type prefix should be DOMAIN_DEPOSIT");
+    }
+
+    function test_revertOnSha256PairReturnSizeMismatch() external {
+        vm.mockCall(address(0x02), bytes(""), bytes("")); // 0x02 = SHA256 precompile
+        vm.expectRevert(BLS12_381.Sha256PrecompileFailed.selector);
+        harness.computeDepositDomain(bytes4(0));
+        vm.clearMockedCalls();
+    }
+
+    function test_revertOnPubkeyRootReturnSizeMismatch() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+        vm.mockCall(address(0x02), bytes(""), bytes("")); // 0x02 = SHA256 precompile
+        vm.expectRevert(BLS12_381.Sha256PrecompileFailed.selector);
+        harness.depositMessageSigningRoot(message);
+        vm.clearMockedCalls();
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    AMOUNT EDGE CASES                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_revertOnModifiedAmount() external {
+        // Changing amount by 1 gwei should invalidate the signature
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+        message.deposit.amount = message.deposit.amount + 1 gwei;
+
+        vm.expectRevert(BLS12_381.InvalidSignature.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnAmountSubGwei() external {
+        // Amount not aligned to gwei boundary should be rejected.
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Original amount is 1 ether. Adding sub-gwei amounts should revert instead of truncating.
+        message.deposit.amount = 1 ether + 1; // 1 wei extra - not gwei-aligned
+
+        vm.expectRevert(BLS12_381.InvalidDepositAmount.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnAmountDiffersByOneGwei() external {
+        // Changing amount by exactly 1 gwei should invalidate the signature
+        // because it changes the signing root
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Add exactly 1 gwei (not 1 wei) - this changes the actual amount in the signing root
+        message.deposit.amount = 1 ether + 1 gwei;
+
+        vm.expectRevert(BLS12_381.InvalidSignature.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                POINT-NOT-ON-CURVE TESTS                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_revertOnPubkeyNotOnCurve() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Set Y to an arbitrary value that is valid in field but doesn't satisfy curve equation
+        // Y = 1 is very unlikely to be on the curve for the given X
+        message.depositYComponents.pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(uint256(1)));
+
+        // Adjust sign bit to match the new Y (Y=1 < P/2, so sign bit = 0)
+        message.deposit.pubkey[0] = bytes1((uint8(message.deposit.pubkey[0]) & 0x1f) | 0x80);
+
+        // EIP-2537 pairing precompile should reject point not on curve
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnSignatureNotOnCurve() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Set signature Y to an arbitrary value that won't be on the curve
+        message.depositYComponents.signatureY = BLS12_381.Fp2(
+            bytes32(0),
+            bytes32(uint256(1)),
+            bytes32(0),
+            bytes32(uint256(1))
+        );
+
+        // Adjust sign bit - c1 = 1 < P/2, so sign bit = 0
+        message.deposit.signature[0] = bytes1((uint8(message.deposit.signature[0]) & 0x1f) | 0x80);
+
+        // EIP-2537 pairing precompile should reject point not on curve
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
+    }
+}
+
+contract BLSCompressionFlagsFuzzTest is Test {
+    BLSHarness internal harness;
+
+    bytes32 internal constant HALF_P_A = 0x000000000000000000000000000000000d0088f51cbff34d258dd3db21a5d66b;
+    bytes32 internal constant HALF_P_B = 0xb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555;
+
+    constructor() {
+        harness = new BLSHarness();
+    }
+
+    function _copy(bytes memory data) internal pure returns (bytes memory copy) {
+        copy = new bytes(data.length);
+        for (uint256 i = 0; i < data.length; i++) {
+            copy[i] = data[i];
+        }
+    }
+
+    function _buildValidPubkey(BLS12_381.Fp memory pubkeyY) internal returns (bytes memory) {
+        // We don't care about the X-coordinate bytes here: validateCompressedPubkeyFlags()
+        // only inspects the first header byte and the provided Y-coordinate. Using zeroed
+        // bytes for the rest of the pubkey is therefore sufficient and keeps the test simple.
+        bytes memory pubkey = new bytes(48);
+
+        // Try with sign bit = 0 (header 0x80)
+        pubkey[0] = 0x80;
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            return pubkey;
+        } catch {
+            // fall through
+        }
+        // Try with sign bit = 1 (header 0xA0)
+        pubkey[0] = 0xA0;
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+        return pubkey;
+    }
+
+    function _buildValidSignature(BLS12_381.Fp2 memory signatureY) internal returns (bytes memory) {
+        // We don't care about the X-coordinate bytes here either: validateCompressedSignatureFlags()
+        // only inspects the first header byte and the provided Y-coordinate. Using zeroed
+        // bytes for the rest of the signature is therefore sufficient and keeps the test simple.
+        bytes memory signature = new bytes(96);
+
+        // Try with sign bit = 0 (header 0x80)
+        signature[0] = 0x80;
+        try harness.validateCompressedSignatureFlags(signature, signatureY) {
+            return signature;
+        } catch {
+            // fall through
+        }
+        // Try with sign bit = 1 (header 0xA0)
+        signature[0] = 0xA0;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+        return signature;
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedPubkeyFlags_InvalidCompressionFlag(BLS12_381.Fp memory pubkeyY) external {
+        // Build a pubkey whose flags are accepted for this Y
+        bytes memory validPubkey = _buildValidPubkey(pubkeyY);
+
+        // Flip the compression flag bit (0x80) while keeping infinity and sign bits the same
+        bytes memory invalidFlagsPubkey = _copy(validPubkey);
+        invalidFlagsPubkey[0] = bytes1(uint8(invalidFlagsPubkey[0]) ^ 0x80);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(invalidFlagsPubkey, pubkeyY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedPubkeyFlags_InvalidInfinityFlag(BLS12_381.Fp memory pubkeyY) external {
+        // Build a pubkey whose flags are accepted for this Y
+        bytes memory validPubkey = _buildValidPubkey(pubkeyY);
+
+        // Flip the "infinity" flag bit (0x40) while keeping compression flag and sign bit the same
+        bytes memory invalidFlagsPubkey = _copy(validPubkey);
+        invalidFlagsPubkey[0] = bytes1(uint8(invalidFlagsPubkey[0]) ^ 0x40);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(invalidFlagsPubkey, pubkeyY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedPubkeyFlags_InvalidSignBit(BLS12_381.Fp memory pubkeyY) external {
+        bytes memory validPubkey = _buildValidPubkey(pubkeyY);
+
+        // Flip only the sign bit (0x20) while keeping compression/infinity flags valid
+        bytes memory invalidSignPubkey = _copy(validPubkey);
+        invalidSignPubkey[0] = bytes1(uint8(invalidSignPubkey[0]) ^ 0x20);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(invalidSignPubkey, pubkeyY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedSignatureFlags_InvalidCompressionFlag(
+        BLS12_381.Fp2 memory signatureY
+    ) external {
+        bytes memory validSignature = _buildValidSignature(signatureY);
+
+        // Flip the compression flag bit (0x80) while keeping infinity and sign bits the same
+        bytes memory invalidFlagsSignature = _copy(validSignature);
+        invalidFlagsSignature[0] = bytes1(uint8(invalidFlagsSignature[0]) ^ 0x80);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(invalidFlagsSignature, signatureY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedSignatureFlags_InvalidInfinityFlag(BLS12_381.Fp2 memory signatureY) external {
+        bytes memory validSignature = _buildValidSignature(signatureY);
+
+        // Flip the "infinity" flag bit (0x40) while keeping compression flag and sign bit the same
+        bytes memory invalidFlagsSignature = _copy(validSignature);
+        invalidFlagsSignature[0] = bytes1(uint8(invalidFlagsSignature[0]) ^ 0x40);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(invalidFlagsSignature, signatureY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedSignatureFlags_InvalidSignBit(BLS12_381.Fp2 memory signatureY) external {
+        bytes memory validSignature = _buildValidSignature(signatureY);
+
+        // Flip only the sign bit (0x20) while keeping compression/infinity flags valid
+        bytes memory invalidSignSignature = _copy(validSignature);
+        invalidSignSignature[0] = bytes1(uint8(invalidSignSignature[0]) ^ 0x20);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(invalidSignSignature, signatureY);
+    }
+
+    function test_validateCompressedSignatureFlags_UsesC0WhenC1IsZero() external {
+        // `validateCompressedSignatureFlags()` must use `c0` for sign-bit computation if `c1 == 0`.
+        bytes memory signature = new bytes(96);
+
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+
+        // Choose `c0` such that `c0 > p/2`, therefore computed sign bit must be `1`.
+        signatureY.c0_a = bytes32(type(uint256).max);
+        signatureY.c0_b = bytes32(0);
+
+        // sign bit = 0 => must revert
+        signature[0] = 0x80;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        // sign bit = 1 => must pass
+        signature[0] = 0xA0;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    function test_validateCompressedPubkeyFlags_HalfPBoundary() external {
+        bytes memory pubkey = new bytes(48);
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(HALF_P_A, HALF_P_B);
+
+        // y == p/2 => computed sign bit is 0
+        pubkey[0] = 0x80;
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        pubkey[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    function test_validateCompressedSignatureFlags_HalfPBoundary_UsesC1() external {
+        bytes memory signature = new bytes(96);
+        BLS12_381.Fp2 memory signatureY;
+
+        // Ensure c1 != 0 so the normal "use c1" path is taken.
+        signatureY.c1_a = HALF_P_A;
+        signatureY.c1_b = HALF_P_B;
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(0);
+
+        // y == p/2 => computed sign bit is 0
+        signature[0] = 0x80;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        signature[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    function test_validateCompressedPubkeyFlags_InvalidLength() external {
+        bytes memory pubkey = new bytes(47);
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(0));
+        vm.expectRevert(BLS12_381.InvalidPubkeyLength.selector);
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    function test_validateCompressedSignatureFlags_InvalidLength() external {
+        bytes memory signature = new bytes(95);
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(0);
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+        vm.expectRevert(BLS12_381.InvalidSignatureLength.selector);
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Y COORDINATE EDGE CASES                  */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Test when pubkey Y coordinate is exactly zero
+    function test_validateCompressedPubkeyFlags_YIsZero() external {
+        bytes memory pubkey = new bytes(48);
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(0));
+
+        // y == 0 < p/2 => computed sign bit is 0
+        pubkey[0] = 0x80; // sign bit = 0
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        // sign bit = 1 should fail
+        pubkey[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    /// @notice Test the exact boundary where sign bit flips from 0 to 1 (P/2 + 1)
+    function test_validateCompressedPubkeyFlags_JustAboveHalfP() external {
+        bytes memory pubkey = new bytes(48);
+
+        // HALF_P + 1 - this is the first value where sign bit = 1
+        // Need to handle potential overflow from HALF_P_B + 1
+        uint256 halfPB = uint256(HALF_P_B);
+        uint256 halfPA = uint256(HALF_P_A);
+
+        bytes32 yB;
+        bytes32 yA;
+
+        if (halfPB == type(uint256).max) {
+            // Overflow case: carry over to upper part
+            yB = bytes32(0);
+            yA = bytes32(halfPA + 1);
+        } else {
+            yB = bytes32(halfPB + 1);
+            yA = bytes32(halfPA);
+        }
+
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(yA, yB);
+
+        // y > p/2 => computed sign bit is 1
+        pubkey[0] = 0xA0; // sign bit = 1
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        // sign bit = 0 should fail
+        pubkey[0] = 0x80;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    /// @notice Test maximum valid Y value (P - 1)
+    function test_validateCompressedPubkeyFlags_YIsMaxValid() external {
+        bytes memory pubkey = new bytes(48);
+
+        // P - 1 (maximum valid field element)
+        // P = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+        bytes32 P_A = bytes32(uint256(0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7));
+        bytes32 P_B = bytes32(uint256(0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab));
+
+        // P - 1
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(
+            P_A,
+            bytes32(uint256(P_B) - 1) // P_B - 1 = 0x...aaaa
+        );
+
+        // P - 1 > P/2, so sign bit = 1
+        pubkey[0] = 0xA0;
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        // sign bit = 0 should fail
+        pubkey[0] = 0x80;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    /// @notice Test signature Y when c1 is zero and c0 is also zero
+    function test_validateCompressedSignatureFlags_C1ZeroC0Zero() external {
+        bytes memory signature = new bytes(96);
+
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(0);
+
+        // Both c1 and c0 are zero => c0 = 0 < P/2 => sign bit = 0
+        signature[0] = 0x80;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        signature[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    /// @notice Test signature Y when c1 is zero and c0 < P/2
+    function test_validateCompressedSignatureFlags_C1ZeroC0LessThanHalfP() external {
+        bytes memory signature = new bytes(96);
+
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(uint256(1)); // c0 = 1 < P/2
+
+        // c1 == 0, so use c0. c0 < P/2 => sign bit = 0
+        signature[0] = 0x80;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        signature[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                SIGN BIT PARITY INVARIANT                    */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Invariant: For any valid Y < P, exactly one sign bit value (0 or 1) should be valid
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 10000
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_signBitParityInvariant_Pubkey(bytes32 yA, bytes32 yB) external {
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(yA, yB);
+
+        bytes memory pubkey = new bytes(48);
+
+        bool pass0;
+        bool pass1;
+
+        // Try sign bit = 0
+        pubkey[0] = 0x80;
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            pass0 = true;
+        } catch {}
+        // Try sign bit = 1
+        pubkey[0] = 0xA0;
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            pass1 = true;
+        } catch {}
+        // Exactly one should pass (XOR) - this is the parity invariant
+        assertTrue(pass0 != pass1, "Exactly one sign bit value should be valid for any Y");
+    }
+
+    /// @notice Invariant: For any valid Fp2 Y, exactly one sign bit value should be valid
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 10000
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_signBitParityInvariant_Signature(BLS12_381.Fp2 memory signatureY) external {
+        bytes memory signature = new bytes(96);
+
+        bool pass0;
+        bool pass1;
+
+        // Try sign bit = 0
+        signature[0] = 0x80;
+        try harness.validateCompressedSignatureFlags(signature, signatureY) {
+            pass0 = true;
+        } catch {}
+        // Try sign bit = 1
+        signature[0] = 0xA0;
+        try harness.validateCompressedSignatureFlags(signature, signatureY) {
+            pass1 = true;
+        } catch {}
+        // Exactly one should pass (XOR) - this is the parity invariant
+        assertTrue(pass0 != pass1, "Exactly one sign bit value should be valid for any Fp2 Y");
+    }
+}
