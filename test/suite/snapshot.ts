@@ -33,6 +33,10 @@ export function resetState(suite: Mocha.Suite) {
   });
 
   suite.afterAll(async function () {
-    await Snapshot.restore(suiteStartState);
+    // The snapshot is missing when an earlier beforeAll hook skipped or failed
+    // before this helper's beforeAll ran — nothing to restore then.
+    if (suiteStartState) {
+      await Snapshot.restore(suiteStartState);
+    }
   });
 }

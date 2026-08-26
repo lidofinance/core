@@ -19,6 +19,9 @@
     "scratch/steps/0130-grant-roles",
     "scratch/steps/0135-deploy-staking-modules",
     "scratch/steps/0140-plug-staking-modules",
-    "scratch/steps/0150-transfer-roles"
+    "scratch/steps/0145-unpause-sealables",
+    "scratch/steps/0150-transfer-roles",
+    "scratch/steps/0155-activate-protocol",
+    "scratch/steps/0160-deploy-dual-governance"
   ]
 }

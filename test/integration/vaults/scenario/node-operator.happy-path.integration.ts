@@ -173,7 +173,7 @@ resetState(
         proposerIndex: header.proposerIndex,
       }));
 
-    before(async () => {
+    before(async function () {
       [
         ,
         vaultOwner,
@@ -187,6 +187,10 @@ resetState(
       ] = await ethers.getSigners();
 
       ctx = await getProtocolContext();
+
+      // The whole scenario revolves around variable-amount PDG deposits
+      if (!ctx.supportsVariableDepositAmounts) this.skip();
+
       ({ vaultHub, operatorGrid, predepositGuarantee, stakingVaultFactory, lido, lazyOracle } = ctx.contracts);
 
       agent = await ctx.getSigner("agent");

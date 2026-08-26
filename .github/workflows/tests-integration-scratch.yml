@@ -1,10 +1,20 @@
 name: Integration Tests Scratch
 
+# Each job deploys the protocol TWICE, on purpose:
+#   1. `dao-deploy.sh` runs the PRODUCTION deploy driver (scripts/utils/migrate.ts) —
+#      the path a real testnet/mainnet deploy takes. Its artifact is then discarded
+#      (the `mine.ts` step only flushes its last txs).
+#   2. `test:integration:fork:local` (MODE=scratch) RE-deploys from 0000 via the TEST
+#      driver (lib/scratch.ts:applyDeploySteps) and asserts against THAT instance.
+# So step 1 smoke-tests the production driver; step 2 is the functionally-tested deploy.
+# The two drivers are near-duplicates over the same steps.json — the assertions cover
+# the test driver's output, not step 1's. See docs/scratch-deploy.md (CI section).
+
 on: [push]
 
 jobs:
-  test_hardhat_integration_scratch:
-    name: Hardhat / Scratch
+  test_hardhat_integration_scratch_with_dg:
+    name: Hardhat / Scratch with DG
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -12,6 +22,7 @@ jobs:
       SKIP_GAS_REPORT: true
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
+      DG_ALLOW_DEV_COMMITTEES: true
 
     services:
       hardhat-node:
@@ -21,6 +32,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          submodules: recursive
 
       - name: Common setup
         uses: ./.github/workflows/setup
@@ -41,3 +54,157 @@ jobs:
           NETWORK: "local"
           RPC_URL: "http://localhost:8555"
           INTEGRATION_WITH_CSM: "off"
+
+  test_hardhat_integration_scratch_no_dg:
+    name: Hardhat / Scratch without DG
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SKIP_GAS_REPORT: true
+      SKIP_CONTRACT_SIZE: true
+      SKIP_INTERFACES_CHECK: true
+
+    services:
+      hardhat-node:
+        image: ghcr.io/lidofinance/hardhat-node:2.28.0-scratch
+        ports:
+          - 8555:8545
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Set env
+        run: cp .env.example .env && echo "DG_DEPLOYMENT_ENABLED=false" >> .env
+
+      - name: Run scratch deployment
+        run: ./scripts/dao-deploy.sh
+        env:
+          NETWORK: "local"
+          RPC_URL: "http://localhost:8555"
+          GENESIS_TIME: 1639659600
+          DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+          GAS_PRIORITY_FEE: 1
+          GAS_MAX_FEE: 100
+          NETWORK_STATE_FILE: "deployed-local.json"
+          DG_DEPLOYMENT_ENABLED: "false"
+
+      - name: Finalize scratch deployment
+        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
+
+      - name: Run integration tests
+        run: yarn test:integration:fork:local
+        env:
+          INTEGRATION_WITH_CSM: "off"
+          DG_DEPLOYMENT_ENABLED: "false"
+
+  # Sepolia-fork variants of the scratch pipeline: on chainId 11155111 step
+  # 0010 wraps Sepolia's real beacon deposit contract in SepoliaDepositAdapter —
+  # a code path the blank-node jobs above never exercise.
+  test_hardhat_integration_scratch_sepolia_fork_with_dg:
+    name: Hardhat / Scratch on Sepolia fork with DG
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SKIP_GAS_REPORT: true
+      SKIP_CONTRACT_SIZE: true
+      SKIP_INTERFACES_CHECK: true
+      DG_ALLOW_DEV_COMMITTEES: true
+
+    services:
+      hardhat-node:
+        image: ghcr.io/lidofinance/hardhat-node:2.28.0-sepolia
+        env:
+          ETH_RPC_URL: "${{ secrets.SEPOLIA_RPC_URL }}"
+        ports:
+          - 8555:8545
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Set env
+        run: cp .env.example .env
+
+      - name: Run scratch deployment
+        run: ./scripts/dao-deploy.sh
+        env:
+          NETWORK: "local"
+          RPC_URL: "http://localhost:8555"
+          GENESIS_TIME: 1655733600 # Sepolia beacon genesis
+          GENESIS_FORK_VERSION: "0x90000069"
+          DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" # first acc of default mnemonic "test test ..."
+          GAS_PRIORITY_FEE: 1
+          GAS_MAX_FEE: 100
+          NETWORK_STATE_FILE: "deployed-local.json"
+
+      - name: Finalize scratch deployment
+        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
+
+      - name: Run integration tests
+        run: yarn test:integration:fork:local
+        env:
+          INTEGRATION_WITH_CSM: "off"
+          # the in-test re-deploy must see the same Sepolia chain spec
+          GENESIS_TIME: 1655733600
+          GENESIS_FORK_VERSION: "0x90000069"
+
+  test_hardhat_integration_scratch_sepolia_fork_no_dg:
+    name: Hardhat / Scratch on Sepolia fork without DG
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SKIP_GAS_REPORT: true
+      SKIP_CONTRACT_SIZE: true
+      SKIP_INTERFACES_CHECK: true
+
+    services:
+      hardhat-node:
+        image: ghcr.io/lidofinance/hardhat-node:2.28.0-sepolia
+        env:
+          ETH_RPC_URL: "${{ secrets.SEPOLIA_RPC_URL }}"
+        ports:
+          - 8555:8545
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Set env
+        run: cp .env.example .env && echo "DG_DEPLOYMENT_ENABLED=false" >> .env
+
+      - name: Run scratch deployment
+        run: ./scripts/dao-deploy.sh
+        env:
+          NETWORK: "local"
+          RPC_URL: "http://localhost:8555"
+          GENESIS_TIME: 1655733600
+          GENESIS_FORK_VERSION: "0x90000069"
+          DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+          GAS_PRIORITY_FEE: 1
+          GAS_MAX_FEE: 100
+          NETWORK_STATE_FILE: "deployed-local.json"
+          DG_DEPLOYMENT_ENABLED: "false"
+
+      - name: Finalize scratch deployment
+        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
+
+      - name: Run integration tests
+        run: yarn test:integration:fork:local
+        env:
+          INTEGRATION_WITH_CSM: "off"
+          GENESIS_TIME: 1655733600
+          GENESIS_FORK_VERSION: "0x90000069"
+          DG_DEPLOYMENT_ENABLED: "false"

@@ -956,6 +956,10 @@ resetState(
     it("adds fee exemption manually", async () => {
       const settledGrowthBefore = await dashboard.settledGrowth();
       const latestCorrectionTimestampBefore = await dashboard.latestCorrectionTimestamp();
+      // External nodes (anvil) stamp blocks with the wall clock, so a correction in the
+      // same second as the previous one would not advance latestCorrectionTimestamp;
+      // nudge the clock to keep the strictly-increasing assertion below meaningful.
+      await advanceChainTime(1n);
       const feeRateBefore = await dashboard.feeRate();
       const exemptionAmount = ether("0.5");
 
@@ -982,6 +986,8 @@ resetState(
       const currentSettledGrowth = await dashboard.settledGrowth();
       const latestCorrectionTimestampBefore = await dashboard.latestCorrectionTimestamp();
       const newSettledGrowth = currentSettledGrowth + ether("0.1");
+      // Same wall-clock-second guard as in "adds fee exemption manually" above.
+      await advanceChainTime(1n);
 
       // First confirmation from node operator manager - returns false (pending)
       expect(

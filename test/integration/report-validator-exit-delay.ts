@@ -388,7 +388,12 @@ describe("Integration: Report Validator Exit Delay", () => {
       (await validatorExitDelayVerifier.GENESIS_TIME()) + BigInt(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * 12);
 
     const exitDeadlineThreshold = await nor.exitDeadlineThreshold(0);
-    await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - exitDeadlineThreshold);
+    // Land strictly inside the threshold window (+1s): the penalty check is
+    // inclusive (eligibleToExitInSec >= threshold), and on external nodes
+    // (anvil) the delivery txs below can share the warped block's wall-clock
+    // second, which would put the delay exactly AT the threshold. On hardhat
+    // the +1s-per-tx clock provided this margin implicitly.
+    await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - exitDeadlineThreshold + 1n);
 
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);

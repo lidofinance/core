@@ -44,10 +44,13 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
   let depositor: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  before(async () => {
+  before(async function () {
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();
+
+    // The whole scenario revolves around variable-amount PDG deposits
+    if (!ctx.supportsVariableDepositAmounts) this.skip();
 
     await ensurePredepositGuaranteeUnpaused(ctx);
     await setupLidoForVaults(ctx);

@@ -1,7 +1,8 @@
 import { ethers } from "hardhat";
 
 import { impersonate } from "lib";
-import { log } from "lib";
+
+import { ensurePredeployedBytecode } from "./predeploy";
 
 // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#configuration
 export const EIP7002_ADDRESS = "0x00000961Ef480Eb55e80D19ad83579A64c007002";
@@ -16,14 +17,7 @@ export const deployEIP7002WithdrawalRequestContract = async (): Promise<void> =>
 };
 
 export const ensureEIP7002WithdrawalRequestContractPresent = async (): Promise<void> => {
-  const code = await ethers.provider.getCode(EIP7002_ADDRESS);
-
-  if (code === "0x") {
-    log.warning(`EIP7002 withdrawal request contract not found at ${EIP7002_ADDRESS}`);
-
-    await deployEIP7002WithdrawalRequestContract();
-    log.success("EIP7002 withdrawal request contract is present");
-  }
+  await ensurePredeployedBytecode(EIP7002_ADDRESS, EIP7002_RUNTIME_BYTECODE, "EIP7002 withdrawal request contract");
 };
 
 export type EIP7002WithdrawalRequest = {

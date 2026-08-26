@@ -305,22 +305,38 @@ export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDe
   writeSubstateToToml(CM_TOML_SECTION, CM_TOML_MAP, contracts);
 }
 
+// Which of the two external modules to deploy. Both default to true, so the upgrade flow
+// (scripts/upgrade/steps/0135) is unaffected; the scratch step passes the env toggles.
+export type RequestedStakingModules = { csm?: boolean; curated?: boolean };
+
 /**
  * Clones the external community-staking-module repo and deploys the Community Staking Module (CSM)
  * and Curated Module v2 (CMv2), saving their addresses into the deployment state file.
  *
  * Shared between the scratch deploy step and the protocol upgrade step.
  */
-export async function deployStakingModules(state: DeploymentState): Promise<void> {
+export async function deployStakingModules(
+  state: DeploymentState,
+  requested: RequestedStakingModules = {},
+): Promise<void> {
+  const csmRequested = requested.csm ?? true;
+  const curatedRequested = requested.curated ?? true;
+
   // A module counts as deployed only once BOTH its proxy address and its deploy artifact are recorded.
   // During an upgrade the proxies are pre-written into the state file before the new implementations are
   // deployed, so the proxy address alone must not suppress the deploy.
   const csmDeployed = !!(state[Sk.sm_CSM]?.proxy?.address && state[Sk.sm_CSM]?.deployArtifact);
   const curatedDeployed = !!(state[Sk.sm_CM]?.proxy?.address && state[Sk.sm_CM]?.deployArtifact);
 
-  if (csmDeployed && curatedDeployed) {
-    log(`Using the deployed CSM address: ${cy(state[Sk.sm_CSM].proxy.address)}`);
-    log(`Using the deployed CMv2 address: ${cy(state[Sk.sm_CM].proxy.address)}`);
+  if (csmDeployed) log(`Using the deployed CSM address: ${cy(state[Sk.sm_CSM].proxy.address)}`);
+  if (curatedDeployed) log(`Using the deployed CMv2 address: ${cy(state[Sk.sm_CM].proxy.address)}`);
+  if (!csmRequested && !csmDeployed) log("CSM deployment is disabled: skipping it.");
+  if (!curatedRequested && !curatedDeployed) log("CMv2 deployment is disabled: skipping it.");
+
+  const deployCsm = csmRequested && !csmDeployed;
+  const deployCurated = curatedRequested && !curatedDeployed;
+
+  if (!deployCsm && !deployCurated) {
     log.emptyLine();
     return;
   }
@@ -385,7 +401,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       EVM_SCRIPT_EXECUTOR_ADDRESS: state[Sk.appVoting].proxy.address,
     } as unknown as NodeJS.ProcessEnv;
 
-    if (!csmDeployed) {
+    if (deployCsm) {
       log("Deploying Community Staking Module from external repo...");
       let artifactsFile: string;
       const cmdOptions: string[] = [];
@@ -406,7 +422,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       log.emptyLine();
     }
 
-    if (!curatedDeployed) {
+    if (deployCurated) {
       log("Deploying Curated Module v2 from external repo...");
       /// @dev using deploy-curated for both scratch and upgrade, since Curated doesn't exist yet
       ///      and there's nothing to update. Reserved for future use

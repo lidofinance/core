@@ -53,10 +53,10 @@ revokable = false                     # Whether vesting is revokable
 
 [vesting.holders]
 # Initial token holders and amounts (in wei)
-"0xe4dD9D749004872b68279Eda85306ada07CDB12a" = "760000000000000000000000" # Default LDO whale
-"0x51Af50A64Ec8A4F442A36Bd5dcEF1e86c127Bd51" = "60000000000000000000000" # Staking Interface DAO Voter
-"0xaa6bfBCD634EE744CB8FE522b29ADD23124593D3" = "60000000000000000000000" # LDO Voter 1
-"0xBA59A84C6440E8cccfdb5448877E26F1A431Fc8B" = "60000000000000000000000" # LDO Voter 2
+"0xD2094A6172D26037bf55EFA21e8E25E615BcD569" = "760000000000000000000000" # Default LDO whale
+"0x93B0ff94855A1b73899EE99967b67ceCEC7aea34" = "60000000000000000000000" # Staking Interface DAO Voter
+"0xf528Cc46B720d20f9b55d536668daadA341430D1" = "60000000000000000000000" # LDO Voter 1
+"0xb84126c17078eaB4fd6371c332db02CE191Ebeb8" = "60000000000000000000000" # LDO Voter 2
 "lido-aragon-agent-placeholder" = "60000000000000000000000"
 
 # Burner configuration
@@ -210,6 +210,98 @@ forcedRebalanceThresholdBP = 4975     # Threshold for forced rebalancing in basi
 infraFeeBP = 100                      # Infrastructure fee in basis points (5%)
 liquidityFeeBP = 650                  # Liquidity provision fee in basis points (4%)
 reservationFeeBP = 0                # Reservation fee in basis points (1%)
+
+# Optional protocol activation (opt-in via PROTOCOL_ACTIVATION_ENABLED=1).
+# When enabled, step 0155 calls Lido.resume() and sets the staking rate limit to
+# these values (wei). Defaults match lib/protocol/provision.ts ensureStakeLimit
+# (150000 ETH max / 20 ETH per block). maxStakeLimit must be < 2^95 and greater
+# than the per-block increase; set maxStakeLimit = "0" to resume without a limit.
+[protocolActivation]
+maxStakeLimit = "150000000000000000000000"           # 150000 ETH
+stakeLimitIncreasePerBlock = "20000000000000000000"  # 20 ETH per block
+
+# Dual Governance configuration for the scratch deploy.
+#
+# Source of the numeric values and dev addresses below:
+#   foundry/lib/dual-governance/deploy-config/deploy-config-scratch.toml
+# (the DG submodule's own scratch config — short timings + anvil dev keys,
+# suitable for local-fork integration tests). Keys here are camelCase to match
+# the rest of this file; the DG submodule's file uses snake_case.
+#
+# The inline `# (mainnet: …)` annotations cross-reference the production
+# values in the sibling file:
+#   foundry/lib/dual-governance/deploy-config/deploy-config-mainnet.toml
+#
+# Override per network when running against Sepolia/Hoodi/etc. The signalling
+# tokens (stETH/wstETH/withdrawalQueue), the sealable withdrawal blockers, the
+# admin proposer, and the proposals canceller are filled in by the config
+# generator from the scratch deployment state — they are not known until the
+# protocol is deployed. All other knobs come from this section.
+[dualGovernance]
+# Tiebreaker activation timeout: time DG must spend in a "locked" state before
+# the tiebreaker committee can schedule proposals.
+tiebreakerActivationTimeout = 900     # 15 minutes (mainnet: 1 year)
+
+# Reseal committee — Gnosis Multisig on mainnet. Dev address for scratch.
+resealCommittee = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" # anvil[1]
+
+[dualGovernance.sanityCheckParams]
+maxMinAssetsLockDuration = 3600                   # 1 hour (mainnet: 48 days)
+maxSealableWithdrawalBlockersCount = 255
+maxTiebreakerActivationTimeout = 1800             # 30 min (mainnet: 2 years)
+minTiebreakerActivationTimeout = 300              # 5 min (mainnet: 6 months)
+minWithdrawalsBatchSize = 1
+
+[dualGovernance.configProvider]
+# All values use D16 fixed-point (10^16 = 1%). 100% = 100 * 10^16 = 1e18.
+firstSealRageQuitSupport = "10000000000000000"      # 1%
+secondSealRageQuitSupport = "100000000000000000"    # 10%
+minAssetsLockDuration = 300                         # 5 min (mainnet: 5 hours)
+vetoSignallingMinDuration = 300                     # 5 min (mainnet: 5 days)
+vetoSignallingMinActiveDuration = 300               # 5 min (mainnet: 5 hours)
+vetoSignallingMaxDuration = 1800                    # 30 min (mainnet: 45 days)
+vetoSignallingDeactivationMaxDuration = 600         # 10 min (mainnet: 3 days)
+vetoCooldownDuration = 600                          # 10 min (mainnet: 5 hours)
+rageQuitExtensionPeriodDuration = 900               # 15 min (mainnet: 7 days)
+rageQuitEthWithdrawalsMinDelay = 300                # 5 min (mainnet: 60 days)
+rageQuitEthWithdrawalsMaxDelay = 1800               # 30 min (mainnet: 180 days)
+rageQuitEthWithdrawalsDelayGrowth = 600             # 10 min (mainnet: 15 days)
+
+[dualGovernance.timelock]
+afterSubmitDelay = 900                              # 15 min (mainnet: 3 days)
+afterScheduleDelay = 900                            # 15 min (mainnet: 1 day)
+
+[dualGovernance.timelock.sanityCheckParams]
+minExecutionDelay = 600                             # 10 min (mainnet: 3 days)
+maxAfterSubmitDelay = 1800                          # 30 min (mainnet: 30 days)
+maxAfterScheduleDelay = 1800                        # 30 min (mainnet: 10 days)
+maxEmergencyModeDuration = 86400                    # 1 day (mainnet: 1 year)
+maxEmergencyProtectionDuration = 31536000           # 1 year (mainnet: 3 years)
+
+[dualGovernance.timelock.emergencyProtection]
+emergencyModeDuration = 3600                        # 1 hour (mainnet: 1 month)
+# emergencyProtectionEndDate is rendered as deployment timestamp + this offset.
+emergencyProtectionEndOffset = 31536000             # 1 year from deploy
+# Dev addresses for scratch — replace with real multisigs per network.
+emergencyGovernanceProposer = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" # anvil[1]
+emergencyActivationCommittee = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" # anvil[2]
+emergencyExecutionCommittee = "0x90F79bf6EB2c4f870365E785982E1f101E93b906"  # anvil[3]
+
+[dualGovernance.tiebreaker]
+quorum = 2
+executionDelay = 900                                # 15 min (mainnet: 1 month)
+
+[[dualGovernance.tiebreaker.committees]]
+quorum = 1
+members = ["0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"] # anvil[4]
+
+[[dualGovernance.tiebreaker.committees]]
+quorum = 1
+members = ["0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"] # anvil[5]
+
+[[dualGovernance.tiebreaker.committees]]
+quorum = 1
+members = ["0x976EA74026E726554dB657fA54763abd0C3a0aa9"] # anvil[6]
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]

@@ -95,7 +95,9 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   });
 
   // https://docs.lido.fi/guides/stvaults/pdg#pdg-shortcut
-  it("PDG shortcut", async () => {
+  it("PDG shortcut", async function () {
+    if (!ctx.supportsVariableDepositAmounts) this.skip();
+
     const { predepositGuarantee } = ctx.contracts;
 
     // 1. The stVault's owner supplies 100 ETH to the vault.
