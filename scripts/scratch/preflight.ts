@@ -5,7 +5,7 @@ import path from "node:path";
 import { ethers } from "hardhat";
 import { readScratchParameters, ScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
 
-import { isDGDeploymentEnabled, isResumeEnabled } from "lib/env-flags";
+import { isCMv2DeploymentEnabled, isCSMDeploymentEnabled, isDGDeploymentEnabled, isResumeEnabled } from "lib/env-flags";
 import { log } from "lib/log";
 import { SEPOLIA_CHAIN_ID } from "lib/protocol/sepolia";
 import { networkStateFileExists, readNetworkState } from "lib/state-file";
@@ -164,6 +164,37 @@ export async function runScratchDeployPreflight(): Promise<void> {
         assertNoDevCommitteesOnPublicChain(params.dualGovernance, chainId);
       } catch (e) {
         errors.push((e as Error).message);
+      }
+    }
+  }
+
+  // --- External staking modules: plug order vs ConsolidationMigrator ----------
+  // StakingRouter assigns module ids in plug order (step 0140): NOR 1, SimpleDVT 2, then
+  // CSM and CMv2 if their deploys ran. ConsolidationMigrator takes targetModuleId as an
+  // immutable ctor arg back in step 0083, so a mismatch is only fixable by re-deploying —
+  // catch it here rather than at the 0140 assert, which fires after the external repo
+  // deploy and the addStakingModule txs.
+  if (params) {
+    const envTargetModuleId = process.env.CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID?.trim();
+    const targetModuleId = envTargetModuleId // step 0000 lets the env var override the TOML
+      ? parseInt(envTargetModuleId)
+      : params.consolidationMigrator.targetModuleId;
+
+    if (!isCMv2DeploymentEnabled()) {
+      log.warning(
+        `CMV2_DEPLOYMENT_ENABLED is off: ConsolidationMigrator is still deployed (step 0083) with the ` +
+          `immutable targetModuleId ${targetModuleId}, which will stay unassigned.`,
+      );
+    } else {
+      const csmEnabled = isCSMDeploymentEnabled();
+      const cmv2ModuleId = csmEnabled ? 4 : 3;
+      if (targetModuleId !== cmv2ModuleId) {
+        errors.push(
+          `CMv2 will be plugged as staking module ${cmv2ModuleId} (NOR 1, SimpleDVT 2` +
+            `${csmEnabled ? ", CSM 3" : "; CSM_DEPLOYMENT_ENABLED is off"}), but ConsolidationMigrator's ` +
+            `targetModuleId is ${targetModuleId}. Set [consolidationMigrator].targetModuleId ` +
+            `(or CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID) to ${cmv2ModuleId}.`,
+        );
       }
     }
   }

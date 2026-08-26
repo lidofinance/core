@@ -39,7 +39,13 @@ class MigrationSkipFunctionError extends Error {
 
 const deployedSteps: string[] = [];
 
-export { isDGDeploymentEnabled, isProtocolActivationEnabled, isResumeEnabled } from "./env-flags";
+export {
+  isCMv2DeploymentEnabled,
+  isCSMDeploymentEnabled,
+  isDGDeploymentEnabled,
+  isProtocolActivationEnabled,
+  isResumeEnabled,
+} from "./env-flags";
 
 function getCompletedStepsFromState(): string[] {
   if (!networkStateFileExists()) return [];

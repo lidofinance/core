@@ -161,6 +161,33 @@ no-op, step `0150` renounces WQ/VEBO admin immediately, and step `0160` calls
 `LidoTemplate.finalizePermissionsWithoutDGDeployment()` (keeps Voting as
 permission manager) before setting the template owner to Agent.
 
+The two external staking modules have one toggle each, same falsy spellings,
+both enabled by default: `CSM_DEPLOYMENT_ENABLED` and `CMV2_DEPLOYMENT_ENABLED`.
+With one off, step `0135` skips that module's deploy from
+`lidofinance/community-staking-module`, and step `0140` leaves it unplugged — the
+step keys off the module's state entry, so nothing else has to change. The two
+deploys are independent in that repo: separate `just` recipes, forge scripts and
+artifact files, and CMv2 deploys its own `Ejector`, `HashConsensus`, `Accounting`
+and `FeeOracle` rather than reusing CSM's. Note these are the deploy-side
+switches; `INTEGRATION_WITH_CSM=off` is the separate test-side one.
+
+What does couple them is on this side: StakingRouter assigns module ids in plug
+order (NOR 1, SimpleDVT 2, then whichever of CSM / CMv2 was deployed), and
+`ConsolidationMigrator` takes `[consolidationMigrator].targetModuleId` as an
+immutable constructor argument back in step `0083`. So turning CSM off while CMv2
+stays on makes CMv2 module 3, not 4 — set the param (or
+`CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID`) to match. The preflight checks that
+pairing up front, before the expensive external deploy; the assert at the end of
+`0140` is the late backstop. With CMv2 off, `ConsolidationMigrator` is still
+deployed and its target id simply stays unassigned (preflight warns).
+
+Independently of the toggles, plugging the external modules needs Aragon Agent
+authority — their first admin is the Agent (`CSM_FIRST_ADMIN_ADDRESS`), so the
+`resume()` / `updateInitialEpoch` / `registerPauser` calls in `0140` are made
+through `impersonate(agent)`, i.e. `hardhat_impersonateAccount`. Unlike the DG
+step, that part does not work on a live network — there it would take an
+Agent-executed vote or DG proposal.
+
 ### Dual Governance configuration
 
 The `[dualGovernance]` section of the deploy-params toml mirrors the structure
@@ -788,21 +815,21 @@ Two scope gaps to keep in mind:
 
 ### Files of interest
 
-| File                                                         | Role                                                          |
-| ------------------------------------------------------------ | ------------------------------------------------------------- |
-| `scripts/dao-deploy.sh`                                      | Entry point; wipes state file, compiles, runs `migrate.ts`    |
-| `scripts/utils/migrate.ts`                                   | Iterates `steps.json`, imports each step, calls `main()`      |
-| `lib/scratch.ts`                                             | `applyDeploySteps`, `deployScratchProtocol` (step runner)     |
-| `lib/env-flags.ts`                                           | `isDGDeploymentEnabled`, `isResumeEnabled`, `isTruthyEnv`     |
-| `scripts/scratch/deploy-params-testnet.toml`                 | All deploy parameters (`[dualGovernance]` at the bottom)      |
-| `scripts/scratch/steps/0145-unpause-sealables.ts`            | DG prerequisite: resume WQ + VEBO pre-role-transfer           |
-| `scripts/scratch/steps/0150-transfer-roles.ts`               | Admin hand-off to Agent; defers WQ/VEBO renounce for DG       |
-| `scripts/scratch/steps/0160-deploy-dual-governance.ts`       | Forge bridge + ResealManager wiring + template finalize       |
-| `contracts/0.4.24/template/LidoTemplate.sol`                 | `finalizePermissions{After,Without}DGDeployment`, `setOwner`  |
-| `scripts/utils/upgrade.ts`                                   | Shared `executeDGProposal` helper                             |
-| `lib/state-file.ts`                                          | `Sk` enum, `getAddress`, `tryGetAddress`, state reset/persist |
-| `lib/config-schemas.ts`                                      | Zod schema for `[dualGovernance]`                             |
-| `test/integration/dual-governance/dg-scratch.integration.ts` | Post-launch topology assertions + e2e proposal                |
+| File                                                         | Role                                                                                            |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `scripts/dao-deploy.sh`                                      | Entry point; wipes state file, compiles, runs `migrate.ts`                                      |
+| `scripts/utils/migrate.ts`                                   | Iterates `steps.json`, imports each step, calls `main()`                                        |
+| `lib/scratch.ts`                                             | `applyDeploySteps`, `deployScratchProtocol` (step runner)                                       |
+| `lib/env-flags.ts`                                           | `isDGDeploymentEnabled`, `isCSMDeploymentEnabled`, `isCMv2DeploymentEnabled`, `isResumeEnabled` |
+| `scripts/scratch/deploy-params-testnet.toml`                 | All deploy parameters (`[dualGovernance]` at the bottom)                                        |
+| `scripts/scratch/steps/0145-unpause-sealables.ts`            | DG prerequisite: resume WQ + VEBO pre-role-transfer                                             |
+| `scripts/scratch/steps/0150-transfer-roles.ts`               | Admin hand-off to Agent; defers WQ/VEBO renounce for DG                                         |
+| `scripts/scratch/steps/0160-deploy-dual-governance.ts`       | Forge bridge + ResealManager wiring + template finalize                                         |
+| `contracts/0.4.24/template/LidoTemplate.sol`                 | `finalizePermissions{After,Without}DGDeployment`, `setOwner`                                    |
+| `scripts/utils/upgrade.ts`                                   | Shared `executeDGProposal` helper                                                               |
+| `lib/state-file.ts`                                          | `Sk` enum, `getAddress`, `tryGetAddress`, state reset/persist                                   |
+| `lib/config-schemas.ts`                                      | Zod schema for `[dualGovernance]`                                                               |
+| `test/integration/dual-governance/dg-scratch.integration.ts` | Post-launch topology assertions + e2e proposal                                                  |
 
 ## Protocol Parameters
 
