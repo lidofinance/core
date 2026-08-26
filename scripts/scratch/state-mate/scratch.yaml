@@ -732,8 +732,9 @@ l1:
         GI_FIRST_VALIDATOR_PREV: "0x0000000000000000000000000000000000000000000000000096000000000028"
         GI_FIRST_VALIDATOR_CURR: "0x0000000000000000000000000000000000000000000000000096000000000028"
         PIVOT_SLOT: 0
-        # BLS DEPOSIT_DOMAIN for genesisForkVersion 0x00000000
-        DEPOSIT_DOMAIN: "0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9"
+        # BLS domain for the chain's genesisForkVersion: computed per deploy by
+        # prepare-state-mate-check.ts and anchored in the generated .inputs sibling.
+        DEPOSIT_DOMAIN: *DEPOSIT_DOMAIN
         isPaused: false
         PAUSE_INFINITELY: *MAX_UINT256
         DEFAULT_ADMIN_ROLE: *ZERO_BYTES32

@@ -10,6 +10,7 @@
  * Usage: NETWORK_STATE_FILE=deployed-local.json yarn ts-node scripts/scratch/state-mate/prepare-state-mate-check.ts
  */
 
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -245,6 +246,19 @@ function buildInputsYaml(state: StateFile): string {
     (2n ** 64n - 1n - BigInt(String(chainSpec.genesisTime))) /
     (BigInt(String(chainSpec.secondsPerSlot)) * BigInt(String(chainSpec.slotsPerEpoch)));
 
+  // PredepositGuarantee DEPOSIT_DOMAIN: compute_domain(DOMAIN_DEPOSIT, genesisForkVersion,
+  // genesisValidatorsRoot = 0) = 0x03000000 ++ hash_tree_root(ForkData)[:28]. ForkData is two
+  // 32-byte chunks, so its root is a single sha256 (mirrors lib/deposit.ts computeDepositDomain,
+  // inlined here for the same ts-node reason as isProtocolActivationEnabled above).
+  // Fork-version-dependent (mainnet 0x00000000 vs Sepolia 0x90000069), so it must be computed
+  // per deploy, not hardcoded. Default matches GENESIS_FORK_VERSION in lib/constants.ts.
+  const genesisForkVersion = String(chainSpec.genesisForkVersion ?? "0x00000000");
+  if (!/^0x[\da-f]{8}$/i.test(genesisForkVersion)) {
+    die(`chainSpec.genesisForkVersion is not a 4-byte hex string: ${genesisForkVersion}`);
+  }
+  const forkData = Buffer.concat([Buffer.from(genesisForkVersion.slice(2), "hex"), Buffer.alloc(28 + 32)]);
+  const depositDomain = `0x03000000${createHash("sha256").update(forkData).digest("hex").slice(0, 56)}`;
+
   const config: [string, unknown][] = [
     ["daoTokenName", token.name],
     ["daoTokenSymbol", token.symbol],
@@ -262,6 +276,7 @@ function buildInputsYaml(state: StateFile): string {
     ["secondsPerSlot", chainSpec.secondsPerSlot],
     ["lidoWithdrawalCredentials", withdrawalCredentials],
     ["HC_FAR_FUTURE_INITIAL_EPOCH", hcFarFutureInitialEpoch],
+    ["DEPOSIT_DOMAIN", depositDomain],
     // Lido pause state right after deploy: paused unless the optional activation step ran.
     ["lidoIsStopped", !isProtocolActivationEnabled()],
     ["lidoIsStakingPaused", !isProtocolActivationEnabled()],
