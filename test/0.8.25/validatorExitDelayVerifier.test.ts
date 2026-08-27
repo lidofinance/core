@@ -53,8 +53,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     const GI_VALIDATORS = "0x0000000000000000000000000000000000000000000000000000000000016600";
     const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
     const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
-    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
-    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY = "0x000000000000000000000000000000000000000000000000000000000040000d";
 
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
@@ -66,8 +65,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           gIValidators: GI_VALIDATORS,
           gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
           gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-          gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-          gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
         },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
@@ -90,11 +88,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_CURR()).to.equal(
         GI_FIRST_HISTORICAL_SUMMARY_CURR,
       );
-      expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV()).to.equal(
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-      );
-      expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR()).to.equal(
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+      expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY()).to.equal(
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
       );
       expect(await validatorExitDelayVerifier.FIRST_SUPPORTED_SLOT()).to.equal(FIRST_SUPPORTED_SLOT);
       expect(await validatorExitDelayVerifier.PIVOT_SLOT()).to.equal(PIVOT_SLOT);
@@ -117,8 +112,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIValidators: GI_VALIDATORS,
             gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           200_000, // firstSupportedSlot
           100_000, // pivotSlot < firstSupportedSlot
@@ -141,8 +135,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIValidators: GI_VALIDATORS,
             gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
@@ -168,8 +161,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIValidators: GI_VALIDATORS,
             gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
@@ -192,8 +184,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIValidators: GI_VALIDATORS,
             gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
@@ -216,8 +207,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIValidators: GI_VALIDATORS,
             gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
@@ -237,8 +227,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     const GI_VALIDATORS = "0x0000000000000000000000000000000000000000000000000000000000016600";
     const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
     const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
-    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
-    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY = "0x000000000000000000000000000000000000000000000000000000000040000d";
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
     let locator: LidoLocator;
@@ -267,8 +256,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           gIValidators: GI_VALIDATORS,
           gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
           gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-          gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-          gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
         },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
@@ -805,8 +793,7 @@ describe("GIndex helpers", () => {
 
   const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x0000000000000000000000000000000000000000000000000000007600000018";
   const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
-  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
-  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000060000d";
+  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY = "0x000000000000000000000000000000000000000000000000000000000040000d";
 
   const GI_FIRST_VALIDATOR_PRE_GLOAS = "0x0000000000000000000000000000000000000000000000000096000000000028";
   const GI_VALIDATORS = "0x0000000000000000000000000000000000000000000000000000000000016600";
@@ -821,8 +808,7 @@ describe("GIndex helpers", () => {
         gIValidators: GI_VALIDATORS,
         gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
         gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
-        gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-        gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
       },
       FIRST_SUPPORTED_SLOT,
       PIVOT_SLOT,
@@ -878,26 +864,26 @@ describe("GIndex helpers", () => {
     gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 49042n);
     expect(gI).to.equal(0x2d8000011f920dn);
 
-    // NOTE: targetSlot < PIVOT, but historicalSummary was built for slot >= PIVOT.
+    // The historical summary is built at the pivot, but its container layout remains unchanged.
     // historicalSummaries[11].blockRoots[2195]
     gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 100499n);
-    expect(gI).to.equal(0x2d800002e8930dn);
+    expect(gI).to.equal(0x2d800002c8930dn);
 
     // historicalSummaries[11].blockRoots[8191]
     gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT - 1n);
-    expect(gI).to.equal(0x2d800002ffff0dn);
+    expect(gI).to.equal(0x2d800002dfff0dn);
 
     // historicalSummaries[12].blockRoots[0]
     gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT);
-    expect(gI).to.equal(0x2d80000320000dn);
+    expect(gI).to.equal(0x2d80000300000dn);
 
-    // historicalSummaries[X].blockRoots[1]
+    // historicalSummaries[12].blockRoots[1]
     gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT + 1n);
-    expect(gI).to.equal(0x2d80000320010dn);
+    expect(gI).to.equal(0x2d80000300010dn);
 
-    // historicalSummaries[X].blockRoots[42]
+    // historicalSummaries[12].blockRoots[42]
     gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT + 42n);
-    expect(gI).to.equal(0x2d800003202a0dn);
+    expect(gI).to.equal(0x2d800003002a0dn);
   });
 
   it("reverts when the summary cannot exist", async () => {

@@ -67,8 +67,7 @@ struct GIndices {
     GIndex gIValidators;
     GIndex gIFirstHistoricalSummaryPrev;
     GIndex gIFirstHistoricalSummaryCurr;
-    GIndex gIFirstBlockRootInSummaryPrev;
-    GIndex gIFirstBlockRootInSummaryCurr;
+    GIndex gIFirstBlockRootInSummary;
 }
 
 /**
@@ -104,11 +103,9 @@ contract ValidatorExitDelayVerifier {
     /// @dev This index is relative to a state like: `BeaconState.historical_summaries[0]`.
     GIndex public immutable GI_FIRST_HISTORICAL_SUMMARY_CURR;
 
-    /// @dev This index is relative to HistoricalSummary like: HistoricalSummary.blockRoots[0].
-    GIndex public immutable GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV;
-
-    /// @dev This index is relative to HistoricalSummary like: HistoricalSummary.blockRoots[0].
-    GIndex public immutable GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR;
+    /// @dev HistoricalSummary is a plain container whose layout does not vary across forks.
+    ///      This index is relative to HistoricalSummary like: HistoricalSummary.blockRoots[0].
+    GIndex public immutable GI_FIRST_BLOCK_ROOT_IN_SUMMARY;
 
     /// @notice The first slot this verifier will accept proofs for.
     uint64 public immutable FIRST_SUPPORTED_SLOT;
@@ -176,8 +173,7 @@ contract ValidatorExitDelayVerifier {
         GI_VALIDATORS = gIndices.gIValidators;
         GI_FIRST_HISTORICAL_SUMMARY_PREV = gIndices.gIFirstHistoricalSummaryPrev;
         GI_FIRST_HISTORICAL_SUMMARY_CURR = gIndices.gIFirstHistoricalSummaryCurr;
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = gIndices.gIFirstBlockRootInSummaryPrev;
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = gIndices.gIFirstBlockRootInSummaryCurr;
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY = gIndices.gIFirstBlockRootInSummary;
 
         FIRST_SUPPORTED_SLOT = firstSupportedSlot;
         PIVOT_SLOT = pivotSlot;
@@ -382,11 +378,7 @@ contract ValidatorExitDelayVerifier {
         gI = recentSlot < PIVOT_SLOT ? GI_FIRST_HISTORICAL_SUMMARY_PREV : GI_FIRST_HISTORICAL_SUMMARY_CURR;
 
         gI = gI.shr(summaryIndex); // historicalSummaries[summaryIndex]
-        gI = gI.concat(
-            summaryCreatedAtSlot < PIVOT_SLOT
-                ? GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV
-                : GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR
-        ); // historicalSummaries[summaryIndex].blockRoots[0]
+        gI = gI.concat(GI_FIRST_BLOCK_ROOT_IN_SUMMARY); // historicalSummaries[summaryIndex].blockRoots[0]
         gI = gI.shr(rootIndex); // historicalSummaries[summaryIndex].blockRoots[rootIndex]
     }
 
