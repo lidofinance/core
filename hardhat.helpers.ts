@@ -1,9 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 
-import type { EdrNetworkForkingUserConfig } from "hardhat/types/config";
+import { configVariable } from "hardhat/config";
+import type { ConfigurationVariable, EdrNetworkForkingUserConfig } from "hardhat/types/config";
 
 export function getMode() {
   return process.env.MODE || "scratch";
+}
+
+export function getRpcUrl(variableName: string): string | ConfigurationVariable {
+  return process.env[variableName] || process.env.RPC_URL || configVariable(variableName);
 }
 
 /* Determines the forking configuration for Hardhat */

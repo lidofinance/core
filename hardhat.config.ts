@@ -5,7 +5,7 @@ import HardhatIgnoreWarnings from "hardhat-ignore-warnings";
 import HardhatToolbox from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import HardhatContractSizer from "@solidstate/hardhat-contract-sizer";
 
-import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers.js";
+import { getHardhatForkingConfig, getRpcUrl, loadAccounts } from "./hardhat.helpers.js";
 import {
   checkInterfacesTask,
   compileOverrideTask,
@@ -237,25 +237,25 @@ export default defineConfig({
     },
     "local": {
       type: "http",
-      url: configVariable("LOCAL_RPC_URL"),
+      url: getRpcUrl("LOCAL_RPC_URL"),
       timeout: 20 * 60 * 1000, // 20 minutes
     },
     "local-devnet": {
       type: "http",
-      url: configVariable("LOCAL_RPC_URL"),
+      url: getRpcUrl("LOCAL_RPC_URL"),
       timeout: 20 * 60 * 1000, // 20 minutes
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
       chainId: LOCAL_DEVNET_CHAIN_ID,
     },
     "sepolia": {
       type: "http",
-      url: configVariable("SEPOLIA_RPC_URL"),
+      url: getRpcUrl("SEPOLIA_RPC_URL"),
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
     "hoodi": {
       type: "http",
-      url: configVariable("HOODI_RPC_URL"),
+      url: getRpcUrl("HOODI_RPC_URL"),
       chainId: 560048,
       accounts: loadAccounts("hoodi"),
     },
@@ -267,17 +267,17 @@ export default defineConfig({
     },
     "mainnet-fork": {
       type: "http",
-      url: configVariable("MAINNET_RPC_URL"),
+      url: getRpcUrl("MAINNET_RPC_URL"),
       timeout: 20 * 60 * 1000, // 20 minutes
     },
     "sepolia-fork": {
       type: "http",
-      url: configVariable("SEPOLIA_RPC_URL"),
+      url: getRpcUrl("SEPOLIA_RPC_URL"),
       chainId: 11155111,
     },
     "hoodi-fork": {
       type: "http",
-      url: configVariable("HOODI_RPC_URL"),
+      url: getRpcUrl("HOODI_RPC_URL"),
       chainId: 560048,
     },
   },
