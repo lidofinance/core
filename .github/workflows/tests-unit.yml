@@ -44,7 +44,10 @@ jobs:
       - name: Use global invariant depth
         run: |
           find test -name '*.t.sol' -print0 | xargs -0 sed -i '/forge-config: default\.invariant\.depth/d'
-          git diff --quiet -- test && { echo "No inline invariant depth directives found"; exit 1; }
+          if git diff --quiet -- test; then
+            echo "No inline invariant depth directives found"
+            exit 1
+          fi
 
       - name: Run fuzzing and invariant tests (deep profile, 10k runs)
         run: FUZZ_PROFILE=deep yarn hardhat test solidity

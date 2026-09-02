@@ -24,7 +24,10 @@ jobs:
       - name: Use coverage fuzz settings
         run: |
           find test -name '*.t.sol' -print0 | xargs -0 sed -i -E '/forge-config: default\.(fuzz\.runs|invariant\.(runs|depth))/d'
-          git diff --quiet -- test && { echo "No inline fuzz or invariant iteration directives found"; exit 1; }
+          if git diff --quiet -- test; then
+            echo "No inline fuzz or invariant iteration directives found"
+            exit 1
+          fi
 
       - name: Collect coverage
         run: NODE_OPTIONS="--max-old-space-size=10240" yarn test:coverage
