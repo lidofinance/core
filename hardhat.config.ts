@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import "dotenv/config";
 import { configVariable, defineConfig } from "hardhat/config";
 import type { EdrNetworkUserConfig } from "hardhat/types/config";
@@ -21,6 +23,10 @@ import { mochaRootHooks } from "./test/hooks/index.js";
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 const LOCAL_DEVNET_CHAIN_ID = parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10);
+
+const DEEP_FUZZING = process.env.FUZZ_PROFILE === "deep";
+const FUZZ_SEED = process.env.FUZZ_SEED ?? `0x${randomBytes(32).toString("hex")}`;
+if (DEEP_FUZZING) console.log(`Fuzz seed: ${FUZZ_SEED}`);
 
 const simulatedNetwork = {
   type: "edr-simulated",
@@ -87,15 +93,16 @@ export default defineConfig({
       rootHooks: mochaRootHooks,
       parallel: process.env.PARALLEL === "true",
     },
-    // Certification fuzzing. HH3 supports only the `default` solidity-test profile,
-    // hence the env switch; inline `forge-config` comments override these values.
-    solidity:
-      process.env.FUZZ_PROFILE === "deep"
-        ? {
-            fuzz: { runs: 10_000, maxTestRejects: 10_000_000 },
-            invariant: { runs: 10_000, depth: 500 },
-          }
-        : {},
+    // Certification fuzzing. HH3 has a single solidity-test profile, hence the env switch.
+    // Inline `forge-config: default.*` comments override these values in both modes; Foundry skipped
+    // them under FOUNDRY_PROFILE=deep. HH3 pins the fuzz seed; deep runs draw a fresh one unless
+    // FUZZ_SEED is set.
+    solidity: DEEP_FUZZING
+      ? {
+          fuzz: { runs: 10_000, maxTestRejects: 10_000_000, seed: FUZZ_SEED },
+          invariant: { runs: 10_000, depth: 500 },
+        }
+      : {},
   },
   paths: {
     sources: {
