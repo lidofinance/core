@@ -183,9 +183,9 @@ export default defineConfig({
     },
   },
   warnings: {
-    "@aragon/**/*": { default: "off" },
+    "npm/@aragon/**/*": { default: "off" },
     "contracts/*/mocks/**/*": { default: "off" },
-    "test/*/contracts/**/*": { default: "off" },
+    "test/**/contracts/**/*": { default: "off" },
     "contracts/common/interfaces/ILidoLocator.sol": { default: "off" },
   },
   networks: {
