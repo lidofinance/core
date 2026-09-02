@@ -20,6 +20,7 @@ jobs:
     env:
       STATE_MATE_BRANCH: "main"
       ETH_HOODI_RPC_URL: "https://hoodi.drpc.org"
+      ETHERSCAN_TOKEN: "${{ secrets.ETHERSCAN_TOKEN }}"
 
     steps:
       - name: Checkout state-mate
@@ -40,6 +41,7 @@ jobs:
     env:
       STATE_MATE_BRANCH: "main"
       ETH_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
+      ETHERSCAN_TOKEN: "${{ secrets.ETHERSCAN_TOKEN }}"
 
     steps:
       - name: Checkout state-mate
