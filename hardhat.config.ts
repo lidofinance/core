@@ -9,16 +9,9 @@ import HardhatToolbox from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import HardhatContractSizer from "@solidstate/hardhat-contract-sizer";
 
 import { getHardhatForkingConfig, getRpcUrl, loadAccounts } from "./hardhat.helpers.js";
-import {
-  checkInterfacesTask,
-  compileOverrideTask,
-  extractAbisTask,
-  lintSolidityTask,
-  protocolGetAddressesTask,
-  validateConfigsTask,
-  verifyDeployedTask,
-} from "./tasks/index.js";
-import { mochaRootHooks } from "./test/hooks/index.js";
+import { tasks } from "./tasks/index.js";
+import { txLoggerPlugin } from "./tasks/tx-logger.js";
+import { mochaHooks } from "./test/hooks/index.js";
 
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -51,16 +44,8 @@ const simulatedNetwork = {
 } satisfies EdrNetworkUserConfig;
 
 export default defineConfig({
-  plugins: [HardhatToolbox, HardhatContractSizer, HardhatIgnoreWarnings],
-  tasks: [
-    checkInterfacesTask,
-    compileOverrideTask,
-    extractAbisTask,
-    lintSolidityTask,
-    protocolGetAddressesTask,
-    validateConfigsTask,
-    verifyDeployedTask,
-  ],
+  plugins: [HardhatToolbox, HardhatContractSizer, HardhatIgnoreWarnings, txLoggerPlugin],
+  tasks,
   coverage: {
     // globs are relative to the project root: `contracts/` prefix, `/**` for directories
     skipFiles: [
@@ -69,9 +54,6 @@ export default defineConfig({
       "contracts/0.6.11/deposit_contract.sol",
       "contracts/0.6.12/interfaces/**",
       "contracts/0.8.9/interfaces/**",
-      // Skip contracts that are tested by Foundry tests
-      "contracts/common/lib/**", // covered by test/common/*.t.sol
-      "contracts/0.8.9/lib/UnstructuredStorage.sol", // covered by test/0.8.9/unstructuredStorage.t.sol
       "contracts/openzeppelin/**",
       "contracts/upgrade/**",
       // mocks and harnesses: `paths.sources` includes `test`, so they would be instrumented
@@ -90,7 +72,9 @@ export default defineConfig({
   test: {
     mocha: {
       timeout: 20 * 60 * 1000, // 20 minutes
-      rootHooks: mochaRootHooks,
+      // serial runs take rootHooks; parallel workers ignore them and load the file from `require`
+      rootHooks: mochaHooks,
+      require: ["test/hooks/index.ts"],
       parallel: process.env.PARALLEL === "true",
     },
     // Certification fuzzing. HH3 has a single solidity-test profile, hence the env switch.
@@ -116,7 +100,6 @@ export default defineConfig({
     npmFilesToBuild: [
       "@aragon/apps-agent/contracts/Agent.sol",
       "@aragon/apps-finance/contracts/Finance.sol",
-      "@aragon/apps-vault/contracts/Vault.sol",
       "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol",
       "@aragon/apps-lido/apps/voting/contracts/Voting.sol",
       "@aragon/id/contracts/FIFSResolvingRegistrar.sol",

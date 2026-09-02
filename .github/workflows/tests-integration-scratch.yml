@@ -32,10 +32,7 @@ jobs:
         run: cargo install just
 
       - name: Set env
-        run: |
-          cp .env.example .env
-          # configVariable() reads process.env; expose .env to the following steps
-          grep -v '^#' .env | grep -v '^[[:space:]]*$' >> "$GITHUB_ENV"
+        run: cp .env.example .env
 
       - name: Run scratch deployment
         run: yarn test:integration:scratch

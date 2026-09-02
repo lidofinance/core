@@ -1,7 +1,17 @@
-export { checkInterfacesTask } from "./check-interfaces.js";
-export { compileOverrideTask } from "./compile.js";
-export { extractAbisTask } from "./extract-abis.js";
-export { lintSolidityTask } from "./lint-solidity.js";
-export { protocolGetAddressesTask } from "./protocol-get-addresses.js";
-export { validateConfigsTask } from "./validate-configs.js";
-export { verifyDeployedTask } from "./verify-contracts.js";
+import { buildOverrideTask } from "./build.js";
+import { checkInterfacesTask } from "./check-interfaces.js";
+import { extractAbisTask } from "./extract-abis.js";
+import { lintSolidityTask } from "./lint-solidity.js";
+import { protocolGetAddressesTask } from "./protocol-get-addresses.js";
+import { validateConfigsTask } from "./validate-configs.js";
+import { verifyDeployedTask } from "./verify-contracts.js";
+
+export const tasks = [
+  buildOverrideTask,
+  checkInterfacesTask,
+  extractAbisTask,
+  lintSolidityTask,
+  protocolGetAddressesTask,
+  validateConfigsTask,
+  verifyDeployedTask,
+];

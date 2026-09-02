@@ -24,9 +24,9 @@ export async function main() {
     return;
   }
 
-  // deploy mock in case the network="hardhat" (there is no rpcUrl for in-memory node instance)
+  // the in-process network has no RPC URL for the external Foundry deployment, so deploy the mock
   if (networkName === "default") {
-    log("In-memory 'hardhat' network detected, deploy CircuitBreakerMock contract...");
+    log("In-process 'default' network detected, deploy CircuitBreakerMock contract...");
     const cb = await deployWithoutProxy(Sk.circuitBreaker, "CircuitBreakerMock", deployer, [60]);
     log(`CircuitBreakerMock deployed at: ${cy(cb.address)}`);
     log.emptyLine();

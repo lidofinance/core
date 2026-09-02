@@ -1,7 +1,5 @@
 import * as process from "node:process";
 
-import hre from "hardhat";
-
 import { log } from "#lib";
 
 import { getMode } from "../../hardhat.helpers.js";
@@ -14,14 +12,6 @@ import {
   MAINNET_VOTING_ADDRESS,
 } from "./mainnet.js";
 import type { ProtocolNetworkItems } from "./types.js";
-
-export async function isNonForkingHardhatNetwork() {
-  const { networkConfig } = await hre.network.getOrCreate();
-  if (networkConfig.type === "edr-simulated") {
-    return !networkConfig.forking?.enabled;
-  }
-  return false;
-}
 
 export async function parseDeploymentJson(name: string) {
   try {

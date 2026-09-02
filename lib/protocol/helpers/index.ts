@@ -81,6 +81,4 @@ export * from "./operatorGrid.js";
 
 export * from "./share-rate.js";
 
-export * from "./operatorGrid.js";
-
 export * from "./staking.js";

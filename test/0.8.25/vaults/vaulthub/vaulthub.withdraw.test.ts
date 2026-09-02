@@ -7,12 +7,10 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Lido, StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { advanceChainTime, ether } from "#lib";
+import { advanceChainTime, ether, ONE_GWEI } from "#lib";
 
 import { deployVaults } from "#test/deploy";
 import { Snapshot } from "#test/suite";
-
-const GWEI_TO_WEI = 1_000_000_000n;
 
 const CONNECTION_DEPOSIT = ether("1");
 
@@ -540,8 +538,8 @@ describe("VaultHub.sol:withdrawal", () => {
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
       // round down to the nearest GWEI
-      const precisionAmount = withdrawable - (withdrawable % GWEI_TO_WEI);
-      const mod = withdrawable % GWEI_TO_WEI;
+      const precisionAmount = withdrawable - (withdrawable % ONE_GWEI);
+      const mod = withdrawable % ONE_GWEI;
 
       const balanceBefore = await ethers.provider.getBalance(stranger);
       await vaultHub.connect(user).withdraw(connectedVault, stranger, precisionAmount);

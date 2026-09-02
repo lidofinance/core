@@ -1,6 +1,6 @@
 import { overrideTask } from "hardhat/config";
 
-export const compileOverrideTask = overrideTask("build")
+export const buildOverrideTask = overrideTask("build")
   .setInlineAction(async (taskArgs, hre, runSuper) => {
     const result = await runSuper(taskArgs);
 

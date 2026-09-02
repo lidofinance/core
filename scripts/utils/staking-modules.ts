@@ -330,7 +330,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
   }
 
   if (networkName === "default") {
-    log("In-memory 'hardhat' network detected: skipping external CSM/CMv2 deployment (no RPC URL for Foundry).");
+    log("In-process 'default' network detected: skipping external CSM/CMv2 deployment (no RPC URL for Foundry).");
     log.emptyLine();
     return;
   }
