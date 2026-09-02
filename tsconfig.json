@@ -1,10 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "module": "node16",
-    "esModuleInterop": true,
-    "moduleResolution": "node16",
-    "forceConsistentCasingInFileNames": true,
+    "module": "node20",
     "strict": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
