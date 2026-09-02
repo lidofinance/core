@@ -153,6 +153,7 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
   switch (network) {
     case "default":
+    case "localhost":
       if (getMode() === "scratch") {
         return getLocalNetworkConfig(network, "scratch");
       }
