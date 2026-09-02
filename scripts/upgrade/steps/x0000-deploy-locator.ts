@@ -1,10 +1,17 @@
 import { assert } from "chai";
-import { ethers } from "hardhat";
+import { isAddress } from "ethers";
 
-import { log } from "lib";
-import { loadContract, LoadedContract } from "lib/contract";
-import { deployImplementation } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import type { LidoLocator } from "typechain-types/index.js";
+
+import {
+  deployImplementation,
+  getDeployerSigner,
+  loadContract,
+  type LoadedContract,
+  log,
+  readNetworkState,
+  Sk,
+} from "#lib";
 
 const VIEW_NAMES_AND_CTOR_ARGS = [
   "accountingOracle",
@@ -24,10 +31,10 @@ const VIEW_NAMES_AND_CTOR_ARGS = [
 
 const g_newAddresses: { [key: string]: string } = {};
 
-async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract): Promise<string> {
+async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract<LidoLocator>): Promise<string> {
   const valueFromEnv = process.env[name];
   if (valueFromEnv) {
-    if (!ethers.isAddress(valueFromEnv)) {
+    if (!isAddress(valueFromEnv)) {
       log.error(`Value ${valueFromEnv} of ${name} is not an address`);
       process.exit(1);
     }
@@ -37,7 +44,7 @@ async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract): Pr
   return await locator.getFunction(name).staticCall();
 }
 
-async function getConstructorArgs(locator: LoadedContract): Promise<string[]> {
+async function getConstructorArgs(locator: LoadedContract<LidoLocator>): Promise<string[]> {
   return await Promise.all(VIEW_NAMES_AND_CTOR_ARGS.map((name) => getNewFromEnvOrCurrent(name, locator)));
 }
 
@@ -45,7 +52,7 @@ async function deployNewLocator(deployer: string, ctorArgs: string[]): Promise<L
   return await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [ctorArgs]);
 }
 
-async function verifyConstructorArgs(newLocator: LoadedContract, locator: LoadedContract): Promise<void> {
+async function verifyConstructorArgs(newLocator: LoadedContract, locator: LoadedContract<LidoLocator>): Promise<void> {
   for (const viewName of VIEW_NAMES_AND_CTOR_ARGS) {
     const actual = await newLocator.getFunction(viewName).staticCall();
     assert.equal(actual, await getNewFromEnvOrCurrent(viewName, locator));
@@ -53,12 +60,12 @@ async function verifyConstructorArgs(newLocator: LoadedContract, locator: Loaded
 }
 
 export async function main(): Promise<void> {
-  const deployer = (await ethers.provider.getSigner()).address;
+  const deployer = (await getDeployerSigner()).address;
   assert.equal(process.env.DEPLOYER, deployer);
 
   const state = readNetworkState();
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
-  const locator = await loadContract("LidoLocator", locatorAddress);
+  const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
 
   const ctorArgs = await getConstructorArgs(locator);
   if (Object.keys(g_newAddresses).length === 0) {
