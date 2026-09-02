@@ -7,12 +7,12 @@ import { type NonPayableOverrides } from "typechain-types/common.js";
 
 import { getDeployerSigner } from "./account.js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Contract methods have generated variadic signatures.
 export type MethodArgs<C, M extends keyof C> = C[M] extends (...args: any[]) => any ? Parameters<C[M]> : never;
 
 // constructor args
 // example:  const constructorArgs:  ConstructorArgs<UpgradeTemporaryAdmin__factory>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Contract factories have generated variadic signatures.
 type ContractWithConstructor = { deploy: (...args: any[]) => any };
 type DeployArgs<C extends ContractWithConstructor> = MethodArgs<C, "deploy">;
 type RequiredDeployArgs<C extends ContractWithConstructor> = Required<DeployArgs<C>>;
@@ -25,7 +25,7 @@ export type ConstructorArgs<C extends ContractWithConstructor> =
 
 // initialize method args
 // example: const initArgs: InitializeArgs<TopUpGateway> = [param1, param2];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Contract initializers have generated variadic signatures.
 type ContractWithInitialize = { initialize: (...args: any[]) => any };
 export type InitializeArgs<C extends ContractWithInitialize> = MethodArgs<C, "initialize">;
 

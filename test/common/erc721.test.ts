@@ -197,9 +197,12 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](stranger, eoaRecipient, holderTokenId, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              stranger,
+              eoaRecipient,
+              holderTokenId,
+              new Uint8Array(),
+            ),
         ).to.revert(ethers);
       });
 
@@ -227,9 +230,12 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](holder, eoaRecipient, holderTokenId + 1n, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              holder,
+              eoaRecipient,
+              holderTokenId + 1n,
+              new Uint8Array(),
+            ),
         ).to.revert(ethers);
       });
 
@@ -243,9 +249,12 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](holder, contractRecipient, holderTokenId, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              holder,
+              contractRecipient,
+              holderTokenId,
+              new Uint8Array(),
+            ),
         ).to.revert(ethers);
       });
 
@@ -265,9 +274,12 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](holder, contractRecipient, holderTokenId, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              holder,
+              contractRecipient,
+              holderTokenId,
+              new Uint8Array(),
+            ),
         )
           .to.emit(token, "Transfer")
           .withArgs(holder.address, await contractRecipient.getAddress(), holderTokenId);
@@ -433,7 +445,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
 testERC721Compliance.only = (target: ERC721Target) =>
   testERC721Compliance({
     ...target,
-    suiteFunction: describe.only, // eslint-disable-line no-only-tests/no-only-tests
+    suiteFunction: describe.only,
   });
 
 testERC721Compliance.skip = (target: ERC721Target) =>

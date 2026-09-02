@@ -693,7 +693,7 @@ export function ceilDiv(a: bigint, b: bigint): bigint {
 
 // Helper type to extract method names from a contract
 export type Methods<T> = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Contract method signatures are dynamic.
   [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
 }[keyof T];
 
@@ -710,7 +710,7 @@ export async function testMethod<
   errorName = "AccessControlUnauthorizedAccount",
 ) {
   for (const user of failingUsers) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: The method is selected dynamically.
     await expect((contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)))
       .to.be.revertedWithCustomError(contract, errorName)
       .withArgs(user, requiredRole);
@@ -718,7 +718,7 @@ export async function testMethod<
 
   for (const user of successUsers) {
     await expect(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: The method is selected dynamically.
       (contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)),
     ).to.not.be.revertedWithCustomError(contract, errorName);
   }

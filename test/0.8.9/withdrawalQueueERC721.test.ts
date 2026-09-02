@@ -564,9 +564,12 @@ describe("WithdrawalQueueERC721.sol", () => {
         await expect(
           queue
             .connect(user)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              user,
+              erc721ReceiverContractAddress,
+              1,
+              new Uint8Array(),
+            ),
         ).revertedWith("ERC721_NOT_ACCEPT_TOKENS");
       });
 
@@ -577,9 +580,12 @@ describe("WithdrawalQueueERC721.sol", () => {
         await expect(
           queue
             .connect(user)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              user,
+              erc721ReceiverContractAddress,
+              1,
+              new Uint8Array(),
+            ),
         )
           .revertedWithCustomError(queue, "TransferToNonIERC721Receiver")
           .withArgs(erc721ReceiverContractAddress);
@@ -592,9 +598,12 @@ describe("WithdrawalQueueERC721.sol", () => {
         await expect(
           queue
             .connect(user)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              user,
+              erc721ReceiverContractAddress,
+              1,
+              new Uint8Array(),
+            ),
         )
           .to.emit(queue, "Transfer")
           .withArgs(user.address, erc721ReceiverContractAddress, 1);

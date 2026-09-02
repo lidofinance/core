@@ -679,23 +679,23 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
           // Non-header bit flips.
           case 6: {
             const idx = 1 + (r[1] % 47); // [1..47]
-            const mask = 1 << r[2] % 8;
+            const mask = 1 << (r[2] % 8);
             pubkey = flipByte(pubkey, idx, mask);
             break;
           }
           case 7: {
             const idx = 1 + (r[1] % 95); // [1..95]
-            const mask = 1 << r[2] % 8;
+            const mask = 1 << (r[2] % 8);
             signature = flipByte(signature, idx, mask);
             break;
           }
           // Message mutations.
           case 8:
-            depositDomain = flipFirstByte(depositDomain, 1 << r[1] % 8);
+            depositDomain = flipFirstByte(depositDomain, 1 << (r[1] % 8));
             break;
           case 9: {
             const idx = r[1] % 32;
-            const mask = 1 << r[2] % 8;
+            const mask = 1 << (r[2] % 8);
             withdrawalCredentials = flipByte(withdrawalCredentials, idx, mask);
             break;
           }

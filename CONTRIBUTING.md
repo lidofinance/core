@@ -213,7 +213,7 @@ All contributions must adhere to the following established conventions.
 
 ### TypeScript Code
 
-- Must be auto-formatted using ESLint
+- Must be auto-formatted using Biome
 - Follow patterns and conventions established in the existing codebase for tests and scripts
 
 ### Commit Messages

@@ -65,10 +65,10 @@ export const prepareConsolidationTargetWitnesses = async (
     withdrawableEpoch: FAR_FUTURE_EPOCH,
   });
 
-  const buildWitnesses = async (entries: { pubkey: string; validatorIndex: number }[]) => {
+  const buildWitnesses = async (witnessEntries: { pubkey: string; validatorIndex: number }[]) => {
     const { childBlockTimestamp, beaconBlockHeader } = await merkleTree.commitChangesToBeaconRoot(slot);
     return Promise.all(
-      entries.map(async ({ pubkey, validatorIndex }) => ({
+      witnessEntries.map(async ({ pubkey, validatorIndex }) => ({
         proof: await merkleTree.buildProof(validatorIndex, beaconBlockHeader),
         pubkey,
         validatorIndex,

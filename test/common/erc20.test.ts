@@ -316,7 +316,7 @@ export function testERC20Compliance({ tokenName, deploy, suiteFunction = describ
 testERC20Compliance.only = (target: ERC20Target) =>
   testERC20Compliance({
     ...target,
-    suiteFunction: describe.only, // eslint-disable-line no-only-tests/no-only-tests
+    suiteFunction: describe.only,
   });
 
 testERC20Compliance.skip = (target: ERC20Target) =>

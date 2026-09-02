@@ -130,7 +130,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   const APP_BASES_NAMESPACE = await kernel.APP_BASES_NAMESPACE();
 
   // Process each installed app
-  const dataByAppName: { [key: string]: { [key: string]: string } } = {};
+  const dataByAppName: { [key: string]: { [innerKey: string]: string } } = {};
   for (const evt of appInstalledEvents) {
     const appId = evt.args.appId;
     const appName = appNameByAppId[appId];

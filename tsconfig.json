@@ -8,7 +8,7 @@
     "strict": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
-    "baseUrl": ".",
+    "types": ["node", "mocha", "chai-as-promised"],
     "paths": {
       "*": ["./*"]
     }

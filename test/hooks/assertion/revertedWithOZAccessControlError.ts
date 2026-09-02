@@ -5,7 +5,6 @@
 import { Assertion, expect, util } from "chai";
 
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   export namespace Chai {
     interface Assertion {
       /**

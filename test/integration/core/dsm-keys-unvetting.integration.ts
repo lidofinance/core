@@ -117,7 +117,6 @@ describe("Integration: DSM keys unvetting", () => {
     const blockNumber = await networkHelpers.time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
     // Get node operator state before unvetting
-    // eslint-disable-next-line prefer-const
     let { totalVettedValidators, totalDepositedValidators, totalAddedValidators } = await nor.getNodeOperator(
       operatorId,
       true,
@@ -189,7 +188,6 @@ describe("Integration: DSM keys unvetting", () => {
     const operatorId = 0n;
 
     // Get node operator state before unvetting
-    // eslint-disable-next-line prefer-const
     let { totalDepositedValidators, totalVettedValidators, totalAddedValidators } = await nor.getNodeOperator(
       operatorId,
       true,

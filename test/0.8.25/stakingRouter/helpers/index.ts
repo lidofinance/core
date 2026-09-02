@@ -68,15 +68,15 @@ export async function setupModule(
   };
 
   const initializeModule = async (
-    module: StakingModule__MockForStakingRouter | StakingModuleV2__MockForStakingRouter,
+    stakingModule: StakingModule__MockForStakingRouter | StakingModuleV2__MockForStakingRouter,
   ) => {
     await stakingRouter
       .connect(admin)
-      .addStakingModule(randomBytes(8).toString(), await module.getAddress(), stakingModuleConfig);
+      .addStakingModule(randomBytes(8).toString(), await stakingModule.getAddress(), stakingModuleConfig);
 
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
 
-    await module.mock__getStakingModuleSummary(exited, deposited, depositable);
+    await stakingModule.mock__getStakingModuleSummary(exited, deposited, depositable);
     if (validatorsBalanceGwei == 0n && deposited > 0n) {
       validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / ONE_GWEI;
     }

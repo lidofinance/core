@@ -321,15 +321,15 @@ export const norEnsureDepositedOperatorKeys = async (
   const excluded = new Set((opts.excludeOperatorIds ?? []).map(String));
   const operatorsCount = await module.getNodeOperatorsCount();
 
-  const collectKeys = async (operatorId: bigint, firstKeyIndex: bigint) => {
+  const collectKeys = async (targetOperatorId: bigint, firstKeyIndex: bigint) => {
     const keyIndices = Array.from({ length: Number(keysCount) }, (_, i) => firstKeyIndex + BigInt(i));
     const pubkeys: string[] = [];
     for (const keyIndex of keyIndices) {
-      const signingKey = await module.getSigningKey(operatorId, keyIndex);
+      const signingKey = await module.getSigningKey(targetOperatorId, keyIndex);
       expect(signingKey.used).to.be.true;
       pubkeys.push(signingKey.key);
     }
-    return { moduleId, operatorId, keyIndices, pubkeys };
+    return { moduleId, operatorId: targetOperatorId, keyIndices, pubkeys };
   };
 
   for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {

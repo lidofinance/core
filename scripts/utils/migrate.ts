@@ -1,8 +1,8 @@
 import { applyMigrationScript, loadSteps, log, resolveMigrationFile } from "#lib";
 
-const runMigrations = async (stepsFile: string): Promise<void> => {
-  const steps = loadSteps(stepsFile);
-  console.log(`Loaded ${steps.length} migration steps from ${stepsFile}`);
+const runMigrations = async (migrationStepsFile: string): Promise<void> => {
+  const steps = loadSteps(migrationStepsFile);
+  console.log(`Loaded ${steps.length} migration steps from ${migrationStepsFile}`);
   for (const step of steps) {
     const migrationFile = resolveMigrationFile(step);
     console.log(`Applying migration: ${migrationFile}`);

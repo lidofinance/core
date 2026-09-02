@@ -160,7 +160,7 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
 testERC2612Compliance.only = (target: ERC2612Target) =>
   testERC2612Compliance({
     ...target,
-    suiteFunction: describe.only, // eslint-disable-line no-only-tests/no-only-tests
+    suiteFunction: describe.only,
   });
 
 testERC2612Compliance.skip = (target: ERC2612Target) =>

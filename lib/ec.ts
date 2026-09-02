@@ -25,6 +25,6 @@ export function toEip2098({ v, r, s }: ECDSASignature) {
   if (vs[0] >> 7 === 1) {
     throw new Error(`invalid signature 's' value`);
   }
-  vs[0] |= v % 27 << 7; // set the first bit of vs to the v parity bit
+  vs[0] |= (v % 27) << 7; // set the first bit of vs to the v parity bit
   return { r, vs: bufferToHex(vs) };
 }

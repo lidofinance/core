@@ -10,7 +10,7 @@ const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
 
 export type DeploymentState = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Deployment state values vary by contract.
   [key: string]: any;
 };
 

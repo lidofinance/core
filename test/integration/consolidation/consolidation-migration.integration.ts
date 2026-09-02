@@ -84,9 +84,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
   let TARGET_PUBKEY_2: string;
 
   let witnessSet: ConsolidationWitnessSet;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Witness shape is supplied by the proof helper.
   let targetWitness1: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Witness shape is supplied by the proof helper.
   let targetWitness2: any;
 
   let agentSigner: HardhatEthersSigner;

@@ -357,7 +357,7 @@ async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, e
       try {
         execTx = await timelock.connect(executor).execute(proposalId);
         revertedDueToTimeConstraints = false;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // biome-ignore lint/suspicious/noExplicitAny: RPC errors have provider-specific shapes.
       } catch (e: any) {
         // const data = e?.data ?? e?.error?.data ?? e?.revert?.data;
         // if (data) {
