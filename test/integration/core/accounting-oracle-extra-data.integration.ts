@@ -6,6 +6,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "#lib";
+import { EXTRA_DATA_FORMAT_LIST, type KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "#lib/oracle.js";
 import {
   getProtocolContext,
   type OracleReportParams,
@@ -13,9 +14,8 @@ import {
   reportWithEffectiveClDiff,
   seedProtocolPendingBaseline,
 } from "#lib/protocol";
-import { EXTRA_DATA_FORMAT_LIST, type KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle.js";
-import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { reportWithoutExtraData, waitNextAvailableReportTime } from "#lib/protocol/helpers/accounting.js";
+import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
 import { MAX_BASIS_POINTS, Snapshot } from "#test/suite";
 

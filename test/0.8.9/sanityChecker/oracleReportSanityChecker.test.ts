@@ -17,7 +17,7 @@ import type {
 } from "typechain-types/index.js";
 
 import { ether, impersonate } from "#lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
 
 import { Snapshot } from "#test/suite";
 

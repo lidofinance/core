@@ -19,7 +19,7 @@ import {
   resetCLBalanceDecreaseWindow,
   waitNextAvailableReportTime,
 } from "#lib/protocol";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
+import { adjustReportModuleBalances } from "#lib/protocol/helpers/accounting.js";
 
 import { Snapshot } from "#test/suite";
 

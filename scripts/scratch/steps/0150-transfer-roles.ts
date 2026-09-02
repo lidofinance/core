@@ -1,9 +1,9 @@
 import { ZeroHash } from "ethers";
 import hre from "hardhat";
 
-import { loadContract } from "lib/contract.js";
-import { makeTx } from "lib/deploy.js";
-import { readNetworkState, Sk } from "lib/state-file.js";
+import { loadContract } from "#lib/contract.js";
+import { makeTx } from "#lib/deploy.js";
+import { readNetworkState, Sk } from "#lib/state-file.js";
 
 const DEFAULT_ADMIN_ROLE = ZeroHash;
 

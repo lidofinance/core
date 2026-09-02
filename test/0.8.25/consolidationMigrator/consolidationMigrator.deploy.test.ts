@@ -8,7 +8,7 @@ import {
   type StakingRouter__MockForConsolidationMigrator,
 } from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy.js";
+import { proxify } from "#lib/proxy.js";
 
 describe("ConsolidationMigrator.sol: deployment", () => {
   let ethers: HardhatEthers;

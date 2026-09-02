@@ -7,7 +7,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 import type { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types/index.js";
 
 import { ether, randomAddress } from "#lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
 
 import { deployLidoLocator } from "#test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";

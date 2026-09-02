@@ -6,7 +6,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 import { type ConsolidationBus, type ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
 import { advanceChainTime, getCurrentBlockTimestamp } from "#lib";
-import { proxify } from "lib/proxy.js";
+import { proxify } from "#lib/proxy.js";
 
 import { Snapshot } from "#test/suite";
 

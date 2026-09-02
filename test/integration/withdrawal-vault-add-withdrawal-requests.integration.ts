@@ -7,11 +7,11 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 import type { WithdrawalVault } from "typechain-types/index.js";
 
 import { ether, readWithdrawalRequests } from "#lib";
+import { impersonate } from "#lib/account.js";
 import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
-import { impersonate } from "lib/account.js";
 
+import { encodeEIP7002Payload } from "#test/0.8.9/withdrawalVault/eip7002Mock.js";
 import { Snapshot } from "#test/suite";
-import { encodeEIP7002Payload } from "test/0.8.9/withdrawalVault/eip7002Mock.js";
 
 describe("Integration: WithdrawalVault: addWithdrawalRequests", () => {
   let ethers: HardhatEthers;

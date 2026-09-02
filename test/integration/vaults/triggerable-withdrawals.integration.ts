@@ -7,7 +7,7 @@ import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js
 
 import { impersonate, randomAddress } from "#lib";
 import { createVaultWithDashboard, getProtocolContext, type ProtocolContext, setupLidoForVaults } from "#lib/protocol";
-import { ether } from "lib/units.js";
+import { ether } from "#lib/units.js";
 
 import { Snapshot } from "#test/suite";
 

@@ -1,8 +1,8 @@
 import hre from "hardhat";
 
-import { loadContract } from "lib/contract.js";
-import { makeTx } from "lib/deploy.js";
-import { readNetworkState, setValueInState, Sk } from "lib/state-file.js";
+import { loadContract } from "#lib/contract.js";
+import { makeTx } from "#lib/deploy.js";
+import { readNetworkState, setValueInState, Sk } from "#lib/state-file.js";
 
 const NULL_CONTENT_URI =
   "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";

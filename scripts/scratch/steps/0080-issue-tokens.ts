@@ -1,9 +1,9 @@
 import hre from "hardhat";
 
 import { loadContract } from "#lib";
-import { makeTx } from "lib/deploy.js";
-import { cy, log, yl } from "lib/log.js";
-import { readNetworkState, Sk } from "lib/state-file.js";
+import { makeTx } from "#lib/deploy.js";
+import { cy, log, yl } from "#lib/log.js";
+import { readNetworkState, Sk } from "#lib/state-file.js";
 
 const MAX_HOLDERS_IN_ONE_TX = 30;
 

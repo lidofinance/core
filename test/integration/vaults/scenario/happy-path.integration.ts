@@ -19,6 +19,7 @@ import {
   prepareLocalMerkleTree,
   updateBalance,
 } from "#lib";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
 import {
   calculateLockedValue,
   ensurePredepositGuaranteeUnpaused,
@@ -30,10 +31,9 @@ import {
   reportWithoutClActivation,
   setupLidoForVaults,
 } from "#lib/protocol";
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
 
 import { bailOnFailure, Snapshot } from "#test/suite";
-import { ONE_DAY } from "test/suite/constants.js";
+import { ONE_DAY } from "#test/suite/constants.js";
 
 const VALIDATORS_PER_VAULT = 2n;
 const VALIDATOR_DEPOSIT_SIZE = ether("33");

@@ -16,8 +16,8 @@ import type {
 
 import { ether } from "#lib";
 
+import { deployVaults } from "#test/deploy/vaults.js";
 import { Snapshot } from "#test/suite";
-import { deployVaults } from "test/deploy/vaults.js";
 
 describe("AlertingHarness.sol", () => {
   let ethers: HardhatEthers;

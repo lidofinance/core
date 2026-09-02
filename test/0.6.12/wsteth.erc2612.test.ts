@@ -1,6 +1,6 @@
 import hre from "hardhat";
 
-import { ether } from "lib/units.js";
+import { ether } from "#lib/units.js";
 
 import { testERC2612Compliance } from "../common/erc2612.test.js";
 

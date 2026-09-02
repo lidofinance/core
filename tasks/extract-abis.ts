@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { task } from "hardhat/config";
 
-import { log, yl } from "lib/log.js";
+import { log, yl } from "#lib/log.js";
 
 const ABI_OUTPUT_PATH = path.resolve(process.cwd(), "lib", "abi");
 const LIDO_ARTIFACT_PREFIX = "contracts/";

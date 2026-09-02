@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { advanceChainTime } from "#lib";
-import { log } from "lib/log.js";
+import { log } from "#lib/log.js";
 
 const __filename = fileURLToPath(import.meta.url);
 

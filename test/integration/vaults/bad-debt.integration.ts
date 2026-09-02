@@ -19,8 +19,8 @@ import {
   upDefaultTierShareLimit,
   waitNextAvailableReportTime,
 } from "#lib/protocol";
-import { simulateReport } from "lib/protocol/helpers/accounting.js";
-import { ether } from "lib/units.js";
+import { simulateReport } from "#lib/protocol/helpers/accounting.js";
+import { ether } from "#lib/units.js";
 
 import { Snapshot } from "#test/suite";
 

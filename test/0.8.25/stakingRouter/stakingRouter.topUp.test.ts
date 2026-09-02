@@ -13,7 +13,7 @@ import {
 } from "typechain-types/index.js";
 
 import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "#lib";
-import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "lib/constants.js";
+import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "#lib/constants.js";
 
 import { deployLidoLocator, deployStakingRouter } from "#test/deploy";
 import { Snapshot } from "#test/suite";

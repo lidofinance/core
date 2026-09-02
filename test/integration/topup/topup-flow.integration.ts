@@ -4,6 +4,7 @@ import hre from "hardhat";
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { ether, findEventsWithInterfaces, log } from "#lib";
+import { randomValidatorPubkey } from "#lib/pdg.js";
 import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import {
   buildTopUpData,
@@ -20,7 +21,6 @@ import {
   topUpEnsureDepositableEther,
   topUpEnsureModuleAllocation,
 } from "#lib/protocol/helpers";
-import { randomValidatorPubkey } from "lib/pdg.js";
 
 import { Snapshot } from "#test/suite";
 

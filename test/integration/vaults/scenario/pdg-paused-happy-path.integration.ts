@@ -30,6 +30,7 @@ import {
   PDGPolicy,
   prepareLocalMerkleTree,
 } from "#lib";
+import { mEqual } from "#lib/promise.js";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
   getProtocolContext,
@@ -38,7 +39,6 @@ import {
   setupLidoForVaults,
   VAULT_CONNECTION_DEPOSIT,
 } from "#lib/protocol";
-import { mEqual } from "lib/promise.js";
 
 import { resetState, Snapshot } from "#test/suite";
 

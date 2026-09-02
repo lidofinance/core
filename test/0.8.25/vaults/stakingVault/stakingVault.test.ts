@@ -28,8 +28,8 @@ import {
 } from "#lib";
 import { getPubkeys } from "#lib/protocol";
 
+import { deployEIP7002WithdrawalRequestContractMock } from "#test/0.8.9/withdrawalVault/eip7002Mock.js";
 import { Snapshot } from "#test/suite";
-import { deployEIP7002WithdrawalRequestContractMock } from "test/0.8.9/withdrawalVault/eip7002Mock.js";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const INVALID_PUBKEY = "0x" + "ab".repeat(47);

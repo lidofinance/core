@@ -24,7 +24,7 @@ import {
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
 } from "#lib/protocol/helpers";
-import { type LoadedContract } from "lib/protocol/types.js";
+import { type LoadedContract } from "#lib/protocol/types.js";
 
 import { Snapshot } from "#test/suite";
 

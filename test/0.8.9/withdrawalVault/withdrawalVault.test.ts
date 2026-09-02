@@ -16,9 +16,9 @@ import type {
 } from "typechain-types/index.js";
 
 import { EIP7251_ADDRESS, EIP7251_MIN_CONSOLIDATION_FEE } from "#lib";
-import { MAX_UINT256 } from "lib/constants.js";
-import { EIP7002_ADDRESS, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "lib/eips/eip7002.js";
-import { proxify } from "lib/proxy.js";
+import { MAX_UINT256 } from "#lib/constants.js";
+import { EIP7002_ADDRESS, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "#lib/eips/eip7002.js";
+import { proxify } from "#lib/proxy.js";
 
 import { Snapshot } from "#test/suite";
 

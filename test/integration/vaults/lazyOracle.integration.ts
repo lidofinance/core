@@ -14,7 +14,7 @@ import {
   reportWithoutClActivation,
   setupLidoForVaults,
 } from "#lib/protocol";
-import { calculateLockedValue, createVaultsReportTree, type VaultReportItem } from "lib/protocol/helpers/vaults.js";
+import { calculateLockedValue, createVaultsReportTree, type VaultReportItem } from "#lib/protocol/helpers/vaults.js";
 
 import { Snapshot } from "#test/suite";
 

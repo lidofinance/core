@@ -12,8 +12,11 @@
     "#lib": "./lib/index.js",
     "#lib/protocol": "./lib/protocol/index.js",
     "#lib/protocol/helpers": "./lib/protocol/helpers/index.js",
+    "#lib/*": "./lib/*",
+    "#scripts/*": "./scripts/*",
     "#test/suite": "./test/suite/index.js",
-    "#test/deploy": "./test/deploy/index.js"
+    "#test/deploy": "./test/deploy/index.js",
+    "#test/*": "./test/*"
   },
   "scripts": {
     "compile": "hardhat build",

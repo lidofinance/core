@@ -1,5 +1,4 @@
 import { isAddress, ZeroAddress } from "ethers";
-import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade.js";
 
 import { type UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig.js";
 import { UpgradeTemplate__factory } from "typechain-types/index.js";
@@ -18,6 +17,8 @@ import {
   Sk,
   updateObjectInState,
 } from "#lib";
+
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "#scripts/utils/upgrade.js";
 
 /**
  * Validates that `value` is a non-zero address and returns it unchanged, throwing otherwise.

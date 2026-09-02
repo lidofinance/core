@@ -1,7 +1,7 @@
 import hre from "hardhat";
 
 import { cy, deployWithoutProxy, log, updateObjectInState } from "#lib";
-import { readNetworkState, Sk } from "lib/state-file.js";
+import { readNetworkState, Sk } from "#lib/state-file.js";
 
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();

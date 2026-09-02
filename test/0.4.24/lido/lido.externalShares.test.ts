@@ -8,7 +8,7 @@ import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
 import { type Lido, type LidoLocator } from "typechain-types/index.js";
 
 import { advanceChainTime, ether, impersonate, MAX_UINT256 } from "#lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
 
 import { deployLidoDao } from "#test/deploy";
 import { Snapshot } from "#test/suite";

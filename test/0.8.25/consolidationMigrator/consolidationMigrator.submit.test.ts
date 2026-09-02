@@ -11,7 +11,7 @@ import {
   type TargetModule__MockForConsolidationMigrator,
 } from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy.js";
+import { proxify } from "#lib/proxy.js";
 
 import { Snapshot } from "#test/suite";
 

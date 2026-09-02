@@ -16,7 +16,7 @@ import {
   setUpOperatorGrid,
   waitNextAvailableReportTime,
 } from "#lib/protocol";
-import { ether } from "lib/units.js";
+import { ether } from "#lib/units.js";
 
 import { Snapshot } from "#test/suite";
 

@@ -1,5 +1,4 @@
 import hre from "hardhat";
-import { type VoteItem } from "scripts/utils/omnibus.js";
 
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
@@ -25,6 +24,8 @@ import {
   readNetworkState,
   Sk,
 } from "#lib";
+
+import { type VoteItem } from "#scripts/utils/omnibus.js";
 
 const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");
 const VOTE_ID = BigInt(process.env.VOTE_ID || "0");

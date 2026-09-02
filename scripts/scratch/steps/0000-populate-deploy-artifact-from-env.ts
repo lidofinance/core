@@ -1,7 +1,7 @@
 import hre from "hardhat";
 
 import { log } from "#lib";
-import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file.js";
+import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "#lib/state-file.js";
 
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;

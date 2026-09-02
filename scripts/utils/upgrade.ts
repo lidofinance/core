@@ -25,11 +25,11 @@ import {
   or,
   yl,
 } from "#lib";
-import { impersonate } from "lib/account.js";
-import { type UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas.js";
-import { loadContract } from "lib/contract.js";
-import { getTxLink } from "lib/explorer.js";
-import { log } from "lib/log.js";
+import { impersonate } from "#lib/account.js";
+import { type UpgradeParameters, validateUpgradeParameters } from "#lib/config-schemas.js";
+import { loadContract } from "#lib/contract.js";
+import { getTxLink } from "#lib/explorer.js";
+import { log } from "#lib/log.js";
 import {
   type DeploymentState,
   getAddress,
@@ -37,9 +37,9 @@ import {
   readNetworkState,
   Sk,
   updateObjectInState,
-} from "lib/state-file.js";
-import { advanceChainTime } from "lib/time.js";
-import { ether } from "lib/units.js";
+} from "#lib/state-file.js";
+import { advanceChainTime } from "#lib/time.js";
+import { ether } from "#lib/units.js";
 
 import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "#test/suite";
 

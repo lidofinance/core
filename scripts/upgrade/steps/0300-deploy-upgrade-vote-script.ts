@@ -1,5 +1,3 @@
-import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade.js";
-
 import { type UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript.js";
 import { UpgradeVoteScript__factory } from "typechain-types/index.js";
 
@@ -14,6 +12,8 @@ import {
   readNetworkState,
   Sk,
 } from "#lib";
+
+import { checkArtifactDeployedAndLog } from "#scripts/utils/upgrade.js";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeVoteScript);

@@ -13,7 +13,7 @@ import {
 
 import { ether, impersonate, proxify, randomAddress } from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/locator.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy/locator.js";
 
 export const DAY = 86_400n;
 export const DEPOSIT_SIZE = ether("32");

@@ -22,7 +22,7 @@ import type {
 
 import { days, ether, GENESIS_FORK_VERSION, randomAddress } from "#lib";
 import { createVaultProxy } from "#lib/protocol/helpers";
-import { createVaultProxyWithoutConnectingToVaultHub } from "lib/protocol/helpers/vaults.js";
+import { createVaultProxyWithoutConnectingToVaultHub } from "#lib/protocol/helpers/vaults.js";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";

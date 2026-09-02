@@ -92,7 +92,7 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
     predepositGuarantee = ctx.contracts.predepositGuarantee;
 
     // Look up the CircuitBreaker address from the state file (replaces the previous GateSeal flow).
-    const state = await import("lib/state-file.js").then((m) => m.readNetworkState());
+    const state = await import("#lib/state-file.js").then((m) => m.readNetworkState());
     const circuitBreakerAddress = state.circuitBreaker?.address;
 
     if (!circuitBreakerAddress) {

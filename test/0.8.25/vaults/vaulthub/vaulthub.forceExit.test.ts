@@ -19,9 +19,9 @@ import type {
 } from "typechain-types/index.js";
 
 import { GENESIS_FORK_VERSION } from "#lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { findEvents } from "lib/event.js";
-import { ether } from "lib/units.js";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
+import { findEvents } from "#lib/event.js";
+import { ether } from "#lib/units.js";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";

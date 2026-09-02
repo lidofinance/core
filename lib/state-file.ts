@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 
 import { ethers } from "ethers";
 import hre from "hardhat";
-import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch.js";
+
+import { readScratchParameters, scratchParametersToDeploymentState } from "#scripts/utils/scratch.js";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";

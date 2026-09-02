@@ -15,7 +15,7 @@ import {
   setupLidoForVaults,
 } from "#lib/protocol";
 import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "#lib/protocol/helpers";
-import { ether } from "lib/units.js";
+import { ether } from "#lib/units.js";
 
 import { Snapshot } from "#test/suite";
 

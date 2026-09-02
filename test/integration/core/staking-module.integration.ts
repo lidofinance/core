@@ -4,9 +4,9 @@ import hre from "hardhat";
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { certainAddress, ether, impersonate } from "#lib";
+import { type LoadedContract } from "#lib/contract.js";
 import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
-import { type LoadedContract } from "lib/contract.js";
-import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-module.js";
+import { randomPubkeys, randomSignatures } from "#lib/protocol/helpers/staking-module.js";
 
 import { Snapshot } from "#test/suite";
 

@@ -10,12 +10,12 @@ import type { DepositSecurityModule } from "typechain-types/index.js";
 
 import { BigIntMath, certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "#lib";
 import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
-import { setSingleGuardian } from "lib/protocol/helpers/dsm.js";
+import { setSingleGuardian } from "#lib/protocol/helpers/dsm.js";
 import {
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
-} from "lib/protocol/helpers/nor-sdvt.js";
+} from "#lib/protocol/helpers/nor-sdvt.js";
 
 import { Snapshot } from "#test/suite";
 

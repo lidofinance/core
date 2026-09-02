@@ -14,7 +14,7 @@ import {
   reportWithoutClActivation,
   setupLidoForVaults,
 } from "#lib/protocol";
-import { advanceChainTime, days } from "lib/time.js";
+import { advanceChainTime, days } from "#lib/time.js";
 
 import { Snapshot } from "#test/suite";
 

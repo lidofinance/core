@@ -8,10 +8,10 @@ import type {
   WithdrawalQueueERC721,
 } from "typechain-types/index.js";
 
-import { loadContract } from "lib/contract.js";
-import { makeTx } from "lib/deploy.js";
-import { log } from "lib/log.js";
-import { readNetworkState, Sk } from "lib/state-file.js";
+import { loadContract } from "#lib/contract.js";
+import { makeTx } from "#lib/deploy.js";
+import { log } from "#lib/log.js";
+import { readNetworkState, Sk } from "#lib/state-file.js";
 
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();

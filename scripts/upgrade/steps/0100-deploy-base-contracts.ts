@@ -1,5 +1,3 @@
-import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade.js";
-
 import {
   Accounting__factory,
   AccountingOracle__factory,
@@ -43,7 +41,9 @@ import {
   readNetworkState,
   Sk,
 } from "#lib";
-import { OracleReportSanityCheckerSchema } from "lib/config-schemas.js";
+import { OracleReportSanityCheckerSchema } from "#lib/config-schemas.js";
+
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "#scripts/utils/upgrade.js";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeTemporaryAdmin);

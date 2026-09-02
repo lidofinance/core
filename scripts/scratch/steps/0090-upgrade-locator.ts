@@ -2,8 +2,8 @@ import hre from "hardhat";
 
 import type { LidoLocator } from "typechain-types/index.js";
 
-import { updateProxyImplementation } from "lib/deploy.js";
-import { getAddress, readNetworkState, Sk } from "lib/state-file.js";
+import { updateProxyImplementation } from "#lib/deploy.js";
+import { getAddress, readNetworkState, Sk } from "#lib/state-file.js";
 
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();

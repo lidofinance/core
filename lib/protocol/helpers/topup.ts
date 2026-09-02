@@ -3,8 +3,8 @@ import { ethers, ZeroAddress } from "ethers";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { certainAddress, ether, impersonate, log } from "#lib";
-import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "lib/pdg.js";
-import { prepareLocalMerkleTree } from "lib/top-ups.js";
+import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "#lib/pdg.js";
+import { prepareLocalMerkleTree } from "#lib/top-ups.js";
 
 import { type ProtocolContext } from "../types.js";
 

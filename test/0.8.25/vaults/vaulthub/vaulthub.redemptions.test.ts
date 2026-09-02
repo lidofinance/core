@@ -7,7 +7,7 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { ether } from "lib/units.js";
+import { ether } from "#lib/units.js";
 
 import { deployVaults } from "#test/deploy";
 import { Snapshot } from "#test/suite";

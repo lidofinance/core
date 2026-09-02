@@ -9,10 +9,10 @@ import {
 } from "typechain-types/index.js";
 
 import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "#lib";
-import { loadContract } from "lib/contract.js";
-import { makeTx } from "lib/deploy.js";
-import { streccak } from "lib/keccak.js";
-import { type DeploymentState, readNetworkState, Sk } from "lib/state-file.js";
+import { loadContract } from "#lib/contract.js";
+import { makeTx } from "#lib/deploy.js";
+import { streccak } from "#lib/keccak.js";
+import { type DeploymentState, readNetworkState, Sk } from "#lib/state-file.js";
 
 const STAKING_MODULE_MANAGE_ROLE = streccak("STAKING_MODULE_MANAGE_ROLE");
 const ZERO_ADDRESS = ZeroAddress;

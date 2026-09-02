@@ -3,13 +3,13 @@ import hre from "hardhat";
 
 import type { DAOFactory, ENS } from "typechain-types/index.js";
 
-import { loadContract, type LoadedContract } from "lib/contract.js";
-import { deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy.js";
-import { assignENSName } from "lib/ens.js";
-import { findEvents } from "lib/event.js";
-import { streccak } from "lib/keccak.js";
-import { cy, log, mg, yl } from "lib/log.js";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
+import { loadContract, type LoadedContract } from "#lib/contract.js";
+import { deployImplementation, deployWithoutProxy, makeTx } from "#lib/deploy.js";
+import { assignENSName } from "#lib/ens.js";
+import { findEvents } from "#lib/event.js";
+import { streccak } from "#lib/keccak.js";
+import { cy, log, mg, yl } from "#lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "#lib/state-file.js";
 
 async function deployAPM(
   owner: string,

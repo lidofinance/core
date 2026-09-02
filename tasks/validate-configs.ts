@@ -8,7 +8,7 @@ import {
   safeValidateUpgradeParameters,
   type ScratchParameters,
   type UpgradeParameters,
-} from "lib/config-schemas.js";
+} from "#lib/config-schemas.js";
 
 // Re-implement parameter reading without hardhat dependencies
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";

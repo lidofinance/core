@@ -22,7 +22,7 @@ import {
   setStakingLimit,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "#lib/protocol";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
 import { bailOnFailure, Snapshot } from "#test/suite";
 

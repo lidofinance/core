@@ -4,10 +4,10 @@ import hre from "hardhat";
 
 import type { ERCProxy, EVMScriptRegistryFactory, Kernel, LidoTemplate } from "typechain-types/index.js";
 
-import { getContractPath, loadContract, type LoadedContract } from "lib/contract.js";
-import { makeTx } from "lib/deploy.js";
-import { findEvents, findEventsWithInterfaces } from "lib/event.js";
-import { cy, log, yl } from "lib/log.js";
+import { getContractPath, loadContract, type LoadedContract } from "#lib/contract.js";
+import { makeTx } from "#lib/deploy.js";
+import { findEvents, findEventsWithInterfaces } from "#lib/event.js";
+import { cy, log, yl } from "#lib/log.js";
 import {
   type DeploymentState,
   persistNetworkState,
@@ -16,7 +16,7 @@ import {
   Sk,
   TemplateAppNames,
   updateObjectInState,
-} from "lib/state-file.js";
+} from "#lib/state-file.js";
 
 // See KernelConstants.sol
 const KERNEL_DEFAULT_ACL_APP_ID = "0xe3262375f45a6e2026b7e7b18c2b807434f2508fe1a2a3dfb493c7df8f4aad6a";

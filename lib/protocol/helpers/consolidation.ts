@@ -5,7 +5,7 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 import { type ConsolidationBus } from "typechain-types/index.js";
 
 import { advanceChainTime, getCurrentBlockTimestamp } from "#lib";
-import { addressToWC, type LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg.js";
+import { addressToWC, type LocalMerkleTree, prepareLocalMerkleTree } from "#lib/pdg.js";
 
 import { type ProtocolContext } from "../types.js";
 

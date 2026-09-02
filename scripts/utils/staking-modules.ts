@@ -6,16 +6,17 @@ import { getMode } from "hardhat.helpers.js";
 import type { ResolvedConfigurationVariable } from "hardhat/types/config";
 import os from "os";
 import path from "path";
-import {
-  readUpgradeParameters,
-  writeUpgradeParameterAddress,
-  writeUpgradeParameterAddresses,
-} from "scripts/utils/upgrade.js";
 
 import { type HashConsensus, type ValidatorExitDelayVerifier } from "typechain-types/index.js";
 
 import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "#lib";
-import { type DeploymentState, Sk, updateObjectInState } from "lib/state-file.js";
+import { type DeploymentState, Sk, updateObjectInState } from "#lib/state-file.js";
+
+import {
+  readUpgradeParameters,
+  writeUpgradeParameterAddress,
+  writeUpgradeParameterAddresses,
+} from "#scripts/utils/upgrade.js";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 const STAKING_MODULES_REPO_BRANCH = "develop";

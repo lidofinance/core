@@ -21,7 +21,7 @@ import {
   testMethod,
   type VaultRoles,
 } from "#lib/protocol";
-import { vaultRoleKeys } from "lib/protocol/helpers/vaults.js";
+import { vaultRoleKeys } from "#lib/protocol/helpers/vaults.js";
 
 import { Snapshot } from "#test/suite";
 

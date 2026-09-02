@@ -19,8 +19,8 @@ import {
   submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
 } from "#lib/protocol";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { adjustReportModuleBalances } from "#lib/protocol/helpers/accounting.js";
+import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
 import { Snapshot } from "#test/suite";
 

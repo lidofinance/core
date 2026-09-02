@@ -18,9 +18,9 @@ import type {
 } from "typechain-types/index.js";
 
 import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate } from "#lib";
+import { ONE_GWEI, TOTAL_BASIS_POINTS } from "#lib/constants.js";
+import { findEvents } from "#lib/event.js";
 import { ceilDiv } from "#lib/protocol";
-import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { findEvents } from "lib/event.js";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";

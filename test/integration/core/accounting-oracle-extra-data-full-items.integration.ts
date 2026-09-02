@@ -20,7 +20,7 @@ import {
   setAnnualBalanceIncreaseLimit,
 } from "#lib";
 import { getProtocolContext, type ProtocolContext, seedProtocolPendingBaseline, withCSM } from "#lib/protocol";
-import { reportWithoutExtraData } from "lib/protocol/helpers/accounting.js";
+import { reportWithoutExtraData } from "#lib/protocol/helpers/accounting.js";
 import {
   getOperatorName,
   getOperatorRewardAddress,
@@ -28,14 +28,14 @@ import {
   norSdvtAddOperatorKeys,
   norSdvtEnsureOperators,
   norSdvtSetOperatorStakingLimit,
-} from "lib/protocol/helpers/nor-sdvt.js";
+} from "#lib/protocol/helpers/nor-sdvt.js";
 import {
   depositAndReportValidators,
   removeStakingLimit,
   setModuleStakeShareLimit,
-} from "lib/protocol/helpers/staking.js";
-import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
-import type { LoadedContract as ProtocolLoadedContract, StakingModuleName } from "lib/protocol/types.js";
+} from "#lib/protocol/helpers/staking.js";
+import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
+import type { LoadedContract as ProtocolLoadedContract, StakingModuleName } from "#lib/protocol/types.js";
 
 import { MAX_BASIS_POINTS, Snapshot } from "#test/suite";
 

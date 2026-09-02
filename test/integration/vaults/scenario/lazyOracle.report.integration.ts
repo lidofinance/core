@@ -14,7 +14,7 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
 } from "#lib/protocol";
-import { advanceChainTime } from "lib/time.js";
+import { advanceChainTime } from "#lib/time.js";
 
 import { bailOnFailure, Snapshot } from "#test/suite";
 

@@ -17,8 +17,8 @@ import {
   setUpOperatorGrid,
   waitNextAvailableReportTime,
 } from "#lib/protocol";
-import { getCurrentBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
+import { getCurrentBlockTimestamp } from "#lib/time.js";
+import { ether } from "#lib/units.js";
 
 import { Snapshot } from "#test/suite";
 

@@ -3,8 +3,8 @@ import hre from "hardhat";
 import type { VaultHub } from "typechain-types/index.js";
 
 import { ether, loadContract, makeTx } from "#lib";
-import { deployBehindOssifiableProxy, deployWithoutProxy } from "lib/deploy.js";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
+import { deployBehindOssifiableProxy, deployWithoutProxy } from "#lib/deploy.js";
+import { readNetworkState, Sk, updateObjectInState } from "#lib/state-file.js";
 
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();

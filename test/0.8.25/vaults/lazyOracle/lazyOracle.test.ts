@@ -22,7 +22,7 @@ import {
   impersonate,
   randomAddress,
 } from "#lib";
-import { createVaultsReportTree, type VaultReportItem } from "lib/protocol/helpers/vaults.js";
+import { createVaultsReportTree, type VaultReportItem } from "#lib/protocol/helpers/vaults.js";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
 import { Snapshot, ZERO_BYTES32 } from "#test/suite";

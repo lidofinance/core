@@ -11,7 +11,7 @@ import {
 } from "typechain-types/index.js";
 
 import { randomWCType1 } from "#lib";
-import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, StakingModuleStatus, WithdrawalCredentialsType } from "lib/constants.js";
+import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, StakingModuleStatus, WithdrawalCredentialsType } from "#lib/constants.js";
 
 import { deployLidoLocator, deployStakingRouter } from "#test/deploy";
 import { Snapshot } from "#test/suite";

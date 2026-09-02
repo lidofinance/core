@@ -10,22 +10,22 @@ import type {
 } from "typechain-types/index.js";
 
 import { MAX_TOP_UP_PER_BLOCK_GWEI } from "#lib";
-import type { InitializeArgs } from "lib/contract.js";
-import { encodeFunctionCall, getContractPath, loadContract } from "lib/contract.js";
+import type { InitializeArgs } from "#lib/contract.js";
+import { encodeFunctionCall, getContractPath, loadContract } from "#lib/contract.js";
 import {
   deployBehindOssifiableProxy,
   deployContract,
   deployImplementation,
   deployWithoutProxy,
   makeTx,
-} from "lib/deploy.js";
-import { EIP7002_ADDRESS } from "lib/eips/eip7002.js";
-import { EIP7251_ADDRESS } from "lib/eips/eip7251.js";
-import { log } from "lib/log.js";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
-import { en0x } from "lib/string.js";
+} from "#lib/deploy.js";
+import { EIP7002_ADDRESS } from "#lib/eips/eip7002.js";
+import { EIP7251_ADDRESS } from "#lib/eips/eip7251.js";
+import { log } from "#lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "#lib/state-file.js";
+import { en0x } from "#lib/string.js";
 
-import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState.js";
+import { ACTIVE_VALIDATOR_PROOF } from "#test/0.8.25/validatorState.js";
 
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 

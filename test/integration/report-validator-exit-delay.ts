@@ -6,14 +6,14 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "#lib";
 import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
 import {
   encodeExitRequestsDataListWithFormat,
   toHistoricalHeaderWitness,
   toProvableBeaconBlockHeader,
   toValidatorWitness,
-} from "test/0.8.25/validatorExitDelayVerifierHelpers.js";
-import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState.js";
+} from "#test/0.8.25/validatorExitDelayVerifierHelpers.js";
+import { ACTIVE_VALIDATOR_PROOF } from "#test/0.8.25/validatorState.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Report Validator Exit Delay", () => {
   let ethers: HardhatEthers;

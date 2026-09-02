@@ -21,10 +21,10 @@ import {
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
 } from "#lib/protocol";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
 import { Snapshot } from "#test/suite";
-import { SHARE_RATE_PRECISION } from "test/suite/constants.js";
+import { SHARE_RATE_PRECISION } from "#test/suite/constants.js";
 
 describe("Integration: Sanity checker with bad debt internalization", () => {
   let ethers: HardhatEthers;

@@ -31,8 +31,8 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
 } from "#lib";
+import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "#lib/constants.js";
 import { ceilDiv } from "#lib/protocol";
-import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";

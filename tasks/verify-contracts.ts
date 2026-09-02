@@ -6,7 +6,7 @@ import type { HardhatRuntimeEnvironment } from "hardhat/types/hre";
 
 import { verifyContract } from "@nomicfoundation/hardhat-verify/verify";
 
-import { cy, log, yl } from "lib/log.js";
+import { cy, log, yl } from "#lib/log.js";
 
 type DeployedContract = {
   contract: string;

@@ -5,7 +5,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import { type ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy.js";
+import { proxify } from "#lib/proxy.js";
 
 describe("ConsolidationBus.sol: deployment", () => {
   let ethers: HardhatEthers;

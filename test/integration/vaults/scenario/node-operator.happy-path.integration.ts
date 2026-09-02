@@ -31,6 +31,8 @@ import {
   PDGPolicy,
   prepareLocalMerkleTree,
 } from "#lib";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
+import { mEqual } from "#lib/promise.js";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
   ensurePredepositGuaranteeUnpaused,
@@ -42,11 +44,9 @@ import {
   setupLidoForVaults,
   VAULT_CONNECTION_DEPOSIT,
 } from "#lib/protocol";
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { mEqual } from "lib/promise.js";
 
 import { resetState, Snapshot } from "#test/suite";
-import { ONE_DAY } from "test/suite/constants.js";
+import { ONE_DAY } from "#test/suite/constants.js";
 
 const ONE_YEAR = 365n * ONE_DAY;
 

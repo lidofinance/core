@@ -12,7 +12,7 @@ import {
   type StakingRouter__MockForTopUpGateway,
 } from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy.js";
+import { proxify } from "#lib/proxy.js";
 
 import { deployLidoLocator } from "#test/deploy";
 import { Snapshot } from "#test/suite";

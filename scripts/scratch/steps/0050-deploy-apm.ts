@@ -3,13 +3,13 @@ import hre from "hardhat";
 
 import type { ENS, LidoTemplate } from "typechain-types/index.js";
 
-import { loadContract } from "lib/contract.js";
-import { makeTx } from "lib/deploy.js";
-import { getENSNodeOwner } from "lib/ens.js";
-import { findEvents } from "lib/event.js";
-import { streccak } from "lib/keccak.js";
-import { cy, log, mg, yl } from "lib/log.js";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
+import { loadContract } from "#lib/contract.js";
+import { makeTx } from "#lib/deploy.js";
+import { getENSNodeOwner } from "#lib/ens.js";
+import { findEvents } from "#lib/event.js";
+import { streccak } from "#lib/keccak.js";
+import { cy, log, mg, yl } from "#lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "#lib/state-file.js";
 
 function splitDomain(domain: string) {
   const dotIndex = domain.indexOf(".");
