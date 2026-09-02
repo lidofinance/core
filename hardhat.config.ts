@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { configVariable, defineConfig } from "hardhat/config";
+import type { EdrNetworkUserConfig } from "hardhat/types/config";
 import HardhatIgnoreWarnings from "hardhat-ignore-warnings";
 
 import HardhatToolbox from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
@@ -20,7 +21,28 @@ import { mochaRootHooks } from "./test/hooks/index.js";
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 const LOCAL_DEVNET_CHAIN_ID = parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10);
-const HARDHAT_CHAIN_ID = process.env.HARDHAT_CHAIN_ID ? parseInt(process.env.HARDHAT_CHAIN_ID, 10) : undefined;
+
+const simulatedNetwork = {
+  type: "edr-simulated",
+  // setting base fee to 0 to avoid extra calculations doesn't work :(
+  // minimal base fee is 1 for EIP-1559
+  // gasPrice: 0,
+  // initialBaseFeePerGas: 0,
+  blockGasLimit: 30000000,
+  allowUnlimitedContractSize: true,
+  accounts: {
+    // default hardhat's node mnemonic
+    mnemonic: "test test test test test test test test test test test junk",
+    count: 30,
+    accountsBalance: "10000000000000000000000000",
+  },
+  hardfork: "prague",
+  mining: {
+    mempool: {
+      order: "fifo",
+    },
+  },
+} satisfies EdrNetworkUserConfig;
 
 export default defineConfig({
   plugins: [HardhatToolbox, HardhatContractSizer, HardhatIgnoreWarnings],
@@ -190,46 +212,11 @@ export default defineConfig({
   },
   networks: {
     "default": {
-      type: "edr-simulated",
-      // setting base fee to 0 to avoid extra calculations doesn't work :(
-      // minimal base fee is 1 for EIP-1559
-      // gasPrice: 0,
-      // initialBaseFeePerGas: 0,
-      ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
-      blockGasLimit: 30000000,
-      allowUnlimitedContractSize: true,
-      accounts: {
-        // default hardhat's node mnemonic
-        mnemonic: "test test test test test test test test test test test junk",
-        count: 30,
-        accountsBalance: "10000000000000000000000000",
-      },
+      ...simulatedNetwork,
       forking: getHardhatForkingConfig(),
-      hardfork: "prague",
-      mining: {
-        mempool: {
-          order: "fifo",
-        },
-      },
     },
-    "node": {
-      type: "edr-simulated",
-      // without this a forked `hardhat node` reports chainId 31337 (see run-fork-node.sh)
-      ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
-      blockGasLimit: 30000000,
-      allowUnlimitedContractSize: true,
-      accounts: {
-        mnemonic: "test test test test test test test test test test test junk",
-        count: 30,
-        accountsBalance: "10000000000000000000000000",
-      },
-      hardfork: "prague",
-      mining: {
-        mempool: {
-          order: "fifo",
-        },
-      },
-    },
+    // `hardhat node` connects here; run-fork-node.sh passes the fork chain id via --chain-id
+    "node": simulatedNetwork,
     "custom": {
       type: "http",
       url: configVariable("RPC_URL"),
