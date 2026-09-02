@@ -68,7 +68,7 @@ async function deployAragonID(owner: string, ens: LoadedContract<ENS>) {
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  let state = await readNetworkState({ deployer });
+  let state = readNetworkState({ deployer });
 
   let ens: LoadedContract<ENS>;
 
@@ -83,7 +83,7 @@ export async function main() {
     const ensAddress = findEvents(receipt, "DeployENS")[0].args.ens;
 
     ens = await loadContract<ENS>("ENS", ensAddress);
-    state = await updateObjectInState(Sk.ens, {
+    state = updateObjectInState(Sk.ens, {
       address: ensAddress,
       constructorArgs: [],
       contract: ens.contractPath,
@@ -136,8 +136,8 @@ export async function main() {
     apmRegistryFactory,
   );
 
-  await updateObjectInState(Sk.ensNode, { nodeName: ensNodeName, nodeIs: ensNode });
-  state = await updateObjectInState(Sk.aragonApmRegistry, {
+  updateObjectInState(Sk.ensNode, { nodeName: ensNodeName, nodeIs: ensNode });
+  state = updateObjectInState(Sk.aragonApmRegistry, {
     proxy: {
       address: apmRegistry.address,
       contract: apmRegistry.contractPath,

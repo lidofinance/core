@@ -15,7 +15,7 @@ const CIRCUIT_BREAKER_BRANCH = "deploy-script";
 export async function main() {
   const { ethers, networkName, networkConfig } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   // Check if CircuitBreaker address is already specified
   if (state[Sk.circuitBreaker]?.address) {
@@ -113,7 +113,7 @@ export async function main() {
     log(`CircuitBreaker deployed at: ${cy(circuitBreakerAddress)}`);
     log.emptyLine();
 
-    await updateObjectInState(Sk.circuitBreaker, {
+    updateObjectInState(Sk.circuitBreaker, {
       address: circuitBreakerAddress,
     });
   } finally {

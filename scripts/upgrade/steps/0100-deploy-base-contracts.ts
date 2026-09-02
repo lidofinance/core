@@ -50,7 +50,7 @@ export async function skip(): Promise<boolean> {
 }
 
 export async function main() {
-  const state = await readNetworkState();
+  const state = readNetworkState();
   const parameters = readUpgradeParameters();
   const deployer = (await getDeployerSigner()).address;
 

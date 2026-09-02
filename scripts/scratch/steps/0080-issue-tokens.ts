@@ -14,7 +14,7 @@ function formatDate(unixTimestamp: number) {
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   const vesting = state[Sk.vestingParams];
   const pairs = Object.entries(vesting.holders);

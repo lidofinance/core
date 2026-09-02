@@ -25,8 +25,8 @@ export async function main() {
   const consolidationMigratorSourceModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID", "");
   const consolidationMigratorTargetModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID", "");
 
-  await resetStateFileFromDeployParams();
-  const state = await readNetworkState();
+  resetStateFileFromDeployParams();
+  const state = readNetworkState();
 
   // Update network-related information
   state.networkId = parseInt(await ethers.provider.send("net_version"));
@@ -69,7 +69,7 @@ export async function main() {
   // Initialize gas usage tracking
   state[Sk.scratchDeployGasUsed] = 0n.toString();
 
-  await persistNetworkState(state);
+  persistNetworkState(state);
 
   log.emptyLine(); // Add an empty line for better readability
 }

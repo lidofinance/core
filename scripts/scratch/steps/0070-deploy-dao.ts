@@ -63,7 +63,7 @@ function updateAgentVestingAddressPlaceholder(state: DeploymentState) {
 
 async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) {
   const { ethers } = await hre.network.getOrCreate();
-  let state = await readNetworkState();
+  let state = readNetworkState();
 
   // Extract DAO and token addresses from the event
   const newDAOEvent = findEvents(newDAOReceipt, "TmplDAOAndTokenDeployed")[0];
@@ -71,7 +71,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   const daoTokenAddress = newDAOEvent.args.token;
 
   // Update state with kernel proxy information
-  state = await updateObjectInState(Sk.aragonKernel, {
+  state = updateObjectInState(Sk.aragonKernel, {
     proxy: {
       address: kernelProxyAddress,
       contract: await getContractPath("KernelProxy"),
@@ -81,7 +81,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   });
 
   // Update state with DAO token information
-  state = await updateObjectInState(Sk.ldo, {
+  state = updateObjectInState(Sk.ldo, {
     address: daoTokenAddress,
     contract: await getContractPath("MiniMeToken"),
     constructorArgs: [
@@ -102,7 +102,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     state[Sk.evmScriptRegistryFactory].address,
   );
 
-  state = await updateObjectInState(Sk.callsScript, {
+  state = updateObjectInState(Sk.callsScript, {
     address: await evmScriptRegistryFactory.baseCallScript(),
     contract: await getContractPath("CallsScript"),
     constructorArgs: [],
@@ -156,7 +156,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   }
 
   // Update state with app information
-  state = await readNetworkState();
+  state = readNetworkState();
   for (const [appName, appData] of Object.entries(dataByAppName)) {
     const key = `app:${appName}`;
     const proxyAddress = appData.proxyAddress;
@@ -175,7 +175,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     };
   }
   updateAgentVestingAddressPlaceholder(state);
-  await persistNetworkState(state);
+  persistNetworkState(state);
 
   // Process missing proxies (ACL and EVMScriptRegistry)
   const newAppProxyEvents = findEventsWithInterfaces(newDAOReceipt, "NewAppProxy", [kernel.interface]);
@@ -220,23 +220,23 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
 
   log.emptyLine(); // Make the output more readable
 
-  await persistNetworkState(state);
+  persistNetworkState(state);
 }
 
-async function addRepoAddress(state: DeploymentState, key: Sk, repoAddress: string) {
+function addRepoAddress(state: DeploymentState, key: Sk, repoAddress: string) {
   const entry = state[key];
   entry["aragonApp"]["repo"] = {
     proxy: {
       address: repoAddress,
     },
   };
-  await updateObjectInState(key, entry);
+  updateObjectInState(key, entry);
 }
 
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  let state = await readNetworkState({ deployer });
+  let state = readNetworkState({ deployer });
 
   const template = await loadContract<LidoTemplate>("LidoTemplate", state[Sk.lidoTemplate].address);
   if (state[Sk.lidoTemplate].deployBlock) {
@@ -245,17 +245,17 @@ export async function main() {
 
   const newDAOReceipt = await doTemplateNewDAO(template, deployer, state[Sk.daoInitialSettings]);
 
-  await setValueInState(Sk.lidoTemplateNewDaoTx, newDAOReceipt.hash);
+  setValueInState(Sk.lidoTemplateNewDaoTx, newDAOReceipt.hash);
 
   await saveStateFromNewDAOTx(newDAOReceipt);
 
   // Save repo addresses for aragon apps
-  state = await readNetworkState({ deployer });
+  state = readNetworkState({ deployer });
   const appRepos = await template.apmRepos();
-  await addRepoAddress(state, Sk.appLido, appRepos.lido);
-  await addRepoAddress(state, Sk.appNodeOperatorsRegistry, appRepos.nodeOperatorsRegistry);
-  await addRepoAddress(state, Sk.appAgent, appRepos.aragonAgent);
-  await addRepoAddress(state, Sk.appFinance, appRepos.aragonFinance);
-  await addRepoAddress(state, Sk.appTokenManager, appRepos.aragonTokenManager);
-  await addRepoAddress(state, Sk.appVoting, appRepos.aragonVoting);
+  addRepoAddress(state, Sk.appLido, appRepos.lido);
+  addRepoAddress(state, Sk.appNodeOperatorsRegistry, appRepos.nodeOperatorsRegistry);
+  addRepoAddress(state, Sk.appAgent, appRepos.aragonAgent);
+  addRepoAddress(state, Sk.appFinance, appRepos.aragonFinance);
+  addRepoAddress(state, Sk.appTokenManager, appRepos.aragonTokenManager);
+  addRepoAddress(state, Sk.appVoting, appRepos.aragonVoting);
 }

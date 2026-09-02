@@ -111,7 +111,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
 }
 
 async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
-  const state = await readNetworkState();
+  const state = readNetworkState();
 
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
@@ -128,7 +128,7 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
 }
 
 async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
-  const state = await readNetworkState();
+  const state = readNetworkState();
 
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),

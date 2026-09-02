@@ -10,7 +10,7 @@ const DEFAULT_ADMIN_ROLE = ZeroHash;
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   const agent = state[Sk.appAgent].proxy.address;
   const voting = state[Sk.appVoting].proxy.address;

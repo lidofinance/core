@@ -76,7 +76,7 @@ export async function makeTx(
 
   const receipt = await tx.wait();
   const gasUsed = receipt.gasUsed;
-  await incrementGasUsed(gasUsed, withStateFile);
+  incrementGasUsed(gasUsed, withStateFile);
 
   return receipt;
 }
@@ -132,7 +132,7 @@ export async function deployContract(
   log.success(`Deployed: ${yl(artifactName)} at ${bl(receipt.contractAddress)}`);
 
   const gasUsed = receipt.gasUsed;
-  await incrementGasUsed(gasUsed, withStateFile);
+  incrementGasUsed(gasUsed, withStateFile);
   (contract as DeployedContract).deploymentGasUsed = gasUsed;
   (contract as DeployedContract).deploymentTx = tx.hash;
 
@@ -157,7 +157,7 @@ export async function deployWithoutProxy(
 
   if (withStateFile) {
     const contractPath = await getContractPath(artifactName);
-    await updateObjectInState(nameInState, {
+    updateObjectInState(nameInState, {
       contract: contractPath,
       [addressFieldName]: contract.address,
       constructorArgs,
@@ -181,7 +181,7 @@ export async function deployImplementation(
   const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
 
   if (withStateFile) {
-    await updateObjectInState(nameInState, {
+    updateObjectInState(nameInState, {
       implementation: {
         contract: contract.contractPath,
         address: contract.address,
@@ -221,7 +221,7 @@ export async function deployBehindOssifiableProxy(
   const proxy = await deployContract(PROXY_CONTRACT_NAME, proxyConstructorArgs, deployer, withStateFile);
 
   if (withStateFile) {
-    await updateObjectInState(nameInState, {
+    updateObjectInState(nameInState, {
       proxy: {
         contract: await getContractPath(PROXY_CONTRACT_NAME),
         address: proxy.address,
@@ -257,7 +257,7 @@ export async function updateProxyImplementation(
   await makeTx(proxy, "proxy__upgradeTo", [implementation.address], { from: proxyOwner });
 
   if (withStateFile) {
-    await updateObjectInState(nameInState, {
+    updateObjectInState(nameInState, {
       implementation: {
         contract: implementation.contractPath,
         address: implementation.address,

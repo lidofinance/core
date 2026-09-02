@@ -9,7 +9,7 @@ import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   const stethAddress = state[Sk.appLido].proxy.address;
   const wstethAddress = state[Sk.wstETH].address;
@@ -143,7 +143,7 @@ export async function main() {
     [locatorAddress],
   );
   const validatorConsolidationRequestsAddress = await validatorConsolidationRequests_.getAddress();
-  await updateObjectInState(Sk.validatorConsolidationRequests, {
+  updateObjectInState(Sk.validatorConsolidationRequests, {
     validatorConsolidationRequests: validatorConsolidationRequestsAddress,
   });
 }

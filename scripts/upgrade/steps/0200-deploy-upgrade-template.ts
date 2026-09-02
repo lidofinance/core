@@ -35,7 +35,7 @@ export async function skip(): Promise<boolean> {
 }
 
 export async function main() {
-  const state = await readNetworkState();
+  const state = readNetworkState();
   const parameters = readUpgradeParameters();
   const deployer = await getDeployerSigner();
 
@@ -222,7 +222,7 @@ export async function main() {
   );
 
   const configAddress = await template.getFunction("CONFIG")();
-  await updateObjectInState(Sk.upgradeConfig, {
+  updateObjectInState(Sk.upgradeConfig, {
     contract: await getContractPath("UpgradeConfig"),
     address: configAddress,
     constructorArgs: [upgradeParams],

@@ -4,7 +4,7 @@ export const protocolGetAddressesTask = task("protocol:get-addresses", "Get depl
   .setInlineAction(async () => {
     // Lazy import: lib/state-file.js imports hardhat, cyclic with hardhat.config.ts
     const { readNetworkState } = await import("lib/state-file.js");
-    const state = await readNetworkState();
+    const state = readNetworkState();
     console.log(JSON.stringify(state, null, 2));
   })
   .build();

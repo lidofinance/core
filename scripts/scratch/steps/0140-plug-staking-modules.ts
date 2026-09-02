@@ -231,7 +231,7 @@ async function enableExternalModule(setup: ExternalModuleSetup, state: Deploymen
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   // Get contract instances
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", state.stakingRouter.proxy.address);

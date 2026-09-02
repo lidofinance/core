@@ -6,7 +6,7 @@ import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   // Deploy Aragon app implementations
   await deployImplementation(Sk.appAgent, "Agent", deployer);
@@ -38,5 +38,5 @@ export async function main() {
   ]);
 
   const receipt = await ethers.provider.getTransactionReceipt(template.deploymentTx);
-  await updateObjectInState(Sk.lidoTemplate, { deployBlock: receipt?.blockNumber });
+  updateObjectInState(Sk.lidoTemplate, { deployBlock: receipt?.blockNumber });
 }

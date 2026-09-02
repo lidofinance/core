@@ -15,7 +15,7 @@ export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployerSigner = await ethers.provider.getSigner();
   const deployer = deployerSigner.address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   // Load ENS contract
   log(`Using ENS: ${cy(state[Sk.ens].address)}`);

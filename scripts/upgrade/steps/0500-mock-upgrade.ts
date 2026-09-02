@@ -33,7 +33,7 @@ const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
 const PROPOSAL_STATUS_EXECUTED = 3n;
 
 export async function skip(): Promise<boolean> {
-  const state = await readNetworkState();
+  const state = readNetworkState();
   // NOT skip if contract object exists in deployed state but address set as empty string or zero address
   const address = getAddressValidated(Sk.upgradeTemplate, state);
   // NOT skip if contract not deployed yet
@@ -53,7 +53,7 @@ export async function skip(): Promise<boolean> {
 
 export async function main() {
   const deployer = await getDeployerSigner();
-  const state = await readNetworkState();
+  const state = readNetworkState();
 
   const voteScript = await loadContract<UpgradeVoteScript>(
     "UpgradeVoteScript",

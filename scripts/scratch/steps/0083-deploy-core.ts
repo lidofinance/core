@@ -38,7 +38,7 @@ export const SLOTS_PER_HISTORICAL_ROOT = 8192;
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  let state = await readNetworkState({ deployer });
+  let state = readNetworkState({ deployer });
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
@@ -146,7 +146,7 @@ export async function main() {
     deployer,
   );
 
-  state = await updateObjectInState(Sk.withdrawalVault, {
+  state = updateObjectInState(Sk.withdrawalVault, {
     proxy: {
       contract: await getContractPath("WithdrawalsManagerProxy"),
       address: withdrawalsManagerProxy.address,

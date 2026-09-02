@@ -7,7 +7,7 @@ import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   let depositContractAddress = state.chainSpec.depositContract;
   if (depositContractAddress) {
@@ -17,7 +17,7 @@ export async function main() {
 
   depositContractAddress = (await deployWithoutProxy(Sk.depositContract, "DepositContract", deployer)).address;
 
-  await updateObjectInState(Sk.chainSpec, {
+  updateObjectInState(Sk.chainSpec, {
     depositContract: depositContractAddress,
   });
 }

@@ -10,7 +10,7 @@ const NULL_CONTENT_URI =
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
 
@@ -42,6 +42,6 @@ export async function main() {
   );
 
   // Update state with transaction hashes
-  await setValueInState(Sk.lidoTemplateCreateStdAppReposTx, aragonStdAppsReceipt.hash);
-  await setValueInState(Sk.createAppReposTx, lidoAppsReceipt.hash);
+  setValueInState(Sk.lidoTemplateCreateStdAppReposTx, aragonStdAppsReceipt.hash);
+  setValueInState(Sk.createAppReposTx, lidoAppsReceipt.hash);
 }

@@ -20,7 +20,7 @@ export async function skip(): Promise<boolean> {
 }
 
 export async function main() {
-  const state = await readNetworkState();
+  const state = readNetworkState();
   const deployer = (await getDeployerSigner()).address;
 
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeVotingScript contract", deployer);

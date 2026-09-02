@@ -7,7 +7,7 @@ import { readNetworkState, Sk } from "lib/state-file.js";
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
   const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
 

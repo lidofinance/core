@@ -25,7 +25,7 @@ function splitDomain(domain: string) {
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = await readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
   const templateAddress = state.lidoTemplate.address;
 
   log(`APM ENS domain: ${yl(state.lidoApmEnsName)}`);
@@ -55,7 +55,7 @@ export async function main() {
   const template = await loadContract<LidoTemplate>("LidoTemplate", templateAddress);
   const lidoApmDeployArguments = [parentHash, subHash];
   const receipt = await makeTx(template, "deployLidoAPM", lidoApmDeployArguments, { from: deployer });
-  await updateObjectInState(Sk.lidoApm, {
+  updateObjectInState(Sk.lidoApm, {
     deployArguments: lidoApmDeployArguments,
     deployTx: receipt.hash,
   });
@@ -66,5 +66,5 @@ export async function main() {
   log(`Using APMRegistry: ${cy(registryAddress)}`);
   log.emptyLine();
 
-  await updateObjectInState(Sk.lidoApm, { address: registryAddress });
+  updateObjectInState(Sk.lidoApm, { address: registryAddress });
 }

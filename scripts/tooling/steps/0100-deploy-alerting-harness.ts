@@ -8,7 +8,7 @@ export async function main(): Promise<void> {
   const deployer = (await ethers.provider.getSigner()).address;
   assert.equal(process.env.DEPLOYER, deployer);
 
-  const state = await readNetworkState();
+  const state = readNetworkState();
 
   //
   // Extract necessary addresses and parameters from the state

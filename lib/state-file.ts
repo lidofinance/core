@@ -265,12 +265,8 @@ export function getSubAddressValidated(contractKey: Sk, subKey: string, state: D
 
 // Deep-merge `supplement` into `state[key].contracts[subKey]`, preserving sibling sub-entries and the
 // existing fields of the targeted sub-entry, then persist.
-export async function updateSubObjectInState(
-  contractKey: Sk,
-  subKey: string,
-  supplement: object,
-): Promise<DeploymentState> {
-  const state = await readNetworkState();
+export function updateSubObjectInState(contractKey: Sk, subKey: string, supplement: object): DeploymentState {
+  const state = readNetworkState();
   const parent = state[contractKey] ?? {};
   const contracts = parent.contracts ?? {};
   state[contractKey] = {
@@ -283,18 +279,18 @@ export async function updateSubObjectInState(
       },
     },
   };
-  await persistNetworkState(state);
+  persistNetworkState(state);
   return state as unknown as DeploymentState;
 }
 
-export async function readNetworkState({
+export function readNetworkState({
   deployer,
   networkStateFile,
 }: {
   deployer?: string;
   networkStateFile?: string;
 } = {}) {
-  const fileName = await _getStateFileFileName(networkStateFile);
+  const fileName = _getStateFileFileName(networkStateFile);
   const state = _readStateFile(fileName);
 
   // Validate the deployer
@@ -303,8 +299,7 @@ export async function readNetworkState({
   }
 
   // Validate the chainId
-  const { networkConfig } = await hre.network.getOrCreate();
-  const networkChainId = networkConfig.chainId;
+  const networkChainId = hre.config.networks[_getNetworkName()].chainId;
   if (state[Sk.chainSpec].chainId && networkChainId !== parseInt(state[Sk.chainSpec].chainId)) {
     throw new Error(
       `The chainId: ${networkChainId} does not match the one (${state[Sk.chainSpec].chainId}) in the state file!`,
@@ -314,48 +309,44 @@ export async function readNetworkState({
   return state;
 }
 
-export async function updateObjectInState(key: Sk, supplement: object): Promise<DeploymentState> {
-  const state = await readNetworkState();
+export function updateObjectInState(key: Sk, supplement: object): DeploymentState {
+  const state = readNetworkState();
   state[key] = {
     ...state[key],
     ...supplement,
   };
-  await persistNetworkState(state);
+  persistNetworkState(state);
   return state as unknown as DeploymentState;
 }
 
 // path is either top level key or array of keys
-export async function setValueInState(key: Sk, value: unknown): Promise<DeploymentState> {
-  const state = await readNetworkState();
+export function setValueInState(key: Sk, value: unknown): DeploymentState {
+  const state = readNetworkState();
   state[key] = value;
-  await persistNetworkState(state);
+  persistNetworkState(state);
   return state;
 }
 
-export async function incrementGasUsed(
-  increment: bigint | number,
-  useStateFile = true,
-  key: Sk = Sk.scratchDeployGasUsed,
-) {
+export function incrementGasUsed(increment: bigint | number, useStateFile = true, key: Sk = Sk.scratchDeployGasUsed) {
   if (!useStateFile) {
     return;
   }
 
-  const state = await readNetworkState();
+  const state = readNetworkState();
   state[key] = (BigInt(state[key] || 0) + BigInt(increment)).toString();
-  await persistNetworkState(state);
+  persistNetworkState(state);
 }
 
-export async function resetStateFileFromDeployParams(): Promise<void> {
-  const fileName = await _getStateFileFileName();
+export function resetStateFileFromDeployParams(): void {
+  const fileName = _getStateFileFileName();
   const scratchParams = readScratchParameters();
   const initialState = scratchParametersToDeploymentState(scratchParams);
   const data = JSON.stringify(_sortKeysAlphabetically(initialState), null, 2);
   writeFileSync(fileName, `${data}\n`, { encoding: "utf8", flag: "w" });
 }
 
-export async function persistNetworkState(state: DeploymentState): Promise<void> {
-  const fileName = await _getStateFileFileName();
+export function persistNetworkState(state: DeploymentState): void {
+  const fileName = _getStateFileFileName();
   const stateSorted = _sortKeysAlphabetically(state);
   const data = JSON.stringify(stateSorted, null, 2);
 
@@ -366,14 +357,17 @@ export async function persistNetworkState(state: DeploymentState): Promise<void>
   }
 }
 
-async function _getStateFileFileName(networkStateFile = "") {
+function _getStateFileFileName(networkStateFile = "") {
   // Use the specified network state file or the one from the environment
   networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
-  if (networkStateFile) {
-    return resolve(NETWORK_STATE_FILE_DIR, networkStateFile);
-  }
-  const { networkName } = await hre.network.getOrCreate();
-  return _getFileName(NETWORK_STATE_FILE_DIR, networkName);
+  return networkStateFile
+    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
+    : _getFileName(NETWORK_STATE_FILE_DIR, _getNetworkName());
+}
+
+// The network HH3 would connect to, read from the options so no connection is opened
+function _getNetworkName() {
+  return hre.globalOptions.network ?? "default";
 }
 
 function _getFileName(dir: string, networkName: string, prefix: string = NETWORK_STATE_FILE_PREFIX) {

@@ -192,7 +192,7 @@ export const mockAragonVoting = async (state: DeploymentState) => {
     voteId = await newAragonVoting(state, holder, voteDescription);
 
     // save voteId in deployed state
-    await updateObjectInState(Sk.upgradeVoteScript, {
+    updateObjectInState(Sk.upgradeVoteScript, {
       voteState: {
         voteId,
         voteDescription,
@@ -502,7 +502,7 @@ export async function txWaitAndLog(tx: ContractTransactionResponse): Promise<Con
 }
 
 export async function checkArtifactDeployedAndLog(artifactName: Sk): Promise<boolean> {
-  const state = await readNetworkState();
+  const state = readNetworkState();
   // check if contract object exists in deployed state but address set as empty string or zero address
   const address = getAddressValidated(artifactName, state);
   // check if contract not deployed yet

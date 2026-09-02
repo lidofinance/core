@@ -262,7 +262,7 @@ function writeSubstateToToml(section: string, tomlMap: Record<string, TomlMap>, 
   }
 }
 
-export async function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
+export function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
   if (!artifact.CSModule) throw new Error("CSM deploy artifact does not contain CSModule address");
 
   const existing = (state[Sk.sm_CSM]?.contracts ?? {}) as Substate;
@@ -271,7 +271,7 @@ export async function saveCSMArtifact(state: DeploymentState, artifact: External
     : artifact.CSModule;
   const contracts = buildSubstate(artifact, isScratch ? CSM_CONTRACTS : CSM_UPGRADE_CONTRACTS, existing);
 
-  await updateObjectInState(Sk.sm_CSM, {
+  updateObjectInState(Sk.sm_CSM, {
     proxy: {
       address: proxyAddress,
       contract: "external:staking-modules/src/CSModule.sol:CSModule",
@@ -284,7 +284,7 @@ export async function saveCSMArtifact(state: DeploymentState, artifact: External
   writeSubstateToToml(CSM_TOML_SECTION, CSM_TOML_MAP, contracts);
 }
 
-export async function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
+export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
   const moduleAddress = artifact.CuratedModule;
   if (!moduleAddress) throw new Error("Curated deploy artifact does not contain CuratedModule address");
 
@@ -294,7 +294,7 @@ export async function saveCuratedArtifact(state: DeploymentState, artifact: Exte
     : moduleAddress;
   const contracts = buildSubstate(artifact, CM_CONTRACTS, existing);
 
-  await updateObjectInState(Sk.sm_CM, {
+  updateObjectInState(Sk.sm_CM, {
     proxy: {
       address: proxyAddress,
       contract: "external:staking-modules/src/CuratedModule.sol:CuratedModule",
@@ -405,7 +405,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       cmdOptions.push(`--private-key=${privateKey}`);
       run("just", cmdOptions, tmpDir, externalEnv);
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm", artifactsFile));
-      await saveCSMArtifact(state, artifact, isScratch);
+      saveCSMArtifact(state, artifact, isScratch);
       log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
       log.emptyLine();
     }
@@ -420,7 +420,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       const artifactsFile = `deploy-${chain}.json`;
       run("just", cmdOptions, tmpDir, externalEnv);
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, "curated", artifactsFile));
-      await saveCuratedArtifact(state, artifact);
+      saveCuratedArtifact(state, artifact);
       log(`Curated Module v2 deployed at: ${cy(artifact.CuratedModule!)}`);
       log.emptyLine();
     }
