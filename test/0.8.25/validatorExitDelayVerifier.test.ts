@@ -1,8 +1,5 @@
 import { expect } from "chai";
 import { type ContractTransactionResponse } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   LidoLocator,
@@ -15,7 +12,7 @@ import type { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0
 import { updateBeaconBlockRoot } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 import {
   encodeExitRequestsDataListWithFormat,
@@ -30,12 +27,7 @@ import { ACTIVE_VALIDATOR_PROOF } from "./validatorState.js";
 const EMPTY_REPORT = { data: "0x", dataFormat: 1n };
 
 describe("ValidatorExitDelayVerifier.sol", () => {
-  let ethers: HardhatEthers;
   let originalState: string;
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
 
   beforeEach(async () => {
     originalState = await Snapshot.take();
@@ -757,8 +749,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 });
 
 describe("getHistoricalBlockRootGI", () => {
-  let ethers: HardhatEthers;
-
   const FIRST_SUPPORTED_SLOT = 8192n;
   const PIVOT_SLOT = 8192n * 13n;
   const CAPELLA_SLOT = 8192n;
@@ -781,8 +771,6 @@ describe("getHistoricalBlockRootGI", () => {
   let harness: ValidatorExitDelayVerifier__Harness;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     harness = await ethers.deployContract("ValidatorExitDelayVerifier__Harness", [
       LIDO_LOCATOR,
       {

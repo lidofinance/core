@@ -1,8 +1,4 @@
 import { expect } from "chai";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types/index.js";
 
@@ -14,7 +10,7 @@ import {
   setBeaconBlockRoot,
 } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 // CSM "borrowed" prefab validator object with precalculated proofs & root
 // allows us to be sure that core merkle proof validation is working correctly
@@ -95,9 +91,6 @@ const STATIC_VALIDATOR = {
 };
 
 describe("CLProofVerifier.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let CLProofVerifier: CLProofVerifier__Harness;
   let sszMerkleTree: SSZMerkleTree;
   let firstValidatorLeafIndex: bigint;
@@ -106,8 +99,6 @@ describe("CLProofVerifier.sol", () => {
   let snapshotState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     const localTree = await prepareLocalMerkleTree();
     sszMerkleTree = localTree.sszMerkleTree;
     firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;

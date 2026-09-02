@@ -1,17 +1,12 @@
 import { expect } from "chai";
 import { type Signer } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness } from "typechain-types/index.js";
 
 import { deployHashConsensus, type DeployHashConsensusParams } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("HashConsensus.sol:fastLaneLength", function () {
-  let ethers: HardhatEthers;
-
   let admin: Signer;
   let consensus: HashConsensus__Harness;
 
@@ -22,10 +17,6 @@ describe("HashConsensus.sol:fastLaneLength", function () {
     const deployed = await deployHashConsensus(await admin.getAddress(), options);
     consensus = deployed.consensus;
   };
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 

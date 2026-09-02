@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { type ContractTransactionReceipt, ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   ACL,
@@ -23,7 +21,7 @@ import { findEvents } from "#lib/event.js";
 import { ceilDiv } from "#lib/protocol";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
+import { ethers, networkHelpers, Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const SHARE_LIMIT = ether("10");
 const RESERVE_RATIO_BP = 20_00n; // 20%
@@ -34,9 +32,6 @@ const RESERVATION_FEE_BP = 1_00n;
 const CONNECT_DEPOSIT = ether("1");
 
 describe("VaultHub.sol:owner-functions", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let newOwner: HardhatEthersSigner;
@@ -112,8 +107,6 @@ describe("VaultHub.sol:owner-functions", () => {
   }
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer, vaultOwner, newOwner, stranger, recipient] = await ethers.getSigners();
 
     // Deploy dependencies

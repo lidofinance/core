@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, PredepositGuarantee, StakingVault, VaultHub } from "typechain-types/index.js";
 
@@ -16,7 +15,7 @@ import {
   setupLidoForVaults,
 } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 // TS interface aligned with the CircuitBreaker contract.
 interface ICircuitBreaker {
@@ -44,8 +43,6 @@ const ICircuitBreaker_ABI = [
 ];
 
 describe("Integration: CircuitBreaker pause functionality for VaultHub and PredepositGuarantee", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -64,8 +61,6 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
   let stranger: HardhatEthersSigner;
 
   before(async function () {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();

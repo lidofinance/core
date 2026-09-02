@@ -1,10 +1,9 @@
 import { expect } from "chai";
 import { toChecksumAddress } from "ethereumjs-util";
 import { hexlify, parseUnits } from "ethers";
-import hre from "hardhat";
 import { getMode } from "hardhat.helpers.js";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
 import type {
@@ -28,7 +27,7 @@ import {
 } from "#lib";
 import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "#test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 /**
  * Integration test for PDG with a specific validator deposited during soft launch
@@ -42,8 +41,6 @@ import { bailOnFailure, Snapshot } from "#test/suite";
  * Vault address: 0x62e0d92cf7b8752b5292b9bcbbace4cfa1633428
  */
 describe("Scenario: PDG specific validator prove and top up on mainnet fork", function () {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let originalSnapshot: string;
 
@@ -73,8 +70,6 @@ describe("Scenario: PDG specific validator prove and top up on mainnet fork", fu
   let slot: bigint;
 
   before(async function () {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     // Skip if not mainnet

@@ -1,13 +1,13 @@
 import { expect } from "chai";
 import { getBytes, hexlify, keccak256, toBeHex, zeroPadValue } from "ethers";
-import hre from "hardhat";
 
 import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { BLS12_381__Harness } from "typechain-types/index.js";
 
 import { computeDepositDomain, computeDepositMessageRoot, ONE_GWEI } from "#lib";
+
+import { ethers } from "#test/suite";
 
 type FpStruct = { a: string; b: string };
 type Fp2Struct = { c0_a: string; c0_b: string; c1_a: string; c1_b: string };
@@ -154,8 +154,6 @@ function tryBuildDepositY(pubkeyHex: string, signatureHex: string): DepositYStru
 }
 
 describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
-  let ethers: HardhatEthers;
-
   // Pairing precompile calls are expensive; keep default runs moderate and allow overriding via env.
   this.timeout(180_000);
 
@@ -184,7 +182,6 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
   let harness: BLS12_381__Harness;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
     // Log runtime seed for reproducibility. To reproduce a specific run, set BLS_BLST_RUNTIME_SEED env var.
     console.log(`    BLS fuzz runtime seed: ${RUNTIME_SEED} (set BLS_BLST_RUNTIME_SEED to reproduce)`);
     harness = (await ethers.deployContract("BLS12_381__Harness")) as unknown as BLS12_381__Harness;

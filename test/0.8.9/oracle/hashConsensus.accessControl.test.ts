@@ -1,19 +1,14 @@
 import { expect } from "chai";
 import { MaxUint256, type Signer } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus, ReportProcessor__Mock } from "typechain-types/index.js";
 
 import { BASE_CONSENSUS_VERSION, DEFAULT_ADMIN_ROLE, EPOCHS_PER_FRAME, streccak } from "#lib";
 
 import { deployHashConsensus, type DeployHashConsensusParams } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("HashConsensus.sol:accessControl", function () {
-  let ethers: HardhatEthers;
-
   let consensus: HashConsensus;
   let reportProcessor: ReportProcessor__Mock;
   let reportProcessor2: ReportProcessor__Mock;
@@ -53,10 +48,6 @@ describe("HashConsensus.sol:accessControl", function () {
   const refresh = async () => {
     snapshot = await Snapshot.refresh(snapshot);
   };
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
 
   context("DEFAULT_ADMIN_ROLE", () => {
     before(async () => {

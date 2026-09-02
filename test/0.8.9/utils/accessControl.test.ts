@@ -1,7 +1,5 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { AccessControl__Harness } from "typechain-types/index.js";
@@ -14,14 +12,12 @@ import {
   streccak,
 } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 const TEST_ADMIN_ROLE = streccak("TEST_ADMIN_ROLE");
 
 describe("AccessControl.sol", () => {
-  let ethers: HardhatEthers;
-
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -30,8 +26,6 @@ describe("AccessControl.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [owner, stranger] = await ethers.getSigners();
 
     contract = await ethers.deployContract("AccessControl__Harness");

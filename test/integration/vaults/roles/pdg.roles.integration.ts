@@ -1,8 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 import { beforeEach } from "mocha";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { PredepositGuarantee, StakingVault } from "typechain-types/index.js";
@@ -17,11 +15,9 @@ import {
   testMethod,
 } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: PredepositGuarantee Roles and Access Control", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -38,8 +34,6 @@ describe("Integration: PredepositGuarantee Roles and Access Control", () => {
   let stakingVault: StakingVault;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

@@ -1,22 +1,15 @@
 import { expect } from "chai";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Initializable__Mock } from "typechain-types/index.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Initializable.sol", function () {
-  let ethers: HardhatEthers;
-
   let initializable: Initializable__Mock;
 
   let originalState: string;
 
   before(async function () {
-    ({ ethers } = await hre.network.getOrCreate());
-
     initializable = await ethers.deployContract("Initializable__Mock");
   });
 

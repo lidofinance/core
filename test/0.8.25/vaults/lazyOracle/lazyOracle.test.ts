@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   LazyOracle,
@@ -25,7 +24,7 @@ import {
 import { createVaultsReportTree, type VaultReportItem } from "#lib/protocol/helpers/vaults.js";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
-import { Snapshot, ZERO_BYTES32 } from "#test/suite";
+import { ethers, Snapshot, ZERO_BYTES32 } from "#test/suite";
 
 const QUARANTINE_PERIOD = days(3n);
 const MAX_REWARD_RATIO_BP = 350n;
@@ -60,7 +59,6 @@ const record: Readonly<VaultHub.VaultRecordStruct> = {
 };
 
 describe("LazyOracle.sol", () => {
-  let ethers: HardhatEthers;
   let deployer: HardhatEthersSigner;
   let locator: LidoLocator;
   let vaultHub: VaultHub__MockForLazyOracle;
@@ -72,8 +70,6 @@ describe("LazyOracle.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer] = await ethers.getSigners();
 
     locator = await deployLidoLocator();

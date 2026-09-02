@@ -1,9 +1,8 @@
 import { expect } from "chai";
 import { toChecksumAddress } from "ethereumjs-util";
 import { type ContractTransactionReceipt, ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   DepositContract__MockForStakingVault,
@@ -29,7 +28,7 @@ import {
 import { getPubkeys } from "#lib/protocol";
 
 import { deployEIP7002WithdrawalRequestContractMock } from "#test/0.8.9/withdrawalVault/eip7002Mock.js";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const INVALID_PUBKEY = "0x" + "ab".repeat(47);
@@ -39,8 +38,6 @@ const encodeEip7002Input = (pubkey: string, amount: bigint): string => {
 };
 
 describe("StakingVault.sol", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
@@ -59,8 +56,6 @@ describe("StakingVault.sol", () => {
   let suiteSnapshot: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     suiteSnapshot = await Snapshot.take();
 
     [deployer, vaultOwner, operator, depositor, stranger] = await ethers.getSigners();

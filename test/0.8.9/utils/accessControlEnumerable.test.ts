@@ -1,7 +1,5 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { PANIC_CODES } from "@nomicfoundation/hardhat-ethers-chai-matchers/panic";
 
@@ -15,13 +13,11 @@ import {
   streccak,
 } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 
 describe("AccessControlEnumerable.sol", () => {
-  let ethers: HardhatEthers;
-
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -30,8 +26,6 @@ describe("AccessControlEnumerable.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [owner, stranger] = await ethers.getSigners();
 
     contract = await ethers.deployContract("AccessControlEnumerable__Harness");

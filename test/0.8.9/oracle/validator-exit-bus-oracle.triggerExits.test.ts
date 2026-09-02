@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import { AbiCoder, keccak256, ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
@@ -21,6 +19,7 @@ import {
   SECONDS_PER_FRAME,
   seedMockModuleSigningKeys,
 } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers
@@ -95,8 +94,6 @@ const hashExitRequest = (request: { dataFormat: number; data: string }) => {
 };
 
 describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
-  let ethers: HardhatEthers;
-
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
@@ -146,10 +143,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
 
   describe("Submit via oracle flow ", async () => {
     const exitRequests = [

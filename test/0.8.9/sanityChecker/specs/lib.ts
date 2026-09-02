@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
@@ -14,6 +13,7 @@ import {
 import { ether, impersonate, proxify, randomAddress } from "#lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy/locator.js";
+import { ethers, networkHelpers } from "#test/suite";
 
 export const DAY = 86_400n;
 export const DEPOSIT_SIZE = ether("32");
@@ -186,8 +186,6 @@ export const hasFinalizeUpgradeV4State = (step: MigrationStep): step is Finalize
 export const deployFinalizeUpgradeV4Checker = async (
   limitsList: OracleReportLimits,
 ): Promise<FinalizeUpgradeV4CheckerFixture> => {
-  const { ethers } = await hre.network.getOrCreate();
-
   const [deployer] = await ethers.getSigners();
   const withdrawalVaultAddress = randomAddress();
   const elRewardsVaultAddress = randomAddress();
@@ -244,8 +242,6 @@ export const migrateFinalizeUpgradeV4State = async (
   fixture: FinalizeUpgradeV4CheckerFixture,
   step: MigrationStep,
 ): Promise<LidoBalanceStats> => {
-  const { ethers, networkHelpers } = await hre.network.getOrCreate();
-
   if (step.transientDeposits % DEPOSIT_SIZE !== 0n) {
     throw new Error(`Migration step '${step.label}' has transientDeposits that are not divisible by 32 ETH`);
   }
@@ -308,8 +304,6 @@ export const moveToFirstPostMigrationReportFrame = async (
 };
 
 export const setLastVaultBalanceAfterTransfer = async (checker: OracleReportSanityCheckerWrapper, value: bigint) => {
-  const { ethers } = await hre.network.getOrCreate();
-
   await ethers.provider.send("hardhat_setStorageAt", [
     await checker.getAddress(),
     ethers.toBeHex(LAST_VAULT_BALANCE_AFTER_TRANSFER_SLOT, 32),

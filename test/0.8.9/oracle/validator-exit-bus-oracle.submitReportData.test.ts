@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroHash } from "ethers";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   HashConsensus__Harness,
@@ -20,7 +19,7 @@ import {
   initVEBO,
   seedMockModuleSigningKeys,
 } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -32,8 +31,6 @@ const PUBKEYS = [
 const HASH_1 = "0x1111111111111111111111111111111111111111111111111111111111111111";
 
 describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
-  let ethers: HardhatEthers;
-
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
@@ -150,8 +147,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, member1, member2, member3, stranger, authorizedEntity] = await ethers.getSigners();
 
     await deploy();

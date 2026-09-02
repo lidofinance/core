@@ -1,5 +1,4 @@
 import { type ContractTransactionReceipt } from "ethers";
-import hre from "hardhat";
 
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
@@ -16,7 +15,8 @@ import type {
 import { certainAddress, ether, findEvents, GENESIS_FORK_VERSION, impersonate, TOTAL_BASIS_POINTS } from "#lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
-import { VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
+import { ethers } from "#test/suite";
+import { VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite/constants.js";
 
 const CONNECT_DEPOSIT = ether("1");
 
@@ -51,7 +51,6 @@ async function createMockStakingVault(
   operator: HardhatEthersSigner,
   predepositGuarantee: PredepositGuarantee__HarnessForFactory,
 ): Promise<StakingVault__MockForVaultHub> {
-  const { ethers } = await hre.network.getOrCreate();
   const vaultCreationTx = (await factory
     .createVault(owner, operator, predepositGuarantee)
     .then((tx) => tx.wait())) as ContractTransactionReceipt;
@@ -116,7 +115,6 @@ export async function reportVault(
 }
 
 export async function deployVaults({ deployer, admin }: VaultsConfig) {
-  const { ethers } = await hre.network.getOrCreate();
   const whale = await impersonate(certainAddress("lido-vaults-whale"), ether("1000000000.0"));
 
   const predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [

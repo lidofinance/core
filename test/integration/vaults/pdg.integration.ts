@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
 import type { Dashboard, DepositContract, StakingVault } from "typechain-types/index.js";
@@ -18,11 +17,9 @@ import {
   setupLidoForVaults,
 } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Predeposit Guarantee core functionality", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -36,8 +33,6 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   let agent: HardhatEthersSigner;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();

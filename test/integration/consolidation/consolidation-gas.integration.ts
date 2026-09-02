@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type ConsolidationBus,
@@ -26,7 +25,7 @@ import {
 } from "#lib/protocol/helpers";
 import { type LoadedContract } from "#lib/protocol/types.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 /**
  * Gas measurement for a full consolidation batch (no mocks):
@@ -36,8 +35,6 @@ import { Snapshot } from "#test/suite";
  * grouped into NUM_GROUPS source groups targeting real deposited CMv2 keys.
  */
 describe("Integration: Consolidation gas measurement (full stack via Migrator)", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let nor: LoadedContract<NodeOperatorsRegistry>;
   let consolidationBus: ConsolidationBus;
@@ -64,8 +61,6 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
   let originalState: string;
 
   before(async function () {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     originalState = await Snapshot.take();

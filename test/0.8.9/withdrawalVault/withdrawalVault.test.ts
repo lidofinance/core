@@ -1,10 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   EIP7002WithdrawalRequest__Mock,
@@ -20,7 +17,7 @@ import { MAX_UINT256 } from "#lib/constants.js";
 import { EIP7002_ADDRESS, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "#lib/eips/eip7002.js";
 import { proxify } from "#lib/proxy.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 import {
   deployEIP7002WithdrawalRequestContractMock,
@@ -39,9 +36,6 @@ import { generateConsolidationRequestPayload, generateWithdrawalRequestPayload }
 const PETRIFIED_VERSION = MAX_UINT256;
 
 describe("WithdrawalVault.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let owner: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let treasury: HardhatEthersSigner;
@@ -63,8 +57,6 @@ describe("WithdrawalVault.sol", () => {
   let vaultAddress: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     suiteSnapshot = await Snapshot.take();
 
     [owner, user, treasury] = await ethers.getSigners();

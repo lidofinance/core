@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
@@ -10,6 +8,8 @@ import type {
   TriggerableWithdrawalsGateway__Harness,
   WithdrawalVault__MockForTWG,
 } from "typechain-types/index.js";
+
+import { ethers } from "#test/suite";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator.js";
 
@@ -35,8 +35,6 @@ const exitRequests = [
 const ZERO_ADDRESS = ZeroAddress;
 
 describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
-  let ethers: HardhatEthers;
-
   let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway__Harness;
   let withdrawalVault: WithdrawalVault__MockForTWG;
   let stakingRouter: StakingRouter__MockForTWG;
@@ -53,8 +51,6 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, authorizedEntity, stranger] = await ethers.getSigners();
 
     const locator = await deployLidoLocator();

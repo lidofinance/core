@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 import { beforeEach } from "mocha";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { LazyOracle } from "typechain-types/index.js";
@@ -11,11 +9,9 @@ import type { LazyOracle } from "typechain-types/index.js";
 import { days, ether, impersonate } from "#lib";
 import { getProtocolContext, type ProtocolContext, setupLidoForVaults, testMethod } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: LazyOracle Roles and Access Control", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -27,8 +23,6 @@ describe("Integration: LazyOracle Roles and Access Control", () => {
   let lazyOracle: LazyOracle;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

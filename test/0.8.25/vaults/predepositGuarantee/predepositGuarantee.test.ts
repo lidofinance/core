@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { IPredepositGuarantee } from "typechain-types/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.js";
 import type {
@@ -30,11 +29,9 @@ import {
 } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("PredepositGuarantee.sol", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
@@ -56,8 +53,6 @@ describe("PredepositGuarantee.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, pauser, stranger] = await ethers.getSigners();
 
     // local merkle tree with 1st validator

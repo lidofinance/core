@@ -1,18 +1,13 @@
 import { expect } from "chai";
 import { MaxUint256, type TypedDataDomain, TypedDataEncoder, ZeroAddress } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { EIP712StETH } from "typechain-types/index.js";
 
 import { certainAddress } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("EIP712StETH.sol", () => {
-  let ethers: HardhatEthers;
-
   let domain: TypedDataDomain;
 
   let eip712steth: EIP712StETH;
@@ -20,8 +15,6 @@ describe("EIP712StETH.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     domain = {
       name: "Liquid staked Ether 2.0",
       version: "2",

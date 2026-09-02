@@ -9,17 +9,10 @@ import {
   ZeroAddress,
   ZeroHash,
 } from "ethers";
-import hre from "hardhat";
-import type { NetworkConfig } from "hardhat/types/config";
 import { describe } from "mocha";
 
-import {
-  type HardhatEthers,
-  type HardhatEthersProvider,
-  type HardhatEthersSigner,
-} from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersProvider, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { PANIC_CODES } from "@nomicfoundation/hardhat-ethers-chai-matchers/panic";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   DepositContract__MockForDepositSecurityModule,
@@ -29,7 +22,7 @@ import type {
 
 import { certainAddress, DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage, ether, streccak } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkConfig, networkHelpers, Snapshot } from "#test/suite";
 
 const STAKING_MODULE_ID = 100;
 const MAX_DEPOSITS_PER_BLOCK = 100;
@@ -64,10 +57,6 @@ function initialParams(): Params {
 }
 
 describe("DepositSecurityModule.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-  let networkConfig: NetworkConfig;
-
   const config = initialParams();
 
   let dsm: DepositSecurityModule;
@@ -133,8 +122,6 @@ describe("DepositSecurityModule.sol", () => {
   }
 
   before(async () => {
-    ({ ethers, networkHelpers, networkConfig } = await hre.network.getOrCreate());
-
     ({ provider } = ethers);
     [admin, stranger] = await ethers.getSigners();
 

@@ -1,19 +1,15 @@
 import { expect } from "chai";
 import { type Signer, ZeroAddress } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness } from "typechain-types/index.js";
 
 import { BASE_CONSENSUS_VERSION } from "#lib";
 
 import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 // TODO: This is a very heavy test, need to speed it up using proper Snapshot strategy
 describe("HashConsensus.sol:members", function () {
-  let ethers: HardhatEthers;
-
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -31,8 +27,6 @@ describe("HashConsensus.sol:members", function () {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, member1, member2, member3, member4, member5, member6, stranger] = await ethers.getSigners();
   });
 

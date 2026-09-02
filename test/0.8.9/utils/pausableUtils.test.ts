@@ -1,22 +1,13 @@
 import { expect } from "chai";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { PausableUntil__Harness } from "typechain-types/index.js";
 
 import { MAX_UINT256 } from "#lib";
 
+import { ethers, networkHelpers } from "#test/suite";
+
 describe("PausableUtils.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let pausable: PausableUntil__Harness;
-
-  before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-  });
 
   beforeEach(async () => {
     pausable = await ethers.deployContract("PausableUntil__Harness");

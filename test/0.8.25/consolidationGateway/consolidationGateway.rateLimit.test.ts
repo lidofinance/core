@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { MaxUint256 } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type ConsolidationGateway,
@@ -14,7 +13,7 @@ import {
 import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTree } from "#lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 import { PUBKEYS } from "../consolidation-helpers.js";
 
@@ -53,8 +52,6 @@ const expectLimitData = async (
 };
 
 describe("ConsolidationGateway.sol: rate limit management", () => {
-  let ethers: HardhatEthers;
-
   let consolidationGateway: ConsolidationGateway;
   let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
   let admin: HardhatEthersSigner;
@@ -73,8 +70,6 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, authorizedEntity, stranger] = await ethers.getSigners();
 
     const locator = await deployLidoLocator();

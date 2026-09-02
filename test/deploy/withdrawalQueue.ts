@@ -1,5 +1,4 @@
 import { type ContractTransactionResponse } from "ethers";
-import hre from "hardhat";
 
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
@@ -12,6 +11,8 @@ import type {
 } from "typechain-types/index.js";
 
 import { ONE_ETHER, proxify, WITHDRAWAL_QUEUE_NAME, WITHDRAWAL_QUEUE_SYMBOL } from "#lib";
+
+import { ethers } from "#test/suite";
 
 interface StEthDeploymentParams {
   initialStEth: bigint;
@@ -40,7 +41,6 @@ interface WithdrawalQueueDeploymentParams extends BaseWithdrawalQueueDeploymentP
 export const MOCK_NFT_DESCRIPTOR_BASE_URI = "https://example-descriptor.com/";
 
 async function deployNftDescriptor() {
-  const { ethers } = await hre.network.getOrCreate();
   const nftDescriptor = await ethers.deployContract("NFTDescriptor__MockForWithdrawalQueue", [
     MOCK_NFT_DESCRIPTOR_BASE_URI,
   ]);
@@ -49,7 +49,6 @@ async function deployNftDescriptor() {
 }
 
 async function deployStEthMock(stEthSettings: StEthDeploymentParams) {
-  const { ethers } = await hre.network.getOrCreate();
   const stEth = await ethers.deployContract("StETHPermit__HarnessForWithdrawalQueueDeploy", {
     value: stEthSettings.initialStEth,
   });
@@ -71,7 +70,6 @@ async function deployStEthMock(stEthSettings: StEthDeploymentParams) {
 }
 
 async function deployWstEthMock(stEthAddress: string) {
-  const { ethers } = await hre.network.getOrCreate();
   const wstEth = await ethers.deployContract("WstETH__HarnessForWithdrawalQueueDeploy", [stEthAddress]);
   return { wstEth, wstEthAddress: await wstEth.getAddress() };
 }
@@ -81,7 +79,6 @@ async function deployWithdrawalQueueImpl({
   name = WITHDRAWAL_QUEUE_NAME,
   symbol = WITHDRAWAL_QUEUE_SYMBOL,
 }: BaseWithdrawalQueueDeploymentParams = {}) {
-  const { ethers } = await hre.network.getOrCreate();
   const { nftDescriptor, nftDescriptorAddress } = await deployNftDescriptor();
   const { stEth, stEthAddress } = await deployStEthMock(stEthSettings);
   const { wstEth, wstEthAddress } = await deployWstEthMock(stEthAddress);

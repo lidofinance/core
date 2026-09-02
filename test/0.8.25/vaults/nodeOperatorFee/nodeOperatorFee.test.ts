@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   LazyOracle__MockForNodeOperatorFee,
@@ -29,12 +28,11 @@ import {
 } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const BP_BASE = 10000n;
 
 describe("NodeOperatorFee.sol", () => {
-  let ethers: HardhatEthers;
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
@@ -61,8 +59,6 @@ describe("NodeOperatorFee.sol", () => {
   const initialConfirmExpiry = days(7n);
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, vaultOwner, stranger, vaultDepositor, nodeOperatorManager, nodeOperatorFeeExempter] =
       await ethers.getSigners();
 

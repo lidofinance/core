@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
@@ -22,14 +20,9 @@ import {
   initAccountingOracle,
   ORACLE_LAST_COMPLETED_EPOCH,
 } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 describe("AccountingOracle.sol:deploy", () => {
-  let ethers: HardhatEthers;
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
-
   context("Deployment and initial configuration", () => {
     let admin: HardhatEthersSigner;
     let defaultOracle: AccountingOracle;

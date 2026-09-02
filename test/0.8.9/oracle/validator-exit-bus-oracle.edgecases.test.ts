@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type HashConsensus__Harness,
@@ -21,6 +20,7 @@ import {
   makeMockPubkey,
   updateLidoLocatorImplementation,
 } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 const PUBKEY_AA = "0x" + "aa".repeat(48);
 const PUBKEY_BB = "0x" + "bb".repeat(48);
@@ -41,8 +41,6 @@ const encodeV2 = (moduleId: number, nodeOpId: number, valIndex: number, keyIndex
     pubkey.slice(2)) as `0x${string}`;
 
 describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
-  let ethers: HardhatEthers;
-
   let oracle: ValidatorsExitBus__Harness;
   let stakingRouter: StakingRouter__MockForValidatorsExitBus;
   let consensus: HashConsensus__Harness;
@@ -50,8 +48,6 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
   let locatorAddr: string;
 
   beforeEach(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin] = await ethers.getSigners();
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle as ValidatorsExitBus__Harness;

@@ -1,9 +1,5 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, type LogDescription, TransactionResponse, ZeroAddress } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "#lib";
 import { LIMITER_PRECISION_BASE } from "#lib/constants.js";
@@ -23,21 +19,16 @@ import {
 } from "#lib/protocol";
 import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "#test/suite/constants.js";
 
 describe("Integration: Accounting", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let ctx: ProtocolContext;
 
   let snapshot: string;
   let originalState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

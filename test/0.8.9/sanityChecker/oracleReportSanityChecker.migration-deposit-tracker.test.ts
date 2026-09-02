@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
@@ -12,6 +11,8 @@ import {
 
 import { ether, impersonate, randomAddress } from "#lib";
 
+import { ethers, networkHelpers } from "#test/suite";
+
 import { DAY } from "./specs/lib.js";
 import { migrationHoodiNegativeRebaseFormulaFixtureSet } from "./specs/negative-rebase/fixtures/migration-hoodi.js";
 
@@ -22,8 +23,6 @@ type CheckerFixture = {
 };
 
 const deployChecker = async (): Promise<CheckerFixture> => {
-  const { ethers, networkHelpers } = await hre.network.getOrCreate();
-
   const [deployer] = await ethers.getSigners();
   const withdrawalVaultAddress = randomAddress();
   await networkHelpers.setBalance(withdrawalVaultAddress, 0n);
@@ -96,7 +95,6 @@ const report = (
 
 describe("OracleReportSanityChecker.sol:migration deposit accounting", () => {
   it("keeps migration deposits out of reportData baseline so the first report counts them once", async () => {
-    const { ethers } = await hre.network.getOrCreate();
     const validatorsBalance = ether("3200");
     const migratedDeposits = ether("320");
     const realLoss = ether("100");

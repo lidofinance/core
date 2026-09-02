@@ -1,5 +1,3 @@
-import hre from "hardhat";
-
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
@@ -13,6 +11,7 @@ import {
 import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02, proxify } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 export interface DeployStakingRouterSigners {
   deployer: HardhatEthersSigner;
@@ -43,8 +42,6 @@ export async function deployStakingRouter(
   impl: StakingRouter__Harness;
   beaconChainDepositor: BeaconChainDepositor;
 }> {
-  const { ethers } = await hre.network.getOrCreate();
-
   if (!depositContract) {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor");
   }

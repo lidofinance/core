@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   ERC721__Harness,
@@ -13,11 +12,9 @@ import type {
 
 import { batch, certainAddress, ether, impersonate } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("LidoExecutionLayerRewardsVault.sol", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let anyone: HardhatEthersSigner;
   let lidoAsSigner: HardhatEthersSigner;
@@ -30,8 +27,6 @@ describe("LidoExecutionLayerRewardsVault.sol", () => {
   const treasury = certainAddress("test:elRewardsVault:treasury");
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, anyone] = await ethers.getSigners();
 
     lido = await ethers.deployContract("Lido__MockForElRewardsVault", deployer);

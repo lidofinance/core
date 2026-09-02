@@ -1,15 +1,14 @@
 import { expect } from "chai";
 import { keccak256 } from "ethers";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
 import { de0x, numberToHex } from "#lib";
 
 import { deployVEBO, initVEBO } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -23,8 +22,6 @@ const DATA_FORMAT_LIST = 1;
 
 // TODO: update upon TW integrations arrive
 describe.skip("ValidatorsExitBusOracle.sol:helpers", () => {
-  let ethers: HardhatEthers;
-
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
 
@@ -60,8 +57,6 @@ describe.skip("ValidatorsExitBusOracle.sol:helpers", () => {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin] = await ethers.getSigners();
 
     await deploy();

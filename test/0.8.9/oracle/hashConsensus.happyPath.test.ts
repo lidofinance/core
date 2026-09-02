@@ -1,8 +1,5 @@
 import { expect } from "chai";
 import { type Signer } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
@@ -21,12 +18,11 @@ import {
   SLOTS_PER_FRAME,
   ZERO_HASH,
 } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 const INITIAL_EPOCH = 3n;
 
 describe("HashConsensus.sol:happyPath", function () {
-  let ethers: HardhatEthers;
-
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -35,8 +31,6 @@ describe("HashConsensus.sol:happyPath", function () {
   let reportProcessor: ReportProcessor__Mock;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, member1, member2, member3] = await ethers.getSigners();
     const deployed = await deployHashConsensus(await admin.getAddress(), { initialEpoch: INITIAL_EPOCH });
     consensus = deployed.consensus;

@@ -1,12 +1,11 @@
 import { expect } from "chai";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import { type CLValidatorVerifier__Harness, type SSZValidatorsMerkleTree } from "typechain-types/index.js";
 
 import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "#lib/pdg.js";
 import { prepareLocalMerkleTree } from "#lib/top-ups.js";
+
+import { ethers } from "#test/suite";
 
 const STATIC_VALIDATOR = {
   blockRoot: "0xbe928e3a9fa76b916df79d78a8b67237f9b133269bb421f37490b7624abad452",
@@ -149,16 +148,12 @@ const STATIC_VALIDATOR = {
 };
 
 describe("CLTopUpProofVerifier", () => {
-  let ethers: HardhatEthers;
-
   let sszMerkleTree: SSZValidatorsMerkleTree;
   let gIFirstValidator: string;
   let firstValidatorLeafIndex: bigint;
   let verifier: CLValidatorVerifier__Harness;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     // 1) Build a local SSZ tree once
     const localTree = await prepareLocalMerkleTree();
     sszMerkleTree = localTree.stateTree;

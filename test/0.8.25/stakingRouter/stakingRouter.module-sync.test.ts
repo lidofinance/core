@@ -1,8 +1,7 @@
 import { bigintToHex, bufToHex } from "bigint-conversion";
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { type ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter.js";
 import {
@@ -27,11 +26,9 @@ import {
 } from "#lib";
 
 import { deployLidoLocator, deployStakingRouter } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("StakingRouter.sol:module-sync", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -66,8 +63,6 @@ describe("StakingRouter.sol:module-sync", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, admin, user] = await ethers.getSigners();
 
     // Deploy Lido mock

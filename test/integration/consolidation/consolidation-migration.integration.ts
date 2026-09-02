@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type ConsolidationBus,
@@ -32,7 +31,7 @@ import {
 } from "#lib/protocol/helpers";
 import { type LoadedContract } from "#lib/protocol/types.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const fakeWitnessForTarget = (pubkey: string) => ({
   proof: [],
@@ -60,8 +59,6 @@ const fakeWitnessForTarget = (pubkey: string) => ({
  * is allowed only via the explicit INTEGRATION_WITH_CMv2=off opt-out.
  */
 describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let nor: LoadedContract<NodeOperatorsRegistry>;
   let consolidationGateway: ConsolidationGateway;
@@ -98,8 +95,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
   let testSnapshot: string;
 
   before(async function () {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     globalSnapshot = await Snapshot.take();

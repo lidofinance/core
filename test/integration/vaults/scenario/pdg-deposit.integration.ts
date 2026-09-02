@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { type BytesLike } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
 import type { Dashboard, DepositContract, PredepositGuarantee, StakingVault } from "typechain-types/index.js";
@@ -27,11 +26,9 @@ import {
   setupLidoForVaults,
 } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "#test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let originalSnapshot: string;
 
@@ -47,8 +44,6 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
   let stranger: HardhatEthersSigner;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();

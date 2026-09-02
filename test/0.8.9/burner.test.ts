@@ -1,9 +1,8 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
-import hre from "hardhat";
 import { before, beforeEach } from "mocha";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   Burner,
@@ -18,11 +17,9 @@ import { OssifiableProxy__factory } from "typechain-types/index.js";
 import { batch, certainAddress, ether, impersonate } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Burner.sol", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -61,8 +58,6 @@ describe("Burner.sol", () => {
   }
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, admin, holder, stranger] = await ethers.getSigners();
 
     locator = await deployLidoLocator({ treasury, accounting }, deployer);

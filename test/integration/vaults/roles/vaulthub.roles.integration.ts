@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 import { beforeEach } from "mocha";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
@@ -19,11 +17,9 @@ import {
   type VaultRoles,
 } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub Roles and Access Control", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -47,8 +43,6 @@ describe("Integration: VaultHub Roles and Access Control", () => {
   let dashboardRoles: VaultRoles;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

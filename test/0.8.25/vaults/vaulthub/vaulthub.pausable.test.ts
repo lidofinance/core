@@ -1,23 +1,18 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } from "typechain-types/index.js";
 
 import { ether, MAX_UINT256, randomAddress } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
+import { ethers, networkHelpers, Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
 describe("VaultHub.sol:pausableUntil", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -32,8 +27,6 @@ describe("VaultHub.sol:pausableUntil", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer, user, stranger] = await ethers.getSigners();
 
     const locator = await deployLidoLocator();

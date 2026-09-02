@@ -1,10 +1,7 @@
 import { expect } from "chai";
 import { ZeroHash } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { DepositSecurityModule } from "typechain-types/index.js";
 
@@ -17,15 +14,12 @@ import {
   norSdvtSetOperatorStakingLimit,
 } from "#lib/protocol/helpers/nor-sdvt.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 // Just an arbitrary account for using in tests
 const GUARDIAN_PRIVATE_KEY = "0x516b8a7d9290502f5661da81f0cf43893e3d19cb9aea3c426cfb36e8186e9c09";
 
 describe("Integration: DSM keys unvetting", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
   let dsm: DepositSecurityModule;
@@ -34,8 +28,6 @@ describe("Integration: DSM keys unvetting", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     dsm = ctx.contracts.depositSecurityModule;
 

@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { type ContractTransactionReceipt, ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   LazyOracle__MockForVaultHub,
@@ -24,7 +22,7 @@ import { findEvents } from "#lib/event.js";
 import { ether } from "#lib/units.js";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
+import { ethers, networkHelpers, Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
@@ -38,9 +36,6 @@ const RESERVATION_FEE_BP = 1_00n;
 const FEE = 2n;
 
 describe("VaultHub.sol:forceExit", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let feeRecipient: HardhatEthersSigner;
@@ -72,8 +67,6 @@ describe("VaultHub.sol:forceExit", () => {
   }
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer, user, feeRecipient] = await ethers.getSigners();
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });

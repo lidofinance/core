@@ -1,13 +1,12 @@
-import hre from "hardhat";
-
 import { ether, stethDomain } from "#lib";
+
+import { ethers } from "#test/suite";
 
 import { testERC2612Compliance } from "../common/erc2612.test.js";
 
 testERC2612Compliance({
   tokenName: "stETH",
   deploy: async () => {
-    const { ethers } = await hre.network.getOrCreate();
     const [deployer, owner] = await ethers.getSigners();
 
     const value = ether("1.0");
@@ -31,7 +30,6 @@ testERC2612Compliance({
 testERC2612Compliance({
   tokenName: "stETH (for ERC-1271 wallets)",
   deploy: async () => {
-    const { ethers } = await hre.network.getOrCreate();
     const [deployer, owner] = await ethers.getSigners();
 
     const value = ether("1.0");

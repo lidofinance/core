@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { ether, impersonate, log } from "#lib";
@@ -14,11 +12,9 @@ import {
   reportWithoutClActivation,
 } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "#test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 describe("Scenario: Burn Shares", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -30,8 +26,6 @@ describe("Scenario: Burn Shares", () => {
   let internalShares: bigint;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     [stranger] = await ethers.getSigners();

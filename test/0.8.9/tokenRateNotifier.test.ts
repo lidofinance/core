@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   NoInterface__Mock,
@@ -12,7 +11,7 @@ import type {
   TokenRatePusherWithArgs__Mock,
 } from "typechain-types/index.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 // Mirrors `enum ObserverKind { NoArgs, WithArgs }` in TokenRateNotifier.sol.
 // Encoded as bigint to match the uint8 value returned by ethers v6 / TypeChain.
@@ -55,8 +54,6 @@ function reportTuple(report: typeof REPORT): [bigint, bigint, bigint, bigint, bi
 }
 
 describe("TokenRateNotifier.sol", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let provider: HardhatEthersSigner;
@@ -89,7 +86,6 @@ describe("TokenRateNotifier.sol", () => {
   }
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
     [deployer, owner, provider, stranger] = await ethers.getSigners();
   });
 

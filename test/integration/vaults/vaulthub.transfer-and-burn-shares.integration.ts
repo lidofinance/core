@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types/index.js";
 
@@ -15,11 +14,9 @@ import {
 } from "#lib/protocol";
 import { ether } from "#lib/units.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub.transferAndBurnShares", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -33,7 +30,6 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
   let lido: Lido;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

@@ -1,8 +1,5 @@
 import { expect } from "chai";
 import { type Signer } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
@@ -24,12 +21,10 @@ import {
   SLOTS_PER_FRAME,
   ZERO_HASH,
 } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("HashConsensus.sol:frames", function () {
   const TEST_INITIAL_EPOCH = 3n;
-
-  let ethers: HardhatEthers;
 
   let admin: Signer;
 
@@ -40,8 +35,6 @@ describe("HashConsensus.sol:frames", function () {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, member1, member2, member3] = await ethers.getSigners();
   });
 

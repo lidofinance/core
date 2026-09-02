@@ -1,8 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   Dashboard__Mock,
@@ -20,7 +18,7 @@ import {
 } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 import { generateConsolidationRequestPayload } from "./consolidationHelper.js";
 
@@ -28,8 +26,6 @@ const PUBKEY = "0x800276cfb86f1c08a1e7238c76a9ca45d5528d2072e51500b343266203d5d7
 const KEY_LENGTH = 48;
 
 describe("ValidatorConsolidationRequests.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
   let actor: HardhatEthersSigner;
   let consolidationRequestPredeployed: EIP7251MaxEffectiveBalanceRequest__Mock;
   let validatorConsolidationRequests: ValidatorConsolidationRequests;
@@ -41,8 +37,6 @@ describe("ValidatorConsolidationRequests.sol", () => {
   let stakingVault: HardhatEthersSigner;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [actor, stakingVault] = await ethers.getSigners();
 
     // Set a high balance for the actor account

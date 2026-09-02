@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { keccakFromString } from "ethereumjs-util";
 import { type BigNumberish, getBigInt, ZeroHash } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
@@ -36,11 +34,9 @@ import {
 } from "#lib";
 
 import { deployAndConfigureAccountingOracle, HASH_1, SLOTS_PER_FRAME } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("AccountingOracle.sol:submitReport", () => {
-  let ethers: HardhatEthers;
-
   let consensus: HashConsensus__Harness;
   let oracle: AccountingOracle__Harness;
   let reportItems: ReportAsArray;
@@ -153,8 +149,6 @@ describe("AccountingOracle.sol:submitReport", () => {
   }
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     await deploy();
   });
 

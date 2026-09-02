@@ -1,8 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Lido, StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
@@ -10,12 +8,9 @@ import { BigIntMath } from "#lib";
 import { ether } from "#lib/units.js";
 
 import { deployVaults } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("VaultHub.sol:forceRebalance", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -32,8 +27,6 @@ describe("VaultHub.sol:forceRebalance", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer, user, stranger] = await ethers.getSigners();
 
     vaultsContext = await deployVaults({ deployer, admin: user });

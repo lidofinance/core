@@ -1,13 +1,9 @@
-import hre from "hardhat";
-
 import { loadContract } from "#lib/contract.js";
-import { makeTx } from "#lib/deploy.js";
-import { readNetworkState, Sk } from "#lib/state-file.js";
+import { getDeployerState, makeTx } from "#lib/deploy.js";
+import { Sk } from "#lib/state-file.js";
 
 export async function main() {
-  const { ethers } = await hre.network.getOrCreate();
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { state } = await getDeployerState();
 
   const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
 

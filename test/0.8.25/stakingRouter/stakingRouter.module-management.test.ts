@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { type LidoLocator, type StakingRouter } from "typechain-types/index.js";
 
@@ -16,14 +15,13 @@ import {
 } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 
 const UINT64_MAX = 2n ** 64n - 1n;
 
 describe("StakingRouter.sol:module-management", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -37,8 +35,6 @@ describe("StakingRouter.sol:module-management", () => {
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   beforeEach(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, admin, user] = await ethers.getSigners();
 
     locator = await deployLidoLocator({

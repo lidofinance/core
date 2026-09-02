@@ -1,8 +1,5 @@
 import { expect } from "chai";
 import { type Signer, ZeroAddress } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus, ReportProcessor__Mock } from "typechain-types/index.js";
 
@@ -16,17 +13,14 @@ import {
 } from "#lib";
 
 import { deployHashConsensus } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 describe("HashConsensus.sol:deploy", function () {
-  let ethers: HardhatEthers;
-
   let admin: Signer;
   let consensus: HashConsensus;
   let mockReportProcessor: ReportProcessor__Mock;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin] = await ethers.getSigners();
     mockReportProcessor = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION], admin);
   });

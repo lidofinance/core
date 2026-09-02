@@ -1,18 +1,14 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Versioned__Harness089 } from "typechain-types/index.js";
 
 import { MAX_UINT256, proxify, streccak } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Versioned.sol", () => {
-  let ethers: HardhatEthers;
-
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
@@ -25,8 +21,6 @@ describe("Versioned.sol", () => {
   const petrifiedVersion = MAX_UINT256;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, user] = await ethers.getSigners();
 
     impl = await ethers.deployContract("Versioned__Harness089");

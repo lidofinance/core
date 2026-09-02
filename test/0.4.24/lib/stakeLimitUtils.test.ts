@@ -1,25 +1,17 @@
 import { expect } from "chai";
 import { type ContractTransactionResponse } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { StakeLimitUnstructuredStorage__Harness, StakeLimitUtils__Harness } from "typechain-types/index.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("StakeLimitUtils.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let stakeLimitUnstructuredStorage: StakeLimitUnstructuredStorage__Harness;
   let stakeLimitUtils: StakeLimitUtils__Harness;
 
   let originalState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
     stakeLimitUnstructuredStorage = await ethers.deployContract("StakeLimitUnstructuredStorage__Harness");
     stakeLimitUtils = await ethers.deployContract("StakeLimitUtils__Harness");
   });

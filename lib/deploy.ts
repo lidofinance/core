@@ -15,7 +15,7 @@ import {
 } from "./contract.js";
 import { bl, type ConvertibleToString, cy, log, yl } from "./log.js";
 import { keysOf } from "./protocol/types.js";
-import { incrementGasUsed, Sk, updateObjectInState } from "./state-file.js";
+import { incrementGasUsed, readNetworkState, Sk, updateObjectInState } from "./state-file.js";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
 const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;
@@ -60,6 +60,13 @@ function withDefaultSigner(
   }
 
   return signerOrOptions;
+}
+
+// The default signer of the connected network and the state file checked against it
+export async function getDeployerState() {
+  const { ethers } = await hre.network.getOrCreate();
+  const deployer = (await ethers.provider.getSigner()).address;
+  return { ethers, deployer, state: readNetworkState({ deployer }) };
 }
 
 export async function makeTx(

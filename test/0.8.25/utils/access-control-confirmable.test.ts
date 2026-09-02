@@ -1,16 +1,14 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { AccessControlConfirmable__Harness } from "typechain-types/index.js";
 
 import { advanceChainTime, days, getNextBlockTimestamp, hours } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("AccessControlConfirmable.sol", () => {
-  let ethers: HardhatEthers;
   let harness: AccessControlConfirmable__Harness;
   let admin: HardhatEthersSigner;
   let role1Member: HardhatEthersSigner;
@@ -20,8 +18,6 @@ describe("AccessControlConfirmable.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, stranger, role1Member, role2Member] = await ethers.getSigners();
 
     harness = await ethers.deployContract("AccessControlConfirmable__Harness", [admin], admin);

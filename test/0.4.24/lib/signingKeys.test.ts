@@ -1,14 +1,11 @@
 import { expect } from "chai";
 import { solidityPackedKeccak256 } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { SigningKeys__Harness } from "typechain-types/index.js";
 
 import { EMPTY_PUBLIC_KEY, EMPTY_SIGNATURE, FakeValidatorKeys } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const NODE_OPERATOR_1 = 1;
 const NODE_OPERATOR_2 = 2;
@@ -16,8 +13,6 @@ const NODE_OPERATOR_2 = 2;
 const UINT64_MAX = 2n ** 64n - 1n;
 
 describe("SigningKeys.sol", () => {
-  let ethers: HardhatEthers;
-
   let signingKeys: SigningKeys__Harness;
 
   const firstNodeOperatorId = 0;
@@ -32,7 +27,6 @@ describe("SigningKeys.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
     signingKeys = await ethers.deployContract("SigningKeys__Harness", [[NODE_OPERATOR_1, NODE_OPERATOR_2]]);
   });
 

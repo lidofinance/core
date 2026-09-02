@@ -1,16 +1,14 @@
 import { expect } from "chai";
 import { parseUnits, Result } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Receiver__MockForWithdrawalQueueBase, WithdrawalsQueueBase__Harness } from "typechain-types/index.js";
 
 import { ether, shareRate, shares, WITHDRAWAL_MAX_BATCHES_LENGTH } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 const buildBatchCalculationState = (...args: unknown[]) => ({
   remainingEthBudget: args[0] as bigint,
@@ -22,9 +20,6 @@ const buildBatchCalculationState = (...args: unknown[]) => ({
 const MAX_BATCHES = Number(WITHDRAWAL_MAX_BATCHES_LENGTH);
 
 describe("WithdrawalQueueBase.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -46,8 +41,6 @@ describe("WithdrawalQueueBase.sol", () => {
   };
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     ({ provider } = ethers);
     [owner, stranger] = await ethers.getSigners();
 

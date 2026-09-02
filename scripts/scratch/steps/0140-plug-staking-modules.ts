@@ -10,9 +10,9 @@ import {
 
 import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "#lib";
 import { loadContract } from "#lib/contract.js";
-import { makeTx } from "#lib/deploy.js";
+import { getDeployerState, makeTx } from "#lib/deploy.js";
 import { streccak } from "#lib/keccak.js";
-import { type DeploymentState, readNetworkState, Sk } from "#lib/state-file.js";
+import { type DeploymentState, Sk } from "#lib/state-file.js";
 
 const STAKING_MODULE_MANAGE_ROLE = streccak("STAKING_MODULE_MANAGE_ROLE");
 const ZERO_ADDRESS = ZeroAddress;
@@ -229,9 +229,7 @@ async function enableExternalModule(setup: ExternalModuleSetup, state: Deploymen
 }
 
 export async function main() {
-  const { ethers } = await hre.network.getOrCreate();
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { deployer, state } = await getDeployerState();
 
   // Get contract instances
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", state.stakingRouter.proxy.address);

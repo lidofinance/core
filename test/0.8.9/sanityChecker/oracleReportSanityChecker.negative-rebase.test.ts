@@ -2,9 +2,8 @@ import { expect } from "chai";
 import { parseUnits, ZeroAddress } from "ethers";
 import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   Accounting__MockForSanityChecker,
@@ -17,7 +16,7 @@ import type {
 
 import { ether, impersonate } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 const SLOTS_PER_DAY = 7200n;
 const REPORTS_WINDOW = 36;
@@ -28,9 +27,6 @@ const MAX_CL_BALANCE_DECREASE_BP = 360n; // 3.6%
 const artifacts = hre.artifacts;
 
 describe("OracleReportSanityChecker.sol:negative-rebase", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let locator: LidoLocator__MockForSanityChecker;
   let checker: OracleReportSanityCheckerWrapper;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
@@ -126,8 +122,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   };
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer, withdrawalVault] = await ethers.getSigners();
     await networkHelpers.setBalance(withdrawalVault.address, ether("10000"));
 

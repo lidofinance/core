@@ -1,10 +1,7 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
 import { type Lido } from "typechain-types/index.js";
@@ -12,12 +9,9 @@ import { type Lido } from "typechain-types/index.js";
 import { certainAddress, ether, ONE_ETHER } from "#lib";
 
 import { deployLidoDao } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("Lido.sol:staking-limit", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -31,8 +25,6 @@ describe("Lido.sol:staking-limit", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer, user, stranger] = await ethers.getSigners();
 
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));

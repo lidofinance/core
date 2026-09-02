@@ -2,7 +2,7 @@ import { ZeroAddress } from "ethers";
 
 import { certainAddress, ether, getCurrentBlockTimestamp, impersonate, log } from "#lib";
 
-import { SHARE_RATE_PRECISION } from "#test/suite";
+import { SHARE_RATE_PRECISION } from "#test/suite/constants.js";
 
 import type { ProtocolContext } from "../types.js";
 

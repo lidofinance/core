@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type Accounting__MockForSanityChecker,
@@ -25,14 +24,12 @@ import {
 } from "#lib";
 
 import { deployStakingRouter } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
 const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
 
 describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", () => {
-  let ethers: HardhatEthers;
-
   type ModuleBalance = {
     id: bigint;
     validatorsBalanceWei: bigint;
@@ -252,8 +249,6 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       );
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, admin, manager, elRewardsVault] = await ethers.getSigners();
 
     withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForSanityChecker");

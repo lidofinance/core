@@ -1,18 +1,14 @@
 import { expect } from "chai";
 import { type Signer } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness } from "typechain-types/index.js";
 
 import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "#lib";
 
 import { deployHashConsensus, type DeployHashConsensusParams, HASH_1 } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 describe("HashConsensus.sol:fastlaneMembers", () => {
-  let ethers: HardhatEthers;
-
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -48,8 +44,6 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     await deploy();
   });
 

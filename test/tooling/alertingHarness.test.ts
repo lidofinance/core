@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
@@ -17,11 +15,9 @@ import type {
 import { ether } from "#lib";
 
 import { deployVaults } from "#test/deploy/vaults.js";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("AlertingHarness.sol", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
@@ -51,7 +47,6 @@ describe("AlertingHarness.sol", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
     [deployer, user, operator] = await ethers.getSigners();
 
     const vaultsSetup = await deployVaults({ deployer, admin: user });

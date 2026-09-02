@@ -1,13 +1,12 @@
-import hre from "hardhat";
-
 import { ether } from "#lib/units.js";
+
+import { ethers } from "#test/suite";
 
 import { testERC20Compliance } from "../common/erc20.test.js";
 
 testERC20Compliance({
   tokenName: "wstETH",
   deploy: async () => {
-    const { ethers } = await hre.network.getOrCreate();
     const [deployer, holder, recipient, spender] = await ethers.getSigners();
     const totalSupply = ether("10.0");
 

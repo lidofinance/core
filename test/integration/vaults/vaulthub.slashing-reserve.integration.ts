@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
@@ -14,11 +13,9 @@ import {
   setupLidoForVaults,
 } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Scenario: Vault Report Slashing Reserve", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
 
   let owner: HardhatEthersSigner;
@@ -30,7 +27,6 @@ describe("Scenario: Vault Report Slashing Reserve", () => {
   let snapshot: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
     ctx = await getProtocolContext();
     await setupLidoForVaults(ctx);
 

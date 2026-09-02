@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types/index.js";
 
@@ -16,11 +15,9 @@ import {
 } from "#lib/protocol";
 import { calculateLockedValue, createVaultsReportTree, type VaultReportItem } from "#lib/protocol/helpers/vaults.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: LazyOracle", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -35,8 +32,6 @@ describe("Integration: LazyOracle", () => {
   let stranger: HardhatEthersSigner;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

@@ -1,8 +1,5 @@
 import { expect } from "chai";
 import { getBigInt } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import { ether, ONE_GWEI } from "#lib";
 import {
@@ -22,7 +19,7 @@ import {
 import { adjustReportModuleBalances } from "#lib/protocol/helpers/accounting.js";
 import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
 const ONE_VALIDATOR_BALANCE_ETH = 32n;
@@ -33,7 +30,6 @@ const SECONDS_PER_YEAR = 365n * ONE_DAY;
 const sumBigints = (values: bigint[]) => values.reduce((sum, value) => sum + value, 0n);
 
 describe("Integration: AccountingOracle module balances sanity", () => {
-  let ethers: HardhatEthers;
   let ctx: ProtocolContext;
 
   let snapshot: string;
@@ -41,7 +37,6 @@ describe("Integration: AccountingOracle module balances sanity", () => {
   let carriedPendingBalanceGwei: bigint;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

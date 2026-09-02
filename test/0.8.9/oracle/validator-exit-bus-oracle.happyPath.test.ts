@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroHash } from "ethers";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   HashConsensus__Harness,
@@ -21,6 +20,7 @@ import {
   seedMockModuleSigningKeys,
   SLOTS_PER_FRAME,
 } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -31,8 +31,6 @@ const PUBKEYS = [
 ];
 
 describe("ValidatorsExitBusOracle.sol:happyPath", () => {
-  let ethers: HardhatEthers;
-
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
@@ -98,8 +96,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, member1, member2, member3, stranger] = await ethers.getSigners();
 
     const deployed = await deployVEBO(admin.address);

@@ -1,9 +1,8 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 import { before } from "mocha";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   DepositContract__MockForStakingVault,
@@ -28,7 +27,7 @@ import {
 } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 type PermissionsConfigStruct = {
   defaultAdmin: HardhatEthersSigner;
@@ -51,8 +50,6 @@ type PermissionsConfigStruct = {
 };
 
 describe("Permissions", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let defaultAdmin: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -86,8 +83,6 @@ describe("Permissions", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [
       deployer,
       defaultAdmin,

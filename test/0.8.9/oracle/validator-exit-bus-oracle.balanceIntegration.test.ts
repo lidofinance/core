@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type HashConsensus__Harness,
@@ -13,7 +12,7 @@ import {
 import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "#lib";
 
 import { DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -29,8 +28,6 @@ const LEGACY_MODULE_MAX_BALANCE_ETH = 32n; // 32 ETH
 const MAXEB_MODULE_MAX_BALANCE_ETH = 2048n; // 2048 ETH
 
 describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
-  let ethers: HardhatEthers;
-
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let oracleReportSanityChecker: OracleReportSanityChecker;
@@ -121,8 +118,6 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     const signers = await ethers.getSigners();
     admin = signers[0];
     member1 = signers[1];

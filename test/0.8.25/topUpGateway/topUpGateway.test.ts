@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { zeroPadValue } from "ethers";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { TopUpGateway__Harness } from "typechain-types/index.js";
 import {
@@ -15,12 +13,9 @@ import {
 import { proxify } from "#lib/proxy.js";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("TopUpGateway.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let admin: HardhatEthersSigner;
   let topUpOperator: HardhatEthersSigner;
   let limitsManager: HardhatEthersSigner;
@@ -73,8 +68,6 @@ describe("TopUpGateway.sol", () => {
   };
 
   beforeEach(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [admin, topUpOperator, limitsManager, stranger] = await ethers.getSigners();
     snapshot = await Snapshot.take();
     lido = await ethers.deployContract("Lido__MockForTopUpGateway");

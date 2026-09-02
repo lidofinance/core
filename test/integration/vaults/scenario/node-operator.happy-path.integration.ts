@@ -1,10 +1,8 @@
 import { expect } from "chai";
 import { hexlify } from "ethers";
-import hre from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
 import type {
@@ -45,7 +43,7 @@ import {
   VAULT_CONNECTION_DEPOSIT,
 } from "#lib/protocol";
 
-import { resetState, Snapshot } from "#test/suite";
+import { ethers, networkHelpers, resetState, Snapshot } from "#test/suite";
 import { ONE_DAY } from "#test/suite/constants.js";
 
 const ONE_YEAR = 365n * ONE_DAY;
@@ -95,9 +93,6 @@ enum ValidatorStage {
 
 resetState(
   describe("Scenario: Node Operator Happy Path", () => {
-    let ethers: HardhatEthers;
-    let networkHelpers: NetworkHelpers;
-
     let ctx: ProtocolContext;
 
     // EOAs
@@ -177,8 +172,6 @@ resetState(
       }));
 
     before(async () => {
-      ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
       [
         ,
         vaultOwner,

@@ -1,20 +1,15 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { LidoLocator, ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
 import { EPOCHS_PER_FRAME, INITIAL_FAST_LANE_LENGTH_SLOTS, SLOTS_PER_EPOCH, VEBO_CONSENSUS_VERSION } from "#lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let originalState: string;
   let locator: LidoLocator;
   let oracle: ValidatorsExitBus__Harness;
@@ -22,8 +17,6 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
   const NEW_CONSENSUS_VERSION = 42n;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     locator = await deployLidoLocator();
     [admin] = await ethers.getSigners();
 

@@ -1,12 +1,8 @@
-import hre from "hardhat";
-
-import { deployImplementation, deployWithoutProxy } from "#lib/deploy.js";
-import { readNetworkState, Sk, updateObjectInState } from "#lib/state-file.js";
+import { deployImplementation, deployWithoutProxy, getDeployerState } from "#lib/deploy.js";
+import { Sk, updateObjectInState } from "#lib/state-file.js";
 
 export async function main() {
-  const { ethers } = await hre.network.getOrCreate();
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { ethers, deployer, state } = await getDeployerState();
 
   // Deploy Aragon app implementations
   await deployImplementation(Sk.appAgent, "Agent", deployer);

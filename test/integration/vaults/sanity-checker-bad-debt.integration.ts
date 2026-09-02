@@ -1,10 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import { ether, impersonate, LIMITER_PRECISION_BASE, ONE_GWEI } from "#lib";
 import {
@@ -23,13 +20,10 @@ import {
 } from "#lib/protocol";
 import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 import { SHARE_RATE_PRECISION } from "#test/suite/constants.js";
 
 describe("Integration: Sanity checker with bad debt internalization", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -78,8 +72,6 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
   };
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

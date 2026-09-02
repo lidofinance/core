@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type LidoLocator,
@@ -19,13 +18,11 @@ import {
 } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 
 describe("StakingRouter.sol:exit", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let stakingRouterAdmin: HardhatEthersSigner;
@@ -52,8 +49,6 @@ describe("StakingRouter.sol:exit", () => {
   const NODE_OPERATOR_ID = 1n;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, admin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
 
     locator = await deployLidoLocator({

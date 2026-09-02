@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { MaxUint256 } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type AccountingOracle__MockForStakingRouter,
@@ -14,12 +12,9 @@ import {
 import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "#lib";
 
 import { deployLidoLocator } from "#test/deploy/locator.js";
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("Lido.sol:finalizeUpgrade_v4", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let deployer: HardhatEthersSigner;
 
   let impl: Lido__HarnessForFinalizeUpgradeV4;
@@ -33,8 +28,6 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
   let originalState: string;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer] = await ethers.getSigners();
     impl = await ethers.deployContract("Lido__HarnessForFinalizeUpgradeV4", {
       signer: deployer,

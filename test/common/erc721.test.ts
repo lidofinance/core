@@ -1,16 +1,14 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 import { type ExclusiveSuiteFunction, type PendingSuiteFunction } from "mocha";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ERC721, ERC721Receiver__Mock } from "typechain-types/index.js";
 
 import { ERC165_INTERFACE_ID, ERC721_INTERFACE_ID, ERC721METADATA_INTERFACE_ID, INVALID_INTERFACE_ID } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 interface ERC721Deployment {
   token: ERC721;
@@ -63,8 +61,6 @@ interface ERC721Target {
  */
 export function testERC721Compliance({ tokenName, deploy, suiteFunction = describe }: ERC721Target) {
   suiteFunction(`${tokenName} ERC-721 Compliance`, () => {
-    let ethers: HardhatEthers;
-
     let token: ERC721;
     let name: string;
     let symbol: string;
@@ -80,7 +76,6 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
     let originalState: string;
 
     before(async () => {
-      ({ ethers } = await hre.network.getOrCreate());
       ({ token, name, symbol, holder, holderTokenId } = await deploy());
       [spender, newSpender, eoaRecipient, stranger] = await ethers.getSigners();
 

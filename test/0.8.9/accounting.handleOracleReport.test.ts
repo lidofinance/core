@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver.js";
 import type {
@@ -29,10 +28,9 @@ import {
 import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "#lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 describe("Accounting.sol:report", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
 
   let accounting: Accounting;
@@ -45,10 +43,6 @@ describe("Accounting.sol:report", () => {
   let withdrawalQueue: WithdrawalQueue__MockForAccounting;
   let burner: Burner__MockForAccounting;
   let vaultHub: VaultHub__MockForAccountingReport;
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
 
   beforeEach(async () => {
     [deployer] = await ethers.getSigners();

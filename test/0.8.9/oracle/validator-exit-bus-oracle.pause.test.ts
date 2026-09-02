@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import { AbiCoder, keccak256, ZeroAddress } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types/index.js";
@@ -10,6 +8,7 @@ import type { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typecha
 import { de0x, numberToHex } from "#lib";
 
 import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers
@@ -54,18 +53,12 @@ const EXIT_DATA = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataLi
 const EXIT_DATA_HASH = hashExitRequest(EXIT_DATA);
 
 describe("ValidatorsExitBus: pause checks", () => {
-  let ethers: HardhatEthers;
-
   let oracle: ValidatorsExitBus__Harness;
   let consensus: HashConsensus__Harness;
   let admin: HardhatEthersSigner;
   let pauser: HardhatEthersSigner;
   let resumer: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
 
   beforeEach(async () => {
     [admin, pauser, resumer, stranger] = await ethers.getSigners();

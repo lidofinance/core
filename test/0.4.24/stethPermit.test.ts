@@ -1,20 +1,13 @@
 import { expect } from "chai";
 import { type Signature, type Signer, ZeroAddress } from "ethers";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { StETHPermit__HarnessWithEip712Initialization } from "typechain-types/index.js";
 
 import { certainAddress, days, ether, type Permit, signPermit, stethDomain } from "#lib";
 
-import { Snapshot } from "#test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("StETHPermit.sol", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
   let deployer: Signer;
   let signer: Signer;
 
@@ -25,8 +18,6 @@ describe("StETHPermit.sol", () => {
   let steth: StETHPermit__HarnessWithEip712Initialization;
 
   before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-
     [deployer, signer] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETHPermit__HarnessWithEip712Initialization", [signer], {

@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import { AbiCoder, keccak256 } from "ethers";
-import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types/index.js";
@@ -10,6 +8,7 @@ import type { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typecha
 import { de0x, numberToHex } from "#lib";
 
 import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers
@@ -76,8 +75,6 @@ const getTimestampFromTx = async (
 };
 
 describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
-  let ethers: HardhatEthers;
-
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
 
@@ -112,10 +109,6 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
   };
-
-  before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-  });
 
   describe("Common case", () => {
     // tests in this section related to ExitRequestsData mistakes

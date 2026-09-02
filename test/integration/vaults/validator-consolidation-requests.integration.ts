@@ -1,20 +1,17 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard } from "typechain-types/index.js";
 
 import { createVaultWithDashboard, getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
 import { generateConsolidationRequestPayload } from "#test/0.8.25/vaults/consolidation/consolidationHelper.js";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const KEY_LENGTH = 48;
 
 describe("Integration: ValidatorConsolidationRequests", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -24,8 +21,6 @@ describe("Integration: ValidatorConsolidationRequests", () => {
   let dashboard: Dashboard;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

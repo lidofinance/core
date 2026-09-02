@@ -1,7 +1,4 @@
 import { expect } from "chai";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type ConsolidationBus__MockForConsolidationMigrator,
@@ -10,15 +7,13 @@ import {
 
 import { proxify } from "#lib/proxy.js";
 
-describe("ConsolidationMigrator.sol: deployment", () => {
-  let ethers: HardhatEthers;
+import { ethers } from "#test/suite";
 
+describe("ConsolidationMigrator.sol: deployment", () => {
   let stakingRouter: StakingRouter__MockForConsolidationMigrator;
   let consolidationBus: ConsolidationBus__MockForConsolidationMigrator;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     stakingRouter = await ethers.deployContract("StakingRouter__MockForConsolidationMigrator");
     consolidationBus = await ethers.deployContract("ConsolidationBus__MockForConsolidationMigrator");
   });

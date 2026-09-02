@@ -1,8 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type Accounting__MockForSanityChecker,
@@ -13,6 +11,8 @@ import {
 } from "typechain-types/index.js";
 
 import { ether, impersonate, randomAddress } from "#lib";
+
+import { ethers, networkHelpers } from "#test/suite";
 
 import { getMigrationCLValidatorsBalance } from "../lib.js";
 
@@ -30,13 +30,6 @@ import {
 } from "./lib.js";
 
 describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
-  let ethers: HardhatEthers;
-  let networkHelpers: NetworkHelpers;
-
-  before(async () => {
-    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
-  });
-
   const deployChecker = async (
     limitsList: OracleReportLimits,
     postMigrationFirstReportDone: boolean,

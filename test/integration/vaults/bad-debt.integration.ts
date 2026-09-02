@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
@@ -22,11 +21,9 @@ import {
 import { simulateReport } from "#lib/protocol/helpers/accounting.js";
 import { ether } from "#lib/units.js";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Vault with bad debt", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -39,8 +36,6 @@ describe("Integration: Vault with bad debt", () => {
   let dashboard: Dashboard;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     const { lido, stakingVaultFactory, vaultHub } = ctx.contracts;
     originalSnapshot = await Snapshot.take();

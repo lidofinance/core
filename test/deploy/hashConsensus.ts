@@ -1,5 +1,3 @@
-import hre from "hardhat";
-
 import type { ReportProcessor__Mock } from "typechain-types/index.js";
 
 import {
@@ -11,6 +9,8 @@ import {
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
 } from "#lib";
+
+import { ethers } from "#test/suite";
 
 export interface DeployHashConsensusParams {
   reportProcessor?: ReportProcessor__Mock;
@@ -34,7 +34,6 @@ export async function deployHashConsensus(
     initialEpoch = INITIAL_EPOCH,
   }: DeployHashConsensusParams = {},
 ) {
-  const { ethers } = await hre.network.getOrCreate();
   if (!reportProcessor) {
     reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION]);
   }

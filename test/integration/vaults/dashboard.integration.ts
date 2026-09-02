@@ -1,9 +1,8 @@
 import { expect } from "chai";
 import { hexlify, MaxUint256, ZeroAddress } from "ethers";
-import hre from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   Dashboard,
@@ -42,7 +41,7 @@ import {
   type VaultRoles,
 } from "#lib/protocol";
 
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 // EIP-7528 ETH address
 const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -55,8 +54,6 @@ type ValidatorInfo = {
 };
 
 describe("Integration: Dashboard Full Coverage", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -80,8 +77,6 @@ describe("Integration: Dashboard Full Coverage", () => {
   let beaconBlockHeader: SSZBLSHelpers.BeaconBlockHeaderStruct;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

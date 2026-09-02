@@ -1,6 +1,5 @@
 import { expect } from "chai";
 import { randomBytes } from "ethers";
-import hre from "hardhat";
 
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
@@ -12,6 +11,8 @@ import {
 
 import { wcTypeMaxEB } from "#lib";
 import { ONE_GWEI, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "#lib/constants.js";
+
+import { ethers } from "#test/suite";
 
 export const DEFAULT_CONFIG: ModuleConfig = {
   stakeShareLimit: TOTAL_BASIS_POINTS,
@@ -53,8 +54,6 @@ export async function setupModule(
     totalModuleStake = 0n,
   }: ModuleConfig,
 ): Promise<[StakingModule__MockForStakingRouter | StakingModuleV2__MockForStakingRouter, bigint]> {
-  const { ethers } = await hre.network.getOrCreate();
-
   const modulesCount = await stakingRouter.getStakingModulesCount();
   const moduleId = modulesCount + 1n;
 

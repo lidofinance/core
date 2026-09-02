@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   type AccountingOracle__MockForStakingRouter,
@@ -16,13 +15,11 @@ import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } fr
 import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "#lib/constants.js";
 
 import { deployLidoLocator, deployStakingRouter } from "#test/deploy";
-import { Snapshot } from "#test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 import { type CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers/index.js";
 
 describe("StakingRouter.sol:topUp", () => {
-  let ethers: HardhatEthers;
-
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let topUpGatewaySigner: HardhatEthersSigner;
@@ -44,8 +41,6 @@ describe("StakingRouter.sol:topUp", () => {
   const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [deployer, admin, topUpGatewaySigner, stranger] = await ethers.getSigners();
     // Deploy Lido mock
     lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);

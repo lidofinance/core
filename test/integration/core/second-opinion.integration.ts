@@ -1,7 +1,4 @@
 import { expect } from "chai";
-import hre from "hardhat";
-
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { SecondOpinionOracle__Mock } from "typechain-types/index.js";
 
@@ -15,7 +12,7 @@ import {
   resetCLBalanceDecreaseWindow,
 } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "#test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 const AMOUNT = ether("100");
 const INITIAL_REPORTED_BALANCE = ether("32") * 3n; // 32 ETH * 3 validators
@@ -30,13 +27,10 @@ function getExpectedSecondOpinionBalance(validatorsBalance: bigint, reportedDiff
 }
 
 async function getWithdrawalVaultBalance(ctx: ProtocolContext): Promise<bigint> {
-  const { ethers } = await hre.network.getOrCreate();
   return ethers.provider.getBalance(ctx.contracts.withdrawalVault);
 }
 
 describe("Integration: Second opinion", () => {
-  let ethers: HardhatEthers;
-
   let ctx: ProtocolContext;
 
   let snapshot: string;
@@ -47,8 +41,6 @@ describe("Integration: Second opinion", () => {
   let validatorsBalance: bigint;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     ctx = await getProtocolContext();
 
     snapshot = await Snapshot.take();

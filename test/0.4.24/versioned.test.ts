@@ -1,14 +1,13 @@
 import { expect } from "chai";
-import hre from "hardhat";
 
-import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { OssifiableProxy, Versioned__Harness0424 } from "typechain-types/index.js";
 
+import { ethers } from "#test/suite";
+
 // TODO: rewrite to be reusable for any derived contract
 describe("Versioned.sol", () => {
-  let ethers: HardhatEthers;
-
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let proxy: OssifiableProxy;
@@ -19,8 +18,6 @@ describe("Versioned.sol", () => {
   const INIT_VERSION = 1n;
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
-
     [admin, user] = await ethers.getSigners();
 
     // because we have two VersionMocks, we have to specify the full path to the contract

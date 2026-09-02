@@ -1,5 +1,3 @@
-import hre from "hardhat";
-
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ConsensusContract__Mock } from "typechain-types/index.js";
@@ -13,6 +11,8 @@ import {
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
 } from "#lib";
+
+import { ethers } from "#test/suite";
 
 export const SECONDS_PER_EPOCH = SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
 export const SLOTS_PER_FRAME = EPOCHS_PER_FRAME * SLOTS_PER_EPOCH;
@@ -45,7 +45,6 @@ export async function deployBaseOracle(
     mockMember = admin,
   } = {},
 ) {
-  const { ethers } = await hre.network.getOrCreate();
   if (!consensusContract) {
     consensusContract = await ethers.deployContract("ConsensusContract__Mock", [
       slotsPerEpoch,
