@@ -59,7 +59,8 @@ export async function deployUpgrade(stepsFile: string): Promise<void> {
     await applySteps(steps);
   } catch (error) {
     if (error instanceof StepsFileNotFoundError) {
-      log.warning(`Upgrade steps not found in ${stepsFile}, assuming the protocol is already deployed`);
+      log.error("Upgrade failed:", error.message);
+      throw error;
     } else {
       log.error("Upgrade failed:", (error as Error).message);
     }
