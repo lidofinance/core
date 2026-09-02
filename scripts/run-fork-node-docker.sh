@@ -6,7 +6,7 @@ set -o pipefail
 
 load_env_var MODE "forking"
 load_env_var HARDHAT_NODE_DOCKER_IMAGE_REPOSITORY "ghcr.io/lidofinance/hardhat-node"
-load_env_var HARDHAT_NODE_DOCKER_IMAGE_VERSION "2.28.0"
+load_env_var HARDHAT_NODE_DOCKER_IMAGE_VERSION "3.15.0"
 load_env_var HARDHAT_NODE_DOCKER_NAME "hardhat-node"
 load_env_var HARDHAT_NODE_DOCKER_PORT "8545"
 load_env_var HARDHAT_NODE_DOCKER_NETWORK "lido"
