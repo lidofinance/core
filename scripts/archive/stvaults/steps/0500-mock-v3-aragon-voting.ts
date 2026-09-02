@@ -1,6 +1,6 @@
-import { mockDGAragonVoting } from "scripts/utils/upgrade.js";
+import { mockDGAragonVoting } from "scripts/utils/upgrade";
 
-import { readNetworkState } from "lib/state-file.js";
+import { readNetworkState } from "lib/state-file";
 
 export async function main(): Promise<ReturnType<typeof mockDGAragonVoting>> {
   const state = readNetworkState();

@@ -1,13 +1,12 @@
-import hre from "hardhat";
+import { ethers } from "hardhat";
 
-import { impersonate } from "lib/account.js";
-import { deployImplementation, loadContract, makeTx, readNetworkState, Sk } from "lib/index.js";
+import { deployImplementation, loadContract, makeTx, readNetworkState, Sk } from "lib";
+import { impersonate } from "lib/account";
 
 export async function main(): Promise<void> {
-  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
 
-  const state = await readNetworkState();
+  const state = readNetworkState();
 
   const agentAddress = state[Sk.appAgent].proxy.address;
   const agent = await impersonate(agentAddress, ethers.parseEther("1"));
