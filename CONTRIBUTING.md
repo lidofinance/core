@@ -161,8 +161,9 @@ Foundry's [conventions](https://book.getfoundry.sh/guides/best-practices#general
 - For scripts, use the `.s.sol` postfix (e.g., `MyScript.s.sol`).
 - For helpers, use the `.h.sol` postfix (e.g., `MyHelper.h.sol`).
 
-Hardhat picks Solidity tests by the `.t.sol` suffix. Inline `forge-config:` comments apply to every run, including
-`FUZZ_PROFILE=deep`, which raises the run counts for certification (see `hardhat.config.ts`).
+Hardhat picks Solidity tests by the `.t.sol` suffix. Inline `forge-config:` comments apply to local runs, including
+`FUZZ_PROFILE=deep`. The deep CI job removes per-test invariant depth overrides so the global certification depth from
+`hardhat.config.ts` applies.
 
 #### Mocking and Harnessing Contracts
 

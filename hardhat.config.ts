@@ -78,9 +78,9 @@ export default defineConfig({
       parallel: process.env.PARALLEL === "true",
     },
     // Certification fuzzing. HH3 has a single solidity-test profile, hence the env switch.
-    // Inline `forge-config: default.*` comments override these values in both modes; Foundry skipped
-    // them under FOUNDRY_PROFILE=deep. HH3 pins the fuzz seed; deep runs draw a fresh one unless
-    // FUZZ_SEED is set.
+    // Inline `forge-config: default.*` comments override these values. The deep CI job removes
+    // per-test invariant depth overrides before the run; local deep runs still honor them.
+    // HH3 pins the fuzz seed; deep runs draw a fresh one unless FUZZ_SEED is set.
     solidity: DEEP_FUZZING
       ? {
           fuzz: { runs: 10_000, maxTestRejects: 10_000_000, seed: FUZZ_SEED },
