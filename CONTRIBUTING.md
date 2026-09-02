@@ -45,7 +45,7 @@ the [Lido Research Forum](https://research.lido.fi/).
 
 ### Requirements
 
-- [Node.js](https://nodejs.org/en) version 22 (LTS) with `corepack` enabled
+- [Node.js](https://nodejs.org/en) version 24 (LTS) with `corepack` enabled
 - [Yarn](https://yarnpkg.com/) installed via corepack (see below)
 - [Foundry](https://book.getfoundry.sh/) for scratch deployments only: `anvil`, `cast` and `forge script` deploy the
   external CircuitBreaker and staking modules; the tests do not need it
