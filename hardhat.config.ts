@@ -17,9 +17,9 @@ export const ZERO_PK = "0x000000000000000000000000000000000000000000000000000000
 
 const LOCAL_DEVNET_CHAIN_ID = parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10);
 
-const DEEP_FUZZING = process.env.FUZZ_PROFILE === "deep";
+const FUZZ_PROFILE = process.env.FUZZ_PROFILE;
 const FUZZ_SEED = process.env.FUZZ_SEED ?? `0x${randomBytes(32).toString("hex")}`;
-if (DEEP_FUZZING) console.log(`Fuzz seed: ${FUZZ_SEED}`);
+if (FUZZ_PROFILE === "deep") console.log(`Fuzz seed: ${FUZZ_SEED}`);
 
 const simulatedNetwork = {
   type: "edr-simulated",
@@ -78,15 +78,21 @@ export default defineConfig({
       parallel: process.env.PARALLEL === "true",
     },
     // Certification fuzzing. HH3 has a single solidity-test profile, hence the env switch.
-    // Inline `forge-config: default.*` comments override these values. The deep CI job removes
-    // per-test invariant depth overrides before the run; local deep runs still honor them.
+    // Inline `forge-config: default.*` comments override these values. CI removes the relevant
+    // per-test overrides for coverage and deep runs; local runs still honor them.
     // HH3 pins the fuzz seed; deep runs draw a fresh one unless FUZZ_SEED is set.
-    solidity: DEEP_FUZZING
-      ? {
-          fuzz: { runs: 10_000, maxTestRejects: 10_000_000, seed: FUZZ_SEED },
-          invariant: { runs: 10_000, depth: 500 },
-        }
-      : {},
+    solidity:
+      FUZZ_PROFILE === "deep"
+        ? {
+            fuzz: { runs: 10_000, maxTestRejects: 10_000_000, seed: FUZZ_SEED },
+            invariant: { runs: 10_000, depth: 500 },
+          }
+        : FUZZ_PROFILE === "coverage"
+          ? {
+              fuzz: { runs: 256 },
+              invariant: { runs: 256, depth: 32 },
+            }
+          : {},
   },
   paths: {
     sources: {

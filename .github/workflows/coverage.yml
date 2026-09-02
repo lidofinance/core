@@ -21,9 +21,14 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
+      - name: Use coverage fuzz settings
+        run: |
+          find test -name '*.t.sol' -print0 | xargs -0 sed -i -E '/forge-config: default\.(fuzz\.runs|invariant\.(runs|depth))/d'
+          git diff --quiet -- test && { echo "No inline fuzz or invariant iteration directives found"; exit 1; }
+
       - name: Collect coverage
         run: NODE_OPTIONS="--max-old-space-size=10240" yarn test:coverage
-        timeout-minutes: 30
+        timeout-minutes: 60
 
       # HH3's native coverage emits lcov; the publish step consumes Cobertura XML.
       - name: Convert lcov to Cobertura

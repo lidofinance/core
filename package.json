@@ -32,7 +32,7 @@
     "test": "PARALLEL=true NODE_OPTIONS='--max-old-space-size=10240' hardhat test test/**/*.test.ts",
     "test:bls:blst": "SKIP_INTERFACES_CHECK=true SKIP_LINT_SOLIDITY=true hardhat test test/common/bls.blst.e2e.fuzz.test.ts",
     "test:solidity": "hardhat test solidity",
-    "test:coverage": "NODE_OPTIONS='--max-old-space-size=16384' hardhat test --coverage test/**/*.test.ts test/**/*.t.sol",
+    "test:coverage": "FUZZ_PROFILE=coverage NODE_OPTIONS='--max-old-space-size=16384' hardhat test --coverage test/**/*.test.ts test/**/*.t.sol",
     "test:coverage:integration": "MODE=scratch INTEGRATION_WITH_CMv2=off SKIP_LINT_SOLIDITY=true SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true hardhat test --coverage test/integration/**/*.ts",
     "test:coverage:full": "MODE=scratch INTEGRATION_WITH_CMv2=off SKIP_LINT_SOLIDITY=true SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true hardhat test --coverage test/**/*.test.ts test/**/*.t.sol test/integration/**/*.ts",
     "test:sequential": "hardhat test test/**/*.test.ts --gas-stats",
