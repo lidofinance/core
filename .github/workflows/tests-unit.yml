@@ -1,6 +1,6 @@
 name: Unit Tests
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
   test_hardhat_unit:
@@ -32,7 +32,7 @@ jobs:
 
   test_solidity_fuzzing_deep:
     name: Solidity / Fuzzing & Invariants (deep)
-    if: github.ref_name == 'develop' || github.ref_name == 'master'
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == 'develop' || github.ref_name == 'master'
     runs-on: ubuntu-latest
 
     steps:
