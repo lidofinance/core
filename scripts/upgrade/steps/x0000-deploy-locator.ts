@@ -1,19 +1,20 @@
 import { assert } from "chai";
-import { isAddress } from "ethers";
+import { getAddress, isAddress } from "ethers";
 
 import type { LidoLocator } from "typechain-types/index.js";
 
 import {
   deployImplementation,
   getDeployerSigner,
-  loadContract,
   type LoadedContract,
+  loadContract,
   log,
   readNetworkState,
   Sk,
 } from "#lib";
+import { keysOf } from "#lib/protocol/types.js";
 
-const VIEW_NAMES_AND_CTOR_ARGS = [
+const LOCATOR_CONFIG_KEYS = keysOf<LidoLocator.ConfigStruct>()([
   "accountingOracle",
   "depositSecurityModule",
   "elRewardsVault",
@@ -27,35 +28,52 @@ const VIEW_NAMES_AND_CTOR_ARGS = [
   "withdrawalQueue",
   "withdrawalVault",
   "oracleDaemonConfig",
-];
+  "validatorExitDelayVerifier",
+  "triggerableWithdrawalsGateway",
+  "consolidationGateway",
+  "accounting",
+  "predepositGuarantee",
+  "wstETH",
+  "vaultHub",
+  "vaultFactory",
+  "lazyOracle",
+  "operatorGrid",
+  "topUpGateway",
+]);
 
-const g_newAddresses: { [key: string]: string } = {};
+const g_newAddresses: Partial<Record<keyof LidoLocator.ConfigStruct, string>> = {};
 
-async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract<LidoLocator>): Promise<string> {
+async function getNewFromEnvOrCurrent(
+  name: keyof LidoLocator.ConfigStruct,
+  locator: LoadedContract<LidoLocator>,
+): Promise<string> {
   const valueFromEnv = process.env[name];
   if (valueFromEnv) {
     if (!isAddress(valueFromEnv)) {
-      log.error(`Value ${valueFromEnv} of ${name} is not an address`);
-      process.exit(1);
+      throw new Error(`Value ${valueFromEnv} of ${name} is not an address`);
     }
-    g_newAddresses[name] = valueFromEnv;
-    return valueFromEnv;
+    const address = getAddress(valueFromEnv);
+    g_newAddresses[name] = address;
+    return address;
   }
   return await locator.getFunction(name).staticCall();
 }
 
-async function getConstructorArgs(locator: LoadedContract<LidoLocator>): Promise<string[]> {
-  return await Promise.all(VIEW_NAMES_AND_CTOR_ARGS.map((name) => getNewFromEnvOrCurrent(name, locator)));
+async function getConstructorArgs(locator: LoadedContract<LidoLocator>): Promise<LidoLocator.ConfigStruct> {
+  const addresses = await Promise.all(LOCATOR_CONFIG_KEYS.map((name) => getNewFromEnvOrCurrent(name, locator)));
+  return Object.fromEntries(
+    LOCATOR_CONFIG_KEYS.map((name, index) => [name, addresses[index]]),
+  ) as LidoLocator.ConfigStruct;
 }
 
-async function deployNewLocator(deployer: string, ctorArgs: string[]): Promise<LoadedContract> {
-  return await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [ctorArgs]);
+async function deployNewLocator(deployer: string, config: LidoLocator.ConfigStruct): Promise<LoadedContract> {
+  return await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [config]);
 }
 
-async function verifyConstructorArgs(newLocator: LoadedContract, locator: LoadedContract<LidoLocator>): Promise<void> {
-  for (const viewName of VIEW_NAMES_AND_CTOR_ARGS) {
-    const actual = await newLocator.getFunction(viewName).staticCall();
-    assert.equal(actual, await getNewFromEnvOrCurrent(viewName, locator));
+async function verifyConstructorArgs(newLocator: LoadedContract, config: LidoLocator.ConfigStruct): Promise<void> {
+  for (const name of LOCATOR_CONFIG_KEYS) {
+    const actual = await newLocator.getFunction(name).staticCall();
+    assert.equal(actual, config[name]);
   }
 }
 
@@ -67,16 +85,16 @@ export async function main(): Promise<void> {
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
 
-  const ctorArgs = await getConstructorArgs(locator);
+  const config = await getConstructorArgs(locator);
   if (Object.keys(g_newAddresses).length === 0) {
-    log(`No new addresses specified: exiting doing nothing`);
-    process.exit(0);
+    log(`No new addresses specified: doing nothing`);
+    return;
   }
 
-  for (const name in g_newAddresses) {
-    log.warning(`"${name}" new address: ${g_newAddresses[name]}`);
+  for (const [name, address] of Object.entries(g_newAddresses)) {
+    log.warning(`"${name}" new address: ${address}`);
   }
 
-  const newLocator = await deployNewLocator(deployer, ctorArgs);
-  await verifyConstructorArgs(newLocator, locator);
+  const newLocator = await deployNewLocator(deployer, config);
+  await verifyConstructorArgs(newLocator, config);
 }
