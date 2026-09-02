@@ -20,6 +20,9 @@ import {
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 const STAKING_MODULES_REPO_BRANCH = "develop";
+// forge caps the script simulation at `block_gas_limit` of the CSM `deploy` profile (60M);
+// the curated module deployment already exceeds it, so raise the cap explicitly.
+const STAKING_MODULES_FORGE_GAS_LIMIT = 200_000_000;
 
 type ExternalDeployArtifact = Record<string, unknown> & {
   CSModule?: string;
@@ -403,6 +406,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
         cmdOptions.push(`--slow`);
         artifactsFile = `upgrade-${chain}.json`;
       }
+      cmdOptions.push(`--gas-limit=${STAKING_MODULES_FORGE_GAS_LIMIT}`);
       cmdOptions.push(`--private-key=${privateKey}`);
       run("just", cmdOptions, tmpDir, externalEnv);
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm", artifactsFile));
@@ -417,6 +421,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       ///      and there's nothing to update. Reserved for future use
       const cmdOptions: string[] = [];
       cmdOptions.push("deploy-curated");
+      cmdOptions.push(`--gas-limit=${STAKING_MODULES_FORGE_GAS_LIMIT}`);
       cmdOptions.push(`--private-key=${privateKey}`);
       const artifactsFile = `deploy-${chain}.json`;
       run("just", cmdOptions, tmpDir, externalEnv);
