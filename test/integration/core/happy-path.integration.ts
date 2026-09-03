@@ -73,7 +73,8 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const stEthHolderAmount = ether("1000");
 
-    // Deposit some eth
+    // The holder is a well-known hardhat account that may already hold stETH on a live fork,
+    // so check the balance delta rather than the absolute value.
     const stEthHolderBalanceBefore = await lido.balanceOf(stEthHolder.address);
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: stEthHolderAmount });
 
