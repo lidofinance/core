@@ -2,7 +2,6 @@ import { execFileSync } from "child_process";
 import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
-import { getMode } from "hardhat.helpers";
 import os from "os";
 import path from "path";
 import {
@@ -122,9 +121,14 @@ export function getEnvParams() {
   const rawChain = process.env.NETWORK;
   return {
     chain: typeof rawChain === "string" && CHAINS.includes(rawChain as Chain) ? (rawChain as Chain) : DEFAULT_CHAIN,
-    isScratch: getMode() === "scratch",
   };
 }
+
+export type StakingModulesDeployOptions = {
+  /// @dev `true` = fresh modules (`deploy-csm`), `false` = new implementations over the proxies in state
+  ///      (`deploy-csm-impl`). Not derived from `MODE`: a scratch deploy on an external RPC runs as `forking`.
+  scratch: boolean;
+};
 
 function getRpcUrl() {
   const networkConfig = hardhatNetwork.config;
@@ -309,9 +313,12 @@ export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDe
  * Clones the external community-staking-module repo and deploys the Community Staking Module (CSM)
  * and Curated Module v2 (CMv2), saving their addresses into the deployment state file.
  *
- * Shared between the scratch deploy step and the protocol upgrade step.
+ * Shared between the scratch deploy step and the protocol upgrade step; the caller says which one it is.
  */
-export async function deployStakingModules(state: DeploymentState): Promise<void> {
+export async function deployStakingModules(
+  state: DeploymentState,
+  { scratch: isScratch }: StakingModulesDeployOptions,
+): Promise<void> {
   // A module counts as deployed only once BOTH its proxy address and its deploy artifact are recorded.
   // During an upgrade the proxies are pre-written into the state file before the new implementations are
   // deployed, so the proxy address alone must not suppress the deploy.
@@ -361,7 +368,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
     );
     run("just", ["deps"], tmpDir, process.env);
 
-    const { isScratch, chain } = getEnvParams();
+    const { chain } = getEnvParams();
     const artifactsDir = "./artifacts/local/";
 
     const externalEnv = {
