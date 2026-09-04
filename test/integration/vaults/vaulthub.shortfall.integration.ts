@@ -1,14 +1,13 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { impersonate } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
-import { ensureExactShareRate, reportVaultDataWithProof } from "lib/protocol/helpers";
-import { ether } from "lib/units";
+import { impersonate } from "#lib";
+import { createVaultWithDashboard, getProtocolContext, type ProtocolContext, setupLidoForVaults } from "#lib/protocol";
+import { ensureExactShareRate, reportVaultDataWithProof } from "#lib/protocol/helpers";
+import { ether } from "#lib/units.js";
 
-import { SHARE_RATE_PRECISION, Snapshot } from "test/suite";
+import { ethers, SHARE_RATE_PRECISION, Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub Shortfall", () => {
   let ctx: ProtocolContext;

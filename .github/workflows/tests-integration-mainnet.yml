@@ -9,13 +9,12 @@ jobs:
     timeout-minutes: 120
     env:
       NODE_OPTIONS: --max_old_space_size=10240
-      SKIP_GAS_REPORT: true
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.28.0
+        image: ghcr.io/lidofinance/hardhat-node:3.15.0
         env:
           ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
         ports:
@@ -27,20 +26,8 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      # https://github.com/foundry-rs/foundry-toolchain
-      - name: Install foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Install just
-        run: cargo install just
-
       - name: Run integration tests
-        run: yarn test:integration:upgrade
+        run: yarn test:integration
         env:
           NETWORK: "mainnet"
           RUN_NETWORK: "local"
-          # Target the DG proposal explicitly: the Aragon vote already executed on
-          # mainnet, so its non-DG items must be skipped on the fork. Works both before
-          # the proposal is enacted (DG items are mock-executed) and after (already
-          # enacted -> skipped). See scripts/upgrade/steps/0500-mock-upgrade.ts.
-          PROPOSAL_ID: "12"

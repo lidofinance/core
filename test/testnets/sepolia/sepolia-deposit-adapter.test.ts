@@ -1,14 +1,13 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ISepoliaDepositContract, SepoliaDepositAdapter } from "typechain-types";
+import type { ISepoliaDepositContract, SepoliaDepositAdapter } from "typechain-types/index.js";
 
-import { ether, findEvents } from "lib";
+import { ether, findEvents } from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 // To run tests on the Sepolia network, you will need node with sepolia fork running.
 // For example: anvil --port 8545 --fork-url https://sepolia.infura.io/v3/<token>

@@ -1,23 +1,23 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ZeroAddress } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  ConsolidationGateway,
-  DepositSecurityModule__MockForConsolidationGateway,
-  Lido__MockForConsolidationGateway,
-  WithdrawalVault__MockForConsolidationGateway,
-} from "typechain-types";
+  type ConsolidationGateway,
+  type DepositSecurityModule__MockForConsolidationGateway,
+  type Lido__MockForConsolidationGateway,
+  type WithdrawalVault__MockForConsolidationGateway,
+} from "typechain-types/index.js";
 
-import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTree } from "lib";
+import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTree } from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
-import { PUBKEYS } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers.js";
 
-const ZERO_ADDRESS = ethers.ZeroAddress;
+const ZERO_ADDRESS = ZeroAddress;
 
 // Helper to create a dummy witness (no real CL proof) for tests that don't need proof verification
 const dummyWitness = (pubkey: string) => ({

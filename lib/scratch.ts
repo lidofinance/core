@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { log } from "./log";
-import { toBool } from "./string";
+import { log } from "./log.js";
+import { toBool } from "./string.js";
 
 class StepsFileNotFoundError extends Error {
   constructor(filePath: string) {
@@ -41,6 +41,8 @@ async function applySteps(steps: string[]) {
     return; // All steps have been deployed
   }
 
+  const { ethers } = await hre.network.getOrCreate();
+
   for (const step of steps) {
     const migrationFile = resolveMigrationFile(step);
 
@@ -51,13 +53,14 @@ async function applySteps(steps: string[]) {
   }
 }
 
-export async function deployUpgrade(networkName: string, stepsFile: string): Promise<void> {
+export async function deployUpgrade(stepsFile: string): Promise<void> {
   try {
     const steps = loadSteps(stepsFile);
     await applySteps(steps);
   } catch (error) {
     if (error instanceof StepsFileNotFoundError) {
-      log.warning(`Upgrade steps not found in ${stepsFile}, assuming the protocol is already deployed`);
+      log.error("Upgrade failed:", error.message);
+      throw error;
     } else {
       log.error("Upgrade failed:", (error as Error).message);
     }

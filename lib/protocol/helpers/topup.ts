@@ -1,15 +1,14 @@
-import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { ethers, ZeroAddress } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { certainAddress, ether, impersonate, log } from "lib";
-import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "lib/pdg";
-import { prepareLocalMerkleTree } from "lib/top-ups";
+import { certainAddress, ether, impersonate, log } from "#lib";
+import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "#lib/pdg.js";
+import { prepareLocalMerkleTree } from "#lib/top-ups.js";
 
-import { ProtocolContext } from "../types";
+import { type ProtocolContext } from "../types.js";
 
-import { ensureSubmitFitsStakeLimit, setModuleStakeShareLimit } from "./staking";
+import { ensureSubmitFitsStakeLimit, setModuleStakeShareLimit } from "./staking.js";
 
 /**
  * Helpers for driving the real top-up path in integration tests:

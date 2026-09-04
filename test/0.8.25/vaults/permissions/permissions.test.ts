@@ -1,28 +1,33 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 import { before } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   DepositContract__MockForStakingVault,
   LidoLocator,
   OperatorGrid__MockForPermissions,
   Permissions__Harness,
-  Permissions__Harness__factory,
   PredepositGuarantee__MockPermissions,
   StakingVault,
-  StakingVault__factory,
   UpgradeableBeacon,
   VaultFactory__MockPermissions,
   VaultHub__MockPermissions,
-} from "typechain-types";
+} from "typechain-types/index.js";
+import { Permissions__Harness__factory, StakingVault__factory } from "typechain-types/index.js";
 
-import { certainAddress, days, deployEIP7002WithdrawalRequestContract, ether, findEvents, getRandomSigners } from "lib";
+import {
+  certainAddress,
+  days,
+  deployEIP7002WithdrawalRequestContract,
+  ether,
+  findEvents,
+  getRandomSigners,
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 type PermissionsConfigStruct = {
   defaultAdmin: HardhatEthersSigner;

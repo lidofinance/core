@@ -1,10 +1,9 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { LidoLocator, StakingRouter } from "typechain-types";
+import { type LidoLocator, type StakingRouter } from "typechain-types/index.js";
 
 import {
   certainAddress,
@@ -13,11 +12,12 @@ import {
   randomString,
   randomWCType1,
   WithdrawalCredentialsType,
-} from "lib";
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers } from "#test/suite";
 
-import { deployStakingRouter } from "../../deploy/stakingRouter";
+import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 
 const UINT64_MAX = 2n ** 64n - 1n;
 

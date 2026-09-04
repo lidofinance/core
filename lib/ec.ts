@@ -1,6 +1,6 @@
 import {
   bufferToHex,
-  ECDSASignature,
+  type ECDSASignature,
   ecrecover,
   ecsign,
   pubToAddress,
@@ -8,7 +8,7 @@ import {
   toChecksumAddress,
 } from "ethereumjs-util";
 
-import { de0x } from "./string";
+import { de0x } from "./string.js";
 
 export function sign(message: string, privateKey: string) {
   return ecsign(Buffer.from(de0x(message), "hex"), Buffer.from(de0x(privateKey), "hex"));
@@ -25,6 +25,6 @@ export function toEip2098({ v, r, s }: ECDSASignature) {
   if (vs[0] >> 7 === 1) {
     throw new Error(`invalid signature 's' value`);
   }
-  vs[0] |= v % 27 << 7; // set the first bit of vs to the v parity bit
+  vs[0] |= (v % 27) << 7; // set the first bit of vs to the v parity bit
   return { r, vs: bufferToHex(vs) };
 }

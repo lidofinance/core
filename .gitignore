@@ -19,10 +19,6 @@ typechain-types/
 cache/
 artifacts/
 
-# foundry artifacts
-foundry/cache/
-foundry/out/
-
 # Extracted ABI files
 lib/abi/*.json
 
@@ -33,10 +29,10 @@ lib/abi/*.json
 accounts.json
 deployed-local.json
 deployed-local-devnet.json
-deployed-hardhat.json
+deployed-default.json
 deployed-*-upgrade.json
 **/upgrade-params-local.toml
-**/upgrade-params-hardhat.toml
+**/upgrade-params-default.toml
 **/upgrade-params-*-upgrade.toml
 
 # MacOS

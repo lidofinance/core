@@ -1,11 +1,12 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { certainAddress, ether, impersonate, log } from "#lib";
+
 import {
   ensureEIP4788BeaconBlockRootContractPresent,
   ensureEIP7002WithdrawalRequestContractPresent,
   ensureEIP7251MaxEffectiveBalanceRequestContractPresent,
-} from "lib/eips";
+} from "../eips/index.js";
 
 import {
   ensureDsmGuardians,
@@ -17,8 +18,8 @@ import {
   unpauseStaking,
   unpauseWithdrawalQueue,
   upDefaultTierShareLimit,
-} from "./helpers";
-import { ProtocolContext } from "./types";
+} from "./helpers/index.js";
+import type { ProtocolContext } from "./types.js";
 
 let alreadyProvisioned = false;
 

@@ -1,43 +1,37 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   EIP7002WithdrawalRequest__Mock,
   EIP7251ConsolidationRequest__Mock,
   ERC20__Harness,
   ERC721__Harness,
   Lido__MockForWithdrawalVault,
   WithdrawalVault__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import {
-  EIP7002_ADDRESS,
-  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
-  EIP7251_ADDRESS,
-  EIP7251_MIN_CONSOLIDATION_FEE,
-  MAX_UINT256,
-  proxify,
-} from "lib";
+import { EIP7251_ADDRESS, EIP7251_MIN_CONSOLIDATION_FEE } from "#lib";
+import { MAX_UINT256 } from "#lib/constants.js";
+import { EIP7002_ADDRESS, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "#lib/eips/eip7002.js";
+import { proxify } from "#lib/proxy.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 import {
   deployEIP7002WithdrawalRequestContractMock,
   encodeEIP7002Payload,
   findEIP7002MockEvents,
   testEIP7002Mock,
-} from "./eip7002Mock";
+} from "./eip7002Mock.js";
 import {
   deployEIP7251ConsolidationRequestContractMock,
   encodeEIP7251Payload,
   findEIP7251MockEvents,
   testEIP7251Mock,
-} from "./eip7251Mock";
-import { generateConsolidationRequestPayload, generateWithdrawalRequestPayload } from "./utils";
+} from "./eip7251Mock.js";
+import { generateConsolidationRequestPayload, generateWithdrawalRequestPayload } from "./utils.js";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
@@ -51,6 +45,8 @@ describe("WithdrawalVault.sol", () => {
 
   let originalState: string;
 
+  let suiteSnapshot: string;
+
   let withdrawalsPredeployed: EIP7002WithdrawalRequest__Mock;
   let consolidationPredeployed: EIP7251ConsolidationRequest__Mock;
   let lido: Lido__MockForWithdrawalVault;
@@ -61,6 +57,8 @@ describe("WithdrawalVault.sol", () => {
   let vaultAddress: string;
 
   before(async () => {
+    suiteSnapshot = await Snapshot.take();
+
     [owner, user, treasury] = await ethers.getSigners();
     // TODO
     [owner, treasury, triggerableWithdrawalsGateway, consolidationGateway, stranger] = await ethers.getSigners();
@@ -97,6 +95,8 @@ describe("WithdrawalVault.sol", () => {
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
+
+  after(async () => await Snapshot.restore(suiteSnapshot));
 
   context("Constructor", () => {
     it("Reverts if the Lido address is zero", async () => {
@@ -259,7 +259,7 @@ describe("WithdrawalVault.sol", () => {
     });
 
     it("Withdraws the requested amount", async () => {
-      await setBalance(vaultAddress, 10);
+      await networkHelpers.setBalance(vaultAddress, 10);
 
       await expect(lido.mock_withdrawFromVault(vaultAddress, 1)).to.emit(lido, "WithdrawalsReceived").withArgs(1);
     });
@@ -309,7 +309,7 @@ describe("WithdrawalVault.sol", () => {
     });
 
     it("Reverts if the token is not a contract", async () => {
-      await expect(vault.recoverERC721(ZeroAddress, 0)).to.be.reverted;
+      await expect(vault.recoverERC721(ZeroAddress, 0)).to.revert(ethers);
     });
 
     it("Transfers the requested token id", async () => {

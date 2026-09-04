@@ -1,21 +1,20 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, OperatorGrid, VaultHub } from "typechain-types";
+import type { Dashboard, OperatorGrid, VaultHub } from "typechain-types/index.js";
 
-import { days, ether, impersonate } from "lib";
+import { days, ether, impersonate } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   setupLidoForVaults,
   testMethod,
-} from "lib/protocol";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: OperatorGrid Roles and Access Control", () => {
   let ctx: ProtocolContext;

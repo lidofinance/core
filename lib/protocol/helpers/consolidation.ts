@@ -1,14 +1,13 @@
-import { BigNumberish } from "ethers";
-import { ethers } from "hardhat";
+import { type BigNumberish, ethers } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus } from "typechain-types";
+import { type ConsolidationBus } from "typechain-types/index.js";
 
-import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
-import { addressToWC, LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg";
+import { advanceChainTime, getCurrentBlockTimestamp } from "#lib";
+import { addressToWC, type LocalMerkleTree, prepareLocalMerkleTree } from "#lib/pdg.js";
 
-import { ProtocolContext } from "../types";
+import { type ProtocolContext } from "../types.js";
 
 const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
 
@@ -66,10 +65,10 @@ export const prepareConsolidationTargetWitnesses = async (
     withdrawableEpoch: FAR_FUTURE_EPOCH,
   });
 
-  const buildWitnesses = async (entries: { pubkey: string; validatorIndex: number }[]) => {
+  const buildWitnesses = async (witnessEntries: { pubkey: string; validatorIndex: number }[]) => {
     const { childBlockTimestamp, beaconBlockHeader } = await merkleTree.commitChangesToBeaconRoot(slot);
     return Promise.all(
-      entries.map(async ({ pubkey, validatorIndex }) => ({
+      witnessEntries.map(async ({ pubkey, validatorIndex }) => ({
         proof: await merkleTree.buildProof(validatorIndex, beaconBlockHeader),
         pubkey,
         validatorIndex,

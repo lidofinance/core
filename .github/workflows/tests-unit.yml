@@ -1,6 +1,6 @@
 name: Unit Tests
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
   test_hardhat_unit:
@@ -16,8 +16,8 @@ jobs:
       - name: Run unit tests
         run: NODE_OPTIONS="--max-old-space-size=10240" yarn test
 
-  test_foundry_fuzzing:
-    name: Foundry / Fuzzing & Invariants
+  test_solidity_fuzzing:
+    name: Solidity / Fuzzing & Invariants / Normal
     if: github.ref_name != 'develop' && github.ref_name != 'master'
     runs-on: ubuntu-latest
 
@@ -27,23 +27,35 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      - name: Install foundry
-        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
-        # Use a specific version of Foundry in case nightly is broken
-        # https://github.com/foundry-rs/foundry/releases
-        # with:
-        #   version: nightly-54d8510c0f2b0f791f4c5ef99866c6af99b7606a
-
-      - name: Print forge version
-        run: forge --version
-
       - name: Run fuzzing and invariant tests
-        run: forge test
+        run: yarn hardhat test solidity -vvv
 
-  test_foundry_fuzzing_deep:
-    name: Foundry / Fuzzing & Invariants (deep)
-    if: github.ref_name == 'develop' || github.ref_name == 'master'
+  test_solidity_fuzzing_deep_files:
+    name: Solidity / Fuzzing & Invariants / Deep / Collect suites
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == 'develop' || github.ref_name == 'master'
     runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.list.outputs.suites }}
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: List test files with test or invariant functions
+        id: list
+        run: |
+          suites=$(grep -lE 'function (test|invariant)' $(find test -name '*.t.sol') | sort \
+            | jq -Rsc 'split("\n") | map(select(. != "")) | map({file: ., suite: (split("/") | last | sub("\\.t\\.sol$"; ""))})')
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+          echo "$suites"
+
+  test_solidity_fuzzing_deep:
+    name: Solidity / Fuzzing & Invariants / Deep / ${{ matrix.suite }}
+    needs: test_solidity_fuzzing_deep_files
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.test_solidity_fuzzing_deep_files.outputs.suites) }}
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -51,11 +63,10 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      - name: Install foundry
-        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
-
-      - name: Print forge version
-        run: forge --version
+      # Build everything first: with a file argument `test solidity` compiles only that
+      # file's imports, and suites deploying contracts via vm.getCode miss their artifacts.
+      - name: Build all contracts and tests
+        run: yarn hardhat build
 
       - name: Run fuzzing and invariant tests (deep profile, 10k runs)
-        run: FOUNDRY_PROFILE=deep forge test
+        run: FUZZ_PROFILE=deep yarn hardhat test solidity --no-compile ${{ matrix.file }}

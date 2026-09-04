@@ -7,7 +7,6 @@ import { Assertion, util } from "chai";
 const STETH_ROUNDING_MARGIN = 5n;
 
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   export namespace Chai {
     interface Assertion {
       /**

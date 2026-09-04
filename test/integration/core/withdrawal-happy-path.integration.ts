@@ -1,13 +1,16 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, findEvents, findEventsWithInterfaces } from "lib";
-import { finalizeWQViaElVault, getProtocolContext, ProtocolContext, reportWithoutClActivation } from "lib/protocol";
+import { ether, findEvents, findEventsWithInterfaces } from "#lib";
+import {
+  finalizeWQViaElVault,
+  getProtocolContext,
+  type ProtocolContext,
+  reportWithoutClActivation,
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("Integration: Withdrawal happy path", () => {
   let ctx: ProtocolContext;
@@ -21,7 +24,7 @@ describe("Integration: Withdrawal happy path", () => {
     snapshot = await Snapshot.take();
 
     [, holder] = await ethers.getSigners();
-    await setBalance(holder.address, ether("1000000"));
+    await networkHelpers.setBalance(holder.address, ether("1000000"));
 
     await finalizeWQViaElVault(ctx);
   });

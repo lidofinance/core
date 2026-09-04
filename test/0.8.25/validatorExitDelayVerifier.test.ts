@@ -1,25 +1,28 @@
 import { expect } from "chai";
-import { ContractTransactionResponse } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionResponse } from "ethers";
 
-import { StakingRouter_Mock, ValidatorExitDelayVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
-import { LidoLocator } from "typechain-types";
-import { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0.8.25/contracts/ValidatorExitDelayVerifier__Harness";
+import type {
+  LidoLocator,
+  StakingRouter_Mock,
+  ValidatorExitDelayVerifier,
+  ValidatorsExitBusOracle_Mock,
+} from "typechain-types/index.js";
+import type { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0.8.25/contracts/ValidatorExitDelayVerifier__Harness.js";
 
-import { updateBeaconBlockRoot } from "lib";
+import { updateBeaconBlockRoot } from "#lib";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 import {
   encodeExitRequestsDataListWithFormat,
-  ExitRequest,
+  type ExitRequest,
   findStakingRouterMockEvents,
   toHistoricalHeaderWitness,
   toProvableBeaconBlockHeader,
   toValidatorWitness,
-} from "./validatorExitDelayVerifierHelpers";
-import { ACTIVE_VALIDATOR_PROOF } from "./validatorState";
+} from "./validatorExitDelayVerifierHelpers.js";
+import { ACTIVE_VALIDATOR_PROOF } from "./validatorState.js";
 
 const EMPTY_REPORT = { data: "0x", dataFormat: 1n };
 
@@ -633,7 +636,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [badWitness],
           encodedExitRequests,
         ),
-      ).to.be.reverted;
+      ).to.revert(ethers);
 
       await expect(
         validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
@@ -642,7 +645,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [badWitness],
           encodedExitRequests,
         ),
-      ).to.be.reverted;
+      ).to.revert(ethers);
     });
 
     it("reverts with 'RequestsNotDelivered' if exit request index is not in delivery history", async () => {
@@ -699,7 +702,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
           EMPTY_REPORT,
         ),
-      ).to.be.reverted;
+      ).to.revert(ethers);
     });
 
     it("reverts if the validatorProof in the witness is corrupted", async () => {
@@ -740,7 +743,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [badWitness],
           encodedExitRequests,
         ),
-      ).to.be.reverted;
+      ).to.revert(ethers);
     });
   });
 });

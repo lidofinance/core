@@ -1,10 +1,9 @@
 import { expect } from "chai";
-import { Signer, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer, ZeroAddress } from "ethers";
 
-import { Initializable__Mock, OssifiableProxy } from "typechain-types";
+import type { Initializable__Mock, OssifiableProxy } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("OssifiableProxy.sol", () => {
   let admin: Signer;

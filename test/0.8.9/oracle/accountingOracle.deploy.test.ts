@@ -1,26 +1,26 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   Accounting__MockForAccountingOracle,
   AccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { AO_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
+import { AO_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "#lib";
 
 import {
   deployAccountingOracleSetup,
   deployAndConfigureAccountingOracle,
   initAccountingOracle,
   ORACLE_LAST_COMPLETED_EPOCH,
-} from "test/deploy";
+} from "#test/deploy";
+import { ethers } from "#test/suite";
 
 describe("AccountingOracle.sol:deploy", () => {
   context("Deployment and initial configuration", () => {

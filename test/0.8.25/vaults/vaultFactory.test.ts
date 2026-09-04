@@ -1,10 +1,9 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   Dashboard,
   DepositContract__MockForBeaconChainDepositor,
   LazyOracle__MockForNodeOperatorFee,
@@ -18,14 +17,14 @@ import {
   VaultFactory,
   VaultHub,
   WstETH__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { days, ether, GENESIS_FORK_VERSION, randomAddress } from "lib";
-import { createVaultProxy } from "lib/protocol/helpers";
-import { createVaultProxyWithoutConnectingToVaultHub } from "lib/protocol/helpers/vaults";
+import { days, ether, GENESIS_FORK_VERSION, randomAddress } from "#lib";
+import { createVaultProxy } from "#lib/protocol/helpers";
+import { createVaultProxyWithoutConnectingToVaultHub } from "#lib/protocol/helpers/vaults.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers, Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;

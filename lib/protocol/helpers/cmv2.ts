@@ -1,15 +1,15 @@
 import { expect } from "chai";
-import { Contract } from "ethers";
-import { ethers } from "hardhat";
+import { AbiCoder, concat, Contract, formatEther, keccak256, toBeHex, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { certainAddress, ether, impersonate, log } from "#lib";
 
-import { ProtocolContext } from "../types";
+import { type ProtocolContext } from "../types.js";
 
-import { depositAndReportValidators } from "./staking";
-import { randomPubkeys, randomSignatures } from "./staking-module";
+import { depositAndReportValidators } from "./staking.js";
+import { randomPubkeys, randomSignatures } from "./staking-module.js";
 
 /**
  * Helpers for preparing real CMv2 (curated-onchain-v2) node operators in integration tests.
@@ -116,12 +116,14 @@ export const getCMv2ModuleId = (ctx: ProtocolContext): bigint => {
   return cmv2.id;
 };
 
-const getCMv2Module = (ctx: ProtocolContext) => {
+const getCMv2Module = async (ctx: ProtocolContext) => {
+  const { ethers } = await hre.network.getOrCreate();
+
   const cmv2 = ctx.modules.cmv2;
   if (!cmv2) {
     throw new Error("CMv2 (curated-onchain-v2) module is not registered in StakingRouter");
   }
-  return new ethers.Contract(cmv2.stakingModuleAddress, CMV2_MODULE_ABI, ethers.provider);
+  return new Contract(cmv2.stakingModuleAddress, CMV2_MODULE_ABI, ethers.provider);
 };
 
 /**
@@ -129,14 +131,16 @@ const getCMv2Module = (ctx: ProtocolContext) => {
  * that is a MerkleGate bound back to the module.
  */
 const findCuratedGate = async (ctx: ProtocolContext) => {
-  const module = getCMv2Module(ctx);
+  const { ethers } = await hre.network.getOrCreate();
+
+  const module = await getCMv2Module(ctx);
   const moduleAddress = await module.getAddress();
   const role = await module.CREATE_NODE_OPERATOR_ROLE();
   const holdersCount = await module.getRoleMemberCount(role);
 
   for (let i = 0n; i < holdersCount; i++) {
     const holder = await module.getRoleMember(role, i);
-    const gate = new ethers.Contract(holder, CURATED_GATE_ABI, ethers.provider);
+    const gate = new Contract(holder, CURATED_GATE_ABI, ethers.provider);
     try {
       const [gateModule] = await Promise.all([gate.MODULE(), gate.SET_TREE_ROLE(), gate.curveId()]);
       if (gateModule.toLowerCase() === moduleAddress.toLowerCase()) {
@@ -151,12 +155,11 @@ const findCuratedGate = async (ctx: ProtocolContext) => {
 };
 
 // MerkleGate.hashLeaf: keccak256(bytes.concat(keccak256(abi.encode(member))))
-const hashGateLeaf = (member: string) =>
-  ethers.keccak256(ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["address"], [member])));
+const hashGateLeaf = (member: string) => keccak256(keccak256(AbiCoder.defaultAbiCoder().encode(["address"], [member])));
 
 // OpenZeppelin MerkleProof commutative pair hash
 const hashLeafPair = (a: string, b: string) =>
-  BigInt(a) < BigInt(b) ? ethers.keccak256(ethers.concat([a, b])) : ethers.keccak256(ethers.concat([b, a]));
+  BigInt(a) < BigInt(b) ? keccak256(concat([a, b])) : keccak256(concat([b, a]));
 
 let memberSalt = 0;
 
@@ -170,9 +173,11 @@ export const cmv2CreateOperatorWithKeys = async (
   ctx: ProtocolContext,
   params: { name: string; keysCount: bigint },
 ): Promise<CMv2OperatorKeys> => {
+  const { ethers } = await hre.network.getOrCreate();
+
   const { name, keysCount } = params;
   const moduleId = getCMv2ModuleId(ctx);
-  const module = getCMv2Module(ctx);
+  const module = await getCMv2Module(ctx);
   const gate = await findCuratedGate(ctx);
 
   // Fresh member per operator: the gate allows only one createNodeOperator per address
@@ -198,18 +203,14 @@ export const cmv2CreateOperatorWithKeys = async (
   await connectSigner(gate, gateAdmin).setTreeParams(hashLeafPair(memberLeaf, extraLeaf), `test-cid-${name}`);
 
   const operatorId = await module.getNodeOperatorsCount();
-  await connectSigner(gate, member).createNodeOperator(
-    name,
-    "integration test operator",
-    ethers.ZeroAddress,
-    member.address,
-    [extraLeaf],
-  );
+  await connectSigner(gate, member).createNodeOperator(name, "integration test operator", ZeroAddress, member.address, [
+    extraLeaf,
+  ]);
   expect(await module.getNodeOperatorsCount()).to.equal(operatorId + 1n);
 
   // MetaRegistry: the operator must belong to a group and its bond curve must have weight,
   // otherwise the deposit allocator assigns it zero allocation weight
-  const metaRegistry = new ethers.Contract(await module.META_REGISTRY(), META_REGISTRY_ABI, ethers.provider);
+  const metaRegistry = new Contract(await module.META_REGISTRY(), META_REGISTRY_ABI, ethers.provider);
   const registryAdmin = await impersonate(
     await metaRegistry.getRoleMember(await metaRegistry.DEFAULT_ADMIN_ROLE(), 0),
     ether("100"),
@@ -240,11 +241,7 @@ export const cmv2CreateOperatorWithKeys = async (
 
   // The per-operator keys limit is a bond-curve parameter; raise it when the requested
   // key count does not fit
-  const parametersRegistry = new ethers.Contract(
-    await module.PARAMETERS_REGISTRY(),
-    PARAMETERS_REGISTRY_ABI,
-    ethers.provider,
-  );
+  const parametersRegistry = new Contract(await module.PARAMETERS_REGISTRY(), PARAMETERS_REGISTRY_ABI, ethers.provider);
   if ((await parametersRegistry.getKeysLimit(curveId)) < keysCount) {
     const parametersAdmin = await impersonate(
       await parametersRegistry.getRoleMember(await parametersRegistry.DEFAULT_ADMIN_ROLE(), 0),
@@ -254,9 +251,9 @@ export const cmv2CreateOperatorWithKeys = async (
   }
 
   // Pay the bond and add the keys
-  const accounting = new ethers.Contract(await module.ACCOUNTING(), CMV2_ACCOUNTING_ABI, ethers.provider);
+  const accounting = new Contract(await module.ACCOUNTING(), CMV2_ACCOUNTING_ABI, ethers.provider);
   const bond = await accounting.getBondAmountByKeysCount(keysCount, curveId);
-  await ethers.provider.send("hardhat_setBalance", [member.address, ethers.toBeHex(bond + ether("10"))]);
+  await ethers.provider.send("hardhat_setBalance", [member.address, toBeHex(bond + ether("10"))]);
 
   await connectSigner(module, member).addValidatorKeysETH(
     member.address,
@@ -282,7 +279,7 @@ export const cmv2CreateOperatorWithKeys = async (
     "Module ID": moduleId,
     "Operator ID": operatorId,
     "Keys added": keysCount,
-    "Bond paid": ethers.formatEther(bond),
+    "Bond paid": formatEther(bond),
   });
 
   return { moduleId, operatorId, keyIndices, pubkeys };
@@ -303,8 +300,10 @@ export const cmv2CreateOperatorWithKeys = async (
  * Use this only as explicit test setup.
  */
 export const cmv2NormalizeTopUpAllocationBaseline = async (ctx: ProtocolContext, keepOperatorId: bigint) => {
-  const module = getCMv2Module(ctx);
-  const metaRegistry = new ethers.Contract(await module.META_REGISTRY(), META_REGISTRY_ABI, ethers.provider);
+  const { ethers } = await hre.network.getOrCreate();
+
+  const module = await getCMv2Module(ctx);
+  const metaRegistry = new Contract(await module.META_REGISTRY(), META_REGISTRY_ABI, ethers.provider);
 
   const registryAdmin = await impersonate(
     await metaRegistry.getRoleMember(await metaRegistry.DEFAULT_ADMIN_ROLE(), 0),
@@ -371,7 +370,7 @@ export const cmv2NormalizeTopUpAllocationBaseline = async (ctx: ProtocolContext,
  * the snapshot is already fresh is a cheap no-op.
  */
 export const cmv2RefreshDepositInfo = async (ctx: ProtocolContext) => {
-  const module = getCMv2Module(ctx);
+  const module = await getCMv2Module(ctx);
   const caller = await impersonate(certainAddress("cmv2:deposit-info:refresher"), ether("10"));
   await connectSigner(module, caller).batchDepositInfoUpdate(await module.getNodeOperatorsCount());
 };
@@ -384,7 +383,7 @@ export const getCMv2SigningKeys = async (
   operatorId: bigint,
   keyIndices: bigint[],
 ): Promise<string[]> => {
-  const module = getCMv2Module(ctx);
+  const module = await getCMv2Module(ctx);
   return Promise.all(keyIndices.map((keyIndex) => module.getSigningKeys(operatorId, keyIndex, 1)));
 };
 
@@ -404,7 +403,7 @@ export const cmv2EnsureDepositedOperatorKeys = async (
   opts: { excludeOperatorIds?: bigint[]; name?: string; forceCreate?: boolean } = {},
 ): Promise<CMv2OperatorKeys> => {
   const moduleId = getCMv2ModuleId(ctx);
-  const module = getCMv2Module(ctx);
+  const module = await getCMv2Module(ctx);
   const excluded = new Set((opts.excludeOperatorIds ?? []).map(String));
 
   // forceCreate skips the reuse scan: on populated forks an existing operator is

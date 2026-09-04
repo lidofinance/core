@@ -1,15 +1,15 @@
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { DAOFactory, ENS } from "typechain-types";
+import type { DAOFactory, ENS } from "typechain-types/index.js";
 
-import { loadContract, LoadedContract } from "lib/contract";
-import { deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
-import { assignENSName } from "lib/ens";
-import { findEvents } from "lib/event";
-import { streccak } from "lib/keccak";
-import { cy, log, mg, yl } from "lib/log";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { loadContract, type LoadedContract } from "#lib/contract.js";
+import { deployImplementation, deployWithoutProxy, makeTx } from "#lib/deploy.js";
+import { assignENSName } from "#lib/ens.js";
+import { findEvents } from "#lib/event.js";
+import { streccak } from "#lib/keccak.js";
+import { cy, log, mg, yl } from "#lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "#lib/state-file.js";
 
 async function deployAPM(
   owner: string,
@@ -43,6 +43,7 @@ async function deployAPM(
 }
 
 async function deployAragonID(owner: string, ens: LoadedContract<ENS>) {
+  const { ethers } = await hre.network.getOrCreate();
   // Get public resolver
   const publicNode = ethers.namehash("resolver.eth");
   const publicResolverAddress = await ens.resolver(publicNode);
@@ -65,6 +66,7 @@ async function deployAragonID(owner: string, ens: LoadedContract<ENS>) {
 }
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
   let state = readNetworkState({ deployer });
 

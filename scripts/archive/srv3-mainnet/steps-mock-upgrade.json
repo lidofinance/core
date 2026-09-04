@@ -1,0 +1,10 @@
+{
+  "steps": [
+    "upgrade/steps/0000-check-env",
+    "archive/srv3-mainnet/steps/0100-deploy-base-contracts",
+    "archive/srv3-mainnet/steps/0135-deploy-staking-modules",
+    "archive/srv3-mainnet/steps/0200-deploy-upgrade-template",
+    "archive/srv3-mainnet/steps/0300-deploy-upgrade-vote-script",
+    "archive/srv3-mainnet/steps/0500-mock-upgrade"
+  ]
+}

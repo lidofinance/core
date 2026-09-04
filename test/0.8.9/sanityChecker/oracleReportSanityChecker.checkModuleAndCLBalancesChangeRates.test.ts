@@ -1,24 +1,30 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForSanityChecker,
-  Burner__MockForSanityChecker,
-  LidoLocator__MockForSanityChecker,
-  OracleReportSanityCheckerWrapper,
-  StakingModule__MockForStakingRouter,
-  StakingRouter__Harness,
-  StakingRouter__MockForAccountingOracle,
-  WithdrawalQueue__MockForSanityChecker,
-} from "typechain-types";
+  type Accounting__MockForSanityChecker,
+  type AccountingOracle__MockForSanityChecker,
+  type Burner__MockForSanityChecker,
+  type LidoLocator__MockForSanityChecker,
+  type OracleReportSanityCheckerWrapper,
+  type StakingModule__MockForStakingRouter,
+  type StakingRouter__Harness,
+  type StakingRouter__MockForAccountingOracle,
+  type WithdrawalQueue__MockForSanityChecker,
+} from "typechain-types/index.js";
 
-import { ether, impersonate, MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
+import {
+  ether,
+  impersonate,
+  MAX_TOP_UP_PER_BLOCK_GWEI,
+  ONE_GWEI,
+  randomWCType1,
+  WithdrawalCredentialsType,
+} from "#lib";
 
-import { deployStakingRouter } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployStakingRouter } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
 const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
@@ -303,7 +309,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("passes for empty module arrays and zero totals", async () => {
-    await expect(checker.checkModuleAndCLBalancesChangeRates([], [], 0n, 0n, 0n, 0n, 0n, ONE_DAY)).not.to.be.reverted;
+    await expect(checker.checkModuleAndCLBalancesChangeRates([], [], 0n, 0n, 0n, 0n, 0n, ONE_DAY)).not.to.be.revert(
+      ethers,
+    );
   });
 
   it("skips module-specific checks for the first report of a newly added module", async () => {
@@ -322,7 +330,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         0n,
         ONE_DAY,
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("skips the module validators balance increase check on the first post-migration report and applies it on the second", async () => {
@@ -355,7 +363,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .connect(admin)
       .reportValidatorBalancesByStakingModule([moduleId], [previousValidatorsBalanceWei / ONE_GWEI]);
 
-    await expect(problematicModuleReport()).not.to.be.reverted;
+    await expect(problematicModuleReport()).not.to.be.revert(ethers);
 
     await expect(
       checkGlobalReport(checkerWithRouter, accountingSigner, {
@@ -364,7 +372,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         postValidatorsWei: previousValidatorsBalanceWei,
         postPendingWei: prePendingBalanceWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await expect(problematicModuleReport())
       .to.be.revertedWithCustomError(checkerWithRouter, "IncorrectTotalCLBalanceIncrease")
@@ -383,7 +391,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         postPendingWei: depositedWei,
         depositsWei: depositedWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
@@ -396,7 +404,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         depositedWei,
         ONE_DAY,
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await stakingRouterHarness.connect(admin).reportValidatorBalancesByStakingModule([moduleId], [0n]);
 
@@ -406,7 +414,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         postValidatorsWei: activatedValidatorsWei,
         postPendingWei: remainingPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
@@ -419,7 +427,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         0n,
         ONE_DAY,
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("supports cold-start onboarding across multiple new modules", async () => {
@@ -441,7 +449,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         postPendingWei: totalInitialPendingWei,
         depositsWei: totalInitialPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
@@ -454,7 +462,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         totalInitialPendingWei,
         ONE_DAY,
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await stakingRouterHarness
       .connect(admin)
@@ -466,7 +474,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         postValidatorsWei: totalActivatedValidatorsWei,
         postPendingWei: totalRemainingPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
@@ -479,7 +487,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         0n,
         ONE_DAY,
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("supports cold-start onboarding with timeElapsed = 0 under allowance and rate-normalization fallbacks", async () => {
@@ -500,7 +508,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         postPendingWei: initialPendingWei,
         depositsWei: initialPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
@@ -513,7 +521,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         initialPendingWei,
         zeroTimeElapsed,
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await stakingRouterHarness.connect(admin).reportValidatorBalancesByStakingModule([moduleId], [0n]);
 
@@ -524,7 +532,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         postValidatorsWei: maxModuleActivationWei,
         postPendingWei: remainingPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
@@ -537,7 +545,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         0n,
         zeroTimeElapsed,
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("reverts with InvalidClBalancesData on array length mismatch", async () => {
@@ -570,7 +578,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         { id: 1n, validatorsBalanceWei: 0n },
         { id: 2n, validatorsBalanceWei: redistributionWei * 2n },
       ]),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("reverts with IncorrectTotalPendingBalance when a module reports more pending than the protocol funded", async () => {
@@ -602,7 +610,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: reportedPendingWei }], {
         preCLPendingBalanceWei: previousPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("allows module-reported pending exactly at external pending balance cap", async () => {
@@ -618,7 +626,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: maxAllowedPendingWei }], {
         preCLPendingBalanceWei: previousPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("reverts when module-reported pending exceeds external pending balance cap", async () => {
@@ -696,7 +704,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       check([{ id: 1n, validatorsBalanceWei: ether("100"), pendingWei: 0n }], {
         preCLPendingBalanceWei: previousPendingWei,
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("reverts with IncorrectTotalCLBalanceIncrease when module increase exceeds the global activation budget", async () => {
@@ -827,7 +835,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
           preCLPendingBalanceWei: previousPendingWei,
         },
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("reverts when reported validators balance growth exceeds consumed pending plus safetyCap by an explicit overflow", async () => {
@@ -883,7 +891,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
           preCLPendingBalanceWei: previousPendingWei,
         },
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("allows validator growth funded by existing pending when total CL is unchanged", async () => {
@@ -893,7 +901,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       check([{ id: 1n, validatorsBalanceWei: ether("105"), pendingWei: 0n }], {
         preCLPendingBalanceWei: ether("100"),
       }),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 
   it("uses timeElapsed in per-day normalization (timeElapsed = 0 path)", async () => {
@@ -938,7 +946,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
           timeElapsed: halfDay,
         },
       ),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     const exceededValidatorsGrowthWei = allowedValidatorsGrowthWei + ether("1");
     await expect(
@@ -975,6 +983,6 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         { id: 1n, validatorsBalanceWei: 0n },
         { id: 2n, validatorsBalanceWei: redistributionWei * 2n },
       ]),
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
   });
 });

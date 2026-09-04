@@ -1,11 +1,8 @@
-import { ethers } from "hardhat";
-
-import { cy, deployWithoutProxy, log, updateObjectInState } from "lib";
-import { readNetworkState, Sk } from "lib/state-file";
+import { cy, deployWithoutProxy, getDeployerState, log, updateObjectInState } from "#lib";
+import { Sk } from "#lib/state-file.js";
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { deployer, state } = await getDeployerState();
 
   // Check if EasyTrackEVMScriptExecutor address is already specified
   if (state[Sk.easyTrackEVMScriptExecutor]?.address) {

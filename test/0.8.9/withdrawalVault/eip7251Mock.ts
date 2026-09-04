@@ -1,14 +1,15 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
-import { ethers } from "hardhat";
+import { ContractTransactionReceipt, ContractTransactionResponse, Interface } from "ethers";
 
-import { EIP7251ConsolidationRequest__Mock } from "typechain-types";
+import { type EIP7251ConsolidationRequest__Mock } from "typechain-types/index.js";
 
-import { EIP7251_ADDRESS, findEventsWithInterfaces } from "lib";
+import { EIP7251_ADDRESS, findEventsWithInterfaces } from "#lib";
+
+import { ethers } from "#test/suite";
 
 const eventName = "ConsolidationRequestAdded__Mock";
 const eip7251MockEventABI = [`event ${eventName}(bytes request, uint256 fee)`];
-const eip7251MockInterface = new ethers.Interface(eip7251MockEventABI);
+const eip7251MockInterface = new Interface(eip7251MockEventABI);
 
 export const deployEIP7251ConsolidationRequestContractMock = async (
   fee: bigint,

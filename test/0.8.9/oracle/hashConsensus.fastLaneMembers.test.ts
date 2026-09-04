@@ -1,26 +1,12 @@
 import { expect } from "chai";
-import { Signer } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer } from "ethers";
 
-import { HashConsensus__Harness } from "typechain-types";
+import type { HashConsensus__Harness } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "lib";
+import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "#lib";
 
-import { deployHashConsensus, DeployHashConsensusParams, HASH_1 } from "test/deploy";
-
-const prepareFrameData = async ({
-  fastLaneMembers,
-  restMembers,
-}: {
-  fastLaneMembers: number[];
-  restMembers: number[];
-}): Promise<{ fastLaneMembers: Signer[]; restMembers: Signer[] }> => {
-  const signers = await ethers.getSigners();
-  return {
-    fastLaneMembers: fastLaneMembers.map((index) => signers[index]),
-    restMembers: restMembers.map((index) => signers[index]),
-  };
-};
+import { deployHashConsensus, type DeployHashConsensusParams, HASH_1 } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 describe("HashConsensus.sol:fastlaneMembers", () => {
   let admin: Signer;
@@ -31,6 +17,20 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
   let member5: Signer;
   let stranger: Signer;
   let consensus: HashConsensus__Harness;
+
+  const prepareFrameData = async ({
+    fastLaneMembers,
+    restMembers,
+  }: {
+    fastLaneMembers: number[];
+    restMembers: number[];
+  }): Promise<{ fastLaneMembers: Signer[]; restMembers: Signer[] }> => {
+    const signers = await ethers.getSigners();
+    return {
+      fastLaneMembers: fastLaneMembers.map((index) => signers[index]),
+      restMembers: restMembers.map((index) => signers[index]),
+    };
+  };
 
   const deploy = async (options?: DeployHashConsensusParams) => {
     [admin, member1, member2, member3, member4, member5, stranger] = await ethers.getSigners();
@@ -43,7 +43,9 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
     expect(await consensus.getTimeInSlots()).to.equal((await consensus.getCurrentFrame()).refSlot + 1n);
   };
 
-  before(() => deploy());
+  before(async () => {
+    await deploy();
+  });
 
   context("State after initialization", () => {
     it("nobody is in the fast lane set", async () => {
@@ -166,8 +168,9 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
           await consensus.advanceTimeBySlots(1);
           for (const member of preparedFrameData.restMembers) {
             expect((await consensus.getConsensusStateForMember(member)).canReport).to.be.true;
-            await expect(consensus.connect(member).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION)).not.to
-              .be.reverted;
+            await expect(
+              consensus.connect(member).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
+            ).not.to.revert(ethers);
           }
 
           const { variants, support } = await consensus.getReportVariants();

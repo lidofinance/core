@@ -8,7 +8,7 @@ import {Test} from "forge-std/Test.sol";
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "contracts/0.8.9/lib/PositiveTokenRebaseLimiter.sol";
 
 contract PositiveTokenRebaseLimiterTest is Test {
-    PositiveTokenRebaseLimiter__Harness public rebaseLimiter;
+    PositiveTokenRebaseLimiter__FuzzHarness public rebaseLimiter;
 
     // general purpose fuzz test constants
     uint256 private constant MAX_PROJECTED_ETH = 200_000_000 * 1 ether;
@@ -21,7 +21,7 @@ contract PositiveTokenRebaseLimiterTest is Test {
     uint256 private constant SHARE_RATE_PRECISION = 1e27;
 
     function setUp() public {
-        rebaseLimiter = new PositiveTokenRebaseLimiter__Harness();
+        rebaseLimiter = new PositiveTokenRebaseLimiter__FuzzHarness();
     }
 
     /**
@@ -303,7 +303,7 @@ contract PositiveTokenRebaseLimiterTest is Test {
     }
 }
 
-contract PositiveTokenRebaseLimiter__Harness {
+contract PositiveTokenRebaseLimiter__FuzzHarness {
     using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;
 
     TokenRebaseLimiterData trlData;

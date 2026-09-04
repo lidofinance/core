@@ -1,8 +1,7 @@
 import { expect } from "chai";
-import { Signer } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer } from "ethers";
 
-import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
+import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
 import {
   BASE_CONSENSUS_VERSION,
@@ -12,7 +11,7 @@ import {
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "lib";
+} from "#lib";
 
 import {
   computeEpochFirstSlot,
@@ -21,8 +20,8 @@ import {
   HASH_1,
   SLOTS_PER_FRAME,
   ZERO_HASH,
-} from "test/deploy";
-import { Snapshot } from "test/suite";
+} from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("HashConsensus.sol:frames", function () {
   const TEST_INITIAL_EPOCH = 3n;

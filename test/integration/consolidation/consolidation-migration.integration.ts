@@ -1,33 +1,37 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
+import {
+  type ConsolidationBus,
+  type ConsolidationGateway,
+  type ConsolidationMigrator,
+  type NodeOperatorsRegistry,
+} from "typechain-types/index.js";
 
-import { certainAddress, findEventsWithInterfaces } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { certainAddress, findEventsWithInterfaces } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
-  CMv2OperatorKeys,
+  type CMv2OperatorKeys,
   cmv2SuiteEnabled,
-  ConsolidationWitnessSet,
+  type ConsolidationWitnessSet,
   decodeConsolidationRequest,
   ensureBatchNotPending,
   norEnsureDepositedOperatorKeys,
-  NorOperatorKeys,
+  type NorOperatorKeys,
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
-} from "lib/protocol/helpers";
-import { LoadedContract } from "lib/protocol/types";
+} from "#lib/protocol/helpers";
+import { type LoadedContract } from "#lib/protocol/types.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const fakeWitnessForTarget = (pubkey: string) => ({
   proof: [],
@@ -80,9 +84,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
   let TARGET_PUBKEY_2: string;
 
   let witnessSet: ConsolidationWitnessSet;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Witness shape is supplied by the proof helper.
   let targetWitness1: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Witness shape is supplied by the proof helper.
   let targetWitness2: any;
 
   let agentSigner: HardhatEthersSigner;
@@ -461,7 +465,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
           .executeConsolidation([{ sourcePubkeys: [SOURCE_PUBKEY_1], targetWitness: targetWitness1 }], {
             value: fee,
           }),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
     });
 
     it("Should allow one source operator to consolidate to multiple targets", async () => {

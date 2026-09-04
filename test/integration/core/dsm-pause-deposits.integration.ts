@@ -1,17 +1,15 @@
 import { expect } from "chai";
 import { ZeroHash } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { mine, time } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { DepositSecurityModule } from "typechain-types";
+import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { DSMPauseMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { setSingleGuardian } from "lib/protocol/helpers/dsm";
+import { DSMPauseMessage, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
+import { setSingleGuardian } from "#lib/protocol/helpers/dsm.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("Integration: DSM pause deposits", () => {
   let ctx: ProtocolContext;
@@ -78,7 +76,7 @@ describe("Integration: DSM pause deposits", () => {
     const guardian = (await dsm.getGuardians())[0];
     const guardianSigner = await impersonate(guardian, ether("1"));
 
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     await pauseDeposits(guardianSigner, BigInt(blockNumber), { r: ZeroHash, vs: ZeroHash }, guardian);
     await ownerUnpauseDeposits();
   });
@@ -92,7 +90,7 @@ describe("Integration: DSM pause deposits", () => {
     await setSingleGuardian(ctx, guardian);
 
     // Generate signature
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const pauseMessage = new DSMPauseMessage(blockNumber);
     const sig = await pauseMessage.sign(guardianPrivateKey);
 
@@ -112,8 +110,8 @@ describe("Integration: DSM pause deposits", () => {
     const ownerSigner = await impersonate(owner, ether("1"));
     await dsm.connect(ownerSigner).setPauseIntentValidityPeriodBlocks(pauseIntentValidityPeriodBlocks);
 
-    const expiredBlockNumber = await time.latestBlock();
-    await mine(Number(pauseIntentValidityPeriodBlocks) + 1);
+    const expiredBlockNumber = await networkHelpers.time.latestBlock();
+    await networkHelpers.mine(Number(pauseIntentValidityPeriodBlocks) + 1);
 
     await expect(
       dsm.connect(guardianSigner).pauseDeposits(expiredBlockNumber, {
@@ -128,14 +126,14 @@ describe("Integration: DSM pause deposits", () => {
 
     // Try with empty signature
     await expect(
-      dsm.connect(stranger).pauseDeposits(await time.latestBlock(), {
+      dsm.connect(stranger).pauseDeposits(await networkHelpers.time.latestBlock(), {
         r: ZeroHash,
         vs: ZeroHash,
       }),
     ).to.be.revertedWith("ECDSA: invalid signature");
 
     // Try with non-guardian signature
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const nonGuardianPrivateKey = "0x" + "1".repeat(64);
     const pauseMessage = new DSMPauseMessage(blockNumber);
     const sig = pauseMessage.sign(nonGuardianPrivateKey);

@@ -1,8 +1,8 @@
 import readline from "node:readline";
 
-import { artifacts, ethers, network } from "hardhat";
+import hre from "hardhat";
 
-import { bl, ConvertibleToString, cy, gr, gy, log, or, rd, toBool, yg, yl } from "lib";
+import { bl, type ConvertibleToString, cy, gr, gy, log, or, rd, toBool, yg, yl } from "#lib";
 
 export async function confirm(question: string): Promise<void> {
   const AUTO_CONFIRM = toBool(process.env.AUTO_CONFIRM);
@@ -25,6 +25,7 @@ export async function confirm(question: string): Promise<void> {
 }
 
 export async function logScriptHeader(title: string, deployer?: string) {
+  const { ethers, networkName } = await hre.network.getOrCreate();
   const { chainId } = await ethers.provider.getNetwork();
 
   log.splitter();
@@ -32,7 +33,7 @@ export async function logScriptHeader(title: string, deployer?: string) {
   log.splitter();
 
   log.info("Network", {
-    "name": yl(network.name),
+    "name": yl(networkName),
     "chain ID": yl(chainId.toString()),
   });
 
@@ -69,7 +70,7 @@ export async function buildArgRecords(
 ) {
   if (args.length === 0) return { [`${method} args`]: args };
 
-  const constructorAbi = (await artifacts.readArtifact(contract)).abi.find(
+  const constructorAbi = (await hre.artifacts.readArtifact(contract)).abi.find(
     (entry) => entry.type === method || (entry.type === "function" && entry.name === method),
   );
   const argNames =

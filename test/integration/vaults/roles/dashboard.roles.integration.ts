@@ -1,28 +1,27 @@
 import { expect } from "chai";
-import { ContractMethodArgs, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractMethodArgs, ZeroAddress } from "ethers";
 import { beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard } from "typechain-types";
+import type { Dashboard } from "typechain-types/index.js";
 
-import { days, ether, MAX_SANE_SETTLED_GROWTH, PDGPolicy, randomValidatorPubkey } from "lib";
+import { days, ether, MAX_SANE_SETTLED_GROWTH, PDGPolicy, randomValidatorPubkey } from "#lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
   getRoleMethods,
-  Methods,
-  ProtocolContext,
+  type Methods,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
   testMethod,
-  VaultRoles,
-} from "lib/protocol";
-import { vaultRoleKeys } from "lib/protocol/helpers/vaults";
+  type VaultRoles,
+} from "#lib/protocol";
+import { vaultRoleKeys } from "#lib/protocol/helpers/vaults.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   let ctx: ProtocolContext;

@@ -1,9 +1,0 @@
-/foundry
-/contracts
-
-.gitignore
-.prettierignore
-
-eslint.config.mjs
-
-package-lock.json

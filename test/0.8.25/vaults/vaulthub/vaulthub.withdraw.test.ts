@@ -1,17 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 import { describe } from "mocha";
 
-import { GWEI_TO_WEI } from "@nomicfoundation/ethereumjs-util";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Lido, StakingVault__MockForVaultHub, VaultHub } from "typechain-types";
+import type { Lido, StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { advanceChainTime, ether } from "lib";
+import { advanceChainTime, ether, ONE_GWEI } from "#lib";
 
-import { deployVaults } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployVaults } from "#test/deploy";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 const CONNECTION_DEPOSIT = ether("1");
 
@@ -71,7 +68,7 @@ describe("VaultHub.sol:withdrawal", () => {
       await connectedVault.connect(user).fund({ value: ether("100") });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("100") });
 
-      await setBalance(await connectedVault.getAddress(), 0);
+      await networkHelpers.setBalance(await connectedVault.getAddress(), 0);
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
       expect(withdrawable).to.equal(0n);
@@ -153,7 +150,7 @@ describe("VaultHub.sol:withdrawal", () => {
       expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("5"));
 
       const balance = ether("5");
-      await setBalance(await connectedVault.getAddress(), balance);
+      await networkHelpers.setBalance(await connectedVault.getAddress(), balance);
       expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
       expect(await vaultHub.locked(connectedVault)).to.equal(ether("4"));
 
@@ -179,7 +176,7 @@ describe("VaultHub.sol:withdrawal", () => {
       expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("4"));
 
       const balance = ether("5");
-      await setBalance(await connectedVault.getAddress(), balance);
+      await networkHelpers.setBalance(await connectedVault.getAddress(), balance);
       expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
       expect(await vaultHub.locked(connectedVault)).to.equal(ether("4"));
 
@@ -246,7 +243,7 @@ describe("VaultHub.sol:withdrawal", () => {
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
       // gift to the vault
-      await setBalance(await connectedVault.getAddress(), totalValue * 10n);
+      await networkHelpers.setBalance(await connectedVault.getAddress(), totalValue * 10n);
 
       expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
       expect(await vaultHub.locked(connectedVault)).to.equal(CONNECTION_DEPOSIT);
@@ -377,7 +374,7 @@ describe("VaultHub.sol:withdrawal", () => {
     it.skip("handles withdrawal with maximum (uint104) vault balance", async () => {
       const maxUint104 = 2n ** 104n - 1n;
 
-      await setBalance(await connectedVault.getAddress(), maxUint104);
+      await networkHelpers.setBalance(await connectedVault.getAddress(), maxUint104);
       await vaultsContext.reportVault({ vault: connectedVault, totalValue: maxUint104 });
 
       expect(await vaultHub.totalValue(connectedVault)).to.equal(maxUint104);
@@ -442,7 +439,7 @@ describe("VaultHub.sol:withdrawal", () => {
       await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, targetShares);
 
       const elBalance = totalValue - clBalance;
-      await setBalance(await connectedVault.getAddress(), elBalance);
+      await networkHelpers.setBalance(await connectedVault.getAddress(), elBalance);
 
       expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
       expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
@@ -534,8 +531,8 @@ describe("VaultHub.sol:withdrawal", () => {
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
       // round down to the nearest GWEI
-      const precisionAmount = withdrawable - (withdrawable % GWEI_TO_WEI);
-      const mod = withdrawable % GWEI_TO_WEI;
+      const precisionAmount = withdrawable - (withdrawable % ONE_GWEI);
+      const mod = withdrawable % ONE_GWEI;
 
       const balanceBefore = await ethers.provider.getBalance(stranger);
       await vaultHub.connect(user).withdraw(connectedVault, stranger, precisionAmount);
@@ -747,7 +744,7 @@ describe("VaultHub.sol:withdrawal", () => {
               .setLiabilitySharesTarget(connectedVault, testCase.liabilitySharesTarget);
           }
 
-          await setBalance(await connectedVault.getAddress(), testCase.balance);
+          await networkHelpers.setBalance(await connectedVault.getAddress(), testCase.balance);
 
           const withdrawable = await vaultHub.withdrawableValue(connectedVault);
           expect(withdrawable).to.equal(testCase.expectedWithdrawable);
@@ -803,8 +800,9 @@ describe("VaultHub.sol:withdrawal", () => {
       const newWithdrawableAfterReport = await vaultHub.withdrawableValue(connectedVault);
       expect(newWithdrawableAfterReport).to.equal(ether("4")); // 9 - 5 locked = 4
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, newWithdrawableAfterReport)).to.not.be
-        .reverted;
+      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, newWithdrawableAfterReport)).to.not.revert(
+        ethers,
+      );
     });
 
     it("handles withdrawal after fee settlement", async () => {
@@ -818,7 +816,7 @@ describe("VaultHub.sol:withdrawal", () => {
       const newWithdrawable = await vaultHub.withdrawableValue(connectedVault);
       expect(newWithdrawable).to.equal(totalValue - cumulativeLidoFees - CONNECTION_DEPOSIT);
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, newWithdrawable)).to.not.be.reverted;
+      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, newWithdrawable)).to.not.revert(ethers);
     });
   });
 });

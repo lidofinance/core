@@ -1,11 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { certainAddress, ether, findEventsWithInterfaces, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-module";
+import { certainAddress, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
+import { randomPubkeys, randomSignatures } from "#lib/protocol/helpers/staking-module.js";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 type NodeOperatorState = {
   active: boolean;

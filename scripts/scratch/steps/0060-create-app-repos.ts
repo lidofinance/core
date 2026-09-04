@@ -1,15 +1,12 @@
-import { ethers } from "hardhat";
-
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { readNetworkState, setValueInState, Sk } from "lib/state-file";
+import { loadContract } from "#lib/contract.js";
+import { getDeployerState, makeTx } from "#lib/deploy.js";
+import { setValueInState, Sk } from "#lib/state-file.js";
 
 const NULL_CONTENT_URI =
   "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { deployer, state } = await getDeployerState();
 
   const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
 

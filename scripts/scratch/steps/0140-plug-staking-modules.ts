@@ -1,15 +1,21 @@
-import { ethers } from "hardhat";
+import { Contract, getAddress, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
+import {
+  type Burner,
+  type ConsolidationMigrator,
+  type StakingRouter,
+  type TriggerableWithdrawalsGateway,
+} from "typechain-types/index.js";
 
-import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "lib";
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { streccak } from "lib/keccak";
-import { readNetworkState, Sk } from "lib/state-file";
+import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "#lib";
+import { loadContract } from "#lib/contract.js";
+import { getDeployerState, makeTx } from "#lib/deploy.js";
+import { streccak } from "#lib/keccak.js";
+import { type DeploymentState, Sk } from "#lib/state-file.js";
 
 const STAKING_MODULE_MANAGE_ROLE = streccak("STAKING_MODULE_MANAGE_ROLE");
-const ZERO_ADDRESS = ethers.ZeroAddress;
+const ZERO_ADDRESS = ZeroAddress;
 
 const EXTERNAL_ACCESS_CONTROL_ABI = [
   "function RESUME_ROLE() view returns (bytes32)",
@@ -85,7 +91,7 @@ type ExternalModuleSetup = {
   pausableContracts: { address: string; label: string }[];
 };
 
-function getExternalArtifact(state: ReturnType<typeof readNetworkState>, stateKey: Sk, moduleLabel: string) {
+function getExternalArtifact(state: DeploymentState, stateKey: Sk, moduleLabel: string) {
   const artifact = state[stateKey]?.deployArtifact as ExternalDeployArtifact | undefined;
   if (!artifact) {
     throw new Error(`${moduleLabel} deploy artifact is missing in state`);
@@ -111,7 +117,7 @@ function optionalArtifactAddress(artifact: ExternalDeployArtifact, field: keyof 
 }
 
 function getExternalModuleSetup(
-  state: ReturnType<typeof readNetworkState>,
+  state: DeploymentState,
   stateKey: Sk,
   moduleLabel: string,
   moduleField: "CSModule" | "CuratedModule",
@@ -148,7 +154,7 @@ function externalContract(
   abi: string[],
   signer: Awaited<ReturnType<typeof impersonate>>,
 ) {
-  const contract = new ethers.Contract(address, abi, signer);
+  const contract = new Contract(address, abi, signer);
   return Object.assign(contract, {
     name,
     address,
@@ -157,6 +163,7 @@ function externalContract(
 }
 
 async function getCurrentEpoch(hashConsensus: ReturnType<typeof externalContract>) {
+  const { ethers } = await hre.network.getOrCreate();
   const latestBlock = await ethers.provider.getBlock("latest");
   if (!latestBlock) throw new Error("Failed to read latest block");
 
@@ -164,11 +171,7 @@ async function getCurrentEpoch(hashConsensus: ReturnType<typeof externalContract
   return (BigInt(latestBlock.timestamp) - BigInt(genesisTime)) / (BigInt(slotsPerEpoch) * BigInt(secondsPerSlot));
 }
 
-async function enableExternalModule(
-  setup: ExternalModuleSetup,
-  state: ReturnType<typeof readNetworkState>,
-  deployer: string,
-) {
+async function enableExternalModule(setup: ExternalModuleSetup, state: DeploymentState, deployer: string) {
   const agent = state[Sk.appAgent].proxy.address;
   const agentSigner = await impersonate(agent, ether("1"));
 
@@ -205,7 +208,7 @@ async function enableExternalModule(
 
   const circuitBreakerAddress = state[Sk.circuitBreaker]?.address;
   if (circuitBreakerAddress) {
-    const circuitBreakerPauser = ethers.getAddress(agent);
+    const circuitBreakerPauser = getAddress(agent);
     const circuitBreaker = externalContract(
       "CircuitBreaker",
       circuitBreakerAddress,
@@ -217,7 +220,7 @@ async function enableExternalModule(
       const contract = externalContract(pausable.label, pausable.address, EXTERNAL_ACCESS_CONTROL_ABI, agentSigner);
       await makeTx(contract, "grantRole", [await contract.PAUSE_ROLE(), circuitBreakerAddress], { from: agent });
 
-      const currentPauser = ethers.getAddress(await circuitBreaker.getPauser(pausable.address));
+      const currentPauser = getAddress(await circuitBreaker.getPauser(pausable.address));
       if (currentPauser !== circuitBreakerPauser) {
         await makeTx(circuitBreaker, "registerPauser", [pausable.address, circuitBreakerPauser], { from: agent });
       }
@@ -226,8 +229,7 @@ async function enableExternalModule(
 }
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { deployer, state } = await getDeployerState();
 
   // Get contract instances
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", state.stakingRouter.proxy.address);

@@ -1,14 +1,13 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, findEventsWithInterfaces } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ether, findEventsWithInterfaces } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import {
   buildTopUpData,
   cmv2EnsureDepositedOperatorKeys,
-  CMv2OperatorKeys,
+  type CMv2OperatorKeys,
   cmv2SuiteEnabled,
   depositEventInterface,
   expectedTopUpLimitWei,
@@ -17,9 +16,9 @@ import {
   prepareTopUpWitnesses,
   topUpEnsureDepositableEther,
   topUpEnsureModuleAllocation,
-} from "lib/protocol/helpers";
+} from "#lib/protocol/helpers";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const GWEI = 10n ** 9n;
 

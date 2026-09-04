@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { AbiCoder, keccak256 } from "ethers";
 
-import {
+import type {
   HashConsensus__Harness,
   ReportProcessor__Mock,
   StakingModule__MockForKeyVerification,
   ValidatorsExitBusOracle,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
   EPOCHS_PER_FRAME,
@@ -15,10 +15,12 @@ import {
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
   VEBO_CONSENSUS_VERSION,
-} from "lib";
+} from "#lib";
 
-import { deployHashConsensus } from "./hashConsensus";
-import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
+import { ethers } from "#test/suite";
+
+import { deployHashConsensus } from "./hashConsensus.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator.js";
 
 export const DATA_FORMAT_LIST = 1;
 export const DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
@@ -177,11 +179,9 @@ export async function deployVEBO(
 // Derive the same 48-byte pubkey as StakingModule__MockForKeyVerification fallback:
 // pubkey = keccak(nodeOpId, keyIndex) || first 16 bytes of keccak(nodeOpId, keyIndex, 1)
 export function makeMockPubkey(nodeOpId: number | bigint, keyIndex: number | bigint): string {
-  const hash1 = ethers.keccak256(
-    ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [nodeOpId, keyIndex]),
-  );
-  const hash2 = ethers.keccak256(
-    ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "uint256"], [nodeOpId, keyIndex, 1]),
+  const hash1 = keccak256(AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [nodeOpId, keyIndex]));
+  const hash2 = keccak256(
+    AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "uint256"], [nodeOpId, keyIndex, 1]),
   );
   return ("0x" + hash1.slice(2) + hash2.slice(2)).slice(0, 2 + 96);
 }

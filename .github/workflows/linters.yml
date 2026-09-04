@@ -16,8 +16,8 @@ jobs:
       - name: Run solhint
         run: yarn lint:sol
 
-  eslint:
-    name: ESLint
+  biome:
+    name: Biome
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +26,7 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      - name: Run eslint
+      - name: Run Biome
         run: yarn lint:ts
 
   typescript:
@@ -40,7 +40,7 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Generate typechain types
-        run: yarn hardhat compile
+        run: yarn hardhat build
 
       - name: Run typescript types check
         run: yarn typecheck

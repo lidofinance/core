@@ -1,17 +1,18 @@
 import { expect } from "chai";
 import { randomBytes } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  StakingModule__MockForStakingRouter,
-  StakingModuleV2__MockForStakingRouter,
-  StakingRouter__Harness,
-} from "typechain-types";
+  type StakingModule__MockForStakingRouter,
+  type StakingModuleV2__MockForStakingRouter,
+  type StakingRouter__Harness,
+} from "typechain-types/index.js";
 
-import { wcTypeMaxEB } from "lib";
-import { ONE_GWEI, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
+import { wcTypeMaxEB } from "#lib";
+import { ONE_GWEI, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "#lib/constants.js";
+
+import { ethers } from "#test/suite";
 
 export const DEFAULT_CONFIG: ModuleConfig = {
   stakeShareLimit: TOTAL_BASIS_POINTS,
@@ -67,15 +68,15 @@ export async function setupModule(
   };
 
   const initializeModule = async (
-    module: StakingModule__MockForStakingRouter | StakingModuleV2__MockForStakingRouter,
+    stakingModule: StakingModule__MockForStakingRouter | StakingModuleV2__MockForStakingRouter,
   ) => {
     await stakingRouter
       .connect(admin)
-      .addStakingModule(randomBytes(8).toString(), await module.getAddress(), stakingModuleConfig);
+      .addStakingModule(randomBytes(8).toString(), await stakingModule.getAddress(), stakingModuleConfig);
 
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
 
-    await module.mock__getStakingModuleSummary(exited, deposited, depositable);
+    await stakingModule.mock__getStakingModuleSummary(exited, deposited, depositable);
     if (validatorsBalanceGwei == 0n && deposited > 0n) {
       validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / ONE_GWEI;
     }

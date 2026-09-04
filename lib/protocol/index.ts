@@ -1,5 +1,5 @@
-export { getProtocolContext, withCSM } from "./context";
-export type { ProtocolContext, ProtocolSigners, ProtocolContracts } from "./types";
+export { getProtocolContext, withCSM } from "./context.js";
+export type { ProtocolContext, ProtocolSigners, ProtocolContracts } from "./types.js";
 
-export * from "./mainnet";
-export * from "./helpers";
+export * from "./mainnet.js";
+export * from "./helpers/index.js";

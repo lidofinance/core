@@ -1,22 +1,22 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { formatEther } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { BigIntMath, certainAddress, impersonate, TOTAL_BASIS_POINTS } from "lib";
+import { BigIntMath, certainAddress, impersonate, TOTAL_BASIS_POINTS } from "#lib";
 import {
   calculateLockedValue,
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   setupLidoForVaults,
-} from "lib/protocol";
-import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "lib/protocol/helpers";
-import { ether } from "lib/units";
+} from "#lib/protocol";
+import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "#lib/protocol/helpers";
+import { ether } from "#lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub ", () => {
   let ctx: ProtocolContext;
@@ -236,7 +236,7 @@ describe("Integration: VaultHub ", () => {
     });
 
     for (const deltaValue of [1n, 2n, 3n, 5n, 10n, 100n, 1000n, ether("1"), ether("10")]) {
-      it(`handles ${ethers.formatEther(deltaValue)} deltas`, async () => {
+      it(`handles ${formatEther(deltaValue)} deltas`, async () => {
         const totalValue = await vaultHub.totalValue(stakingVault);
         const record = await vaultHub.vaultRecord(stakingVault);
         const connection = await vaultHub.vaultConnection(stakingVault);

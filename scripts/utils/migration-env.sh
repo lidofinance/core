@@ -9,7 +9,7 @@ derive_rpc_url() {
   load_env_var RPC_URL && return 0
 
   local network="$1"
-  if [[ $network == "hardhat" ]]; then
+  if [[ $network == "default" ]]; then
     return 0
   fi
 
@@ -86,10 +86,10 @@ prepare_migration_env() {
   normalize_bool_env UPGRADE "false"
   echo "UPGRADE: $UPGRADE"
 
-  load_env_var NETWORK "hardhat"
+  load_env_var NETWORK "default"
   load_env_var RUN_NETWORK || {
     if [[ $NETWORK != "local" && $MODE == "forking" ]]; then
-      export RUN_NETWORK="hardhat"
+      export RUN_NETWORK="default"
       load_env_var FORKING_BLOCK_NUMBER ""
     else
       export RUN_NETWORK="$NETWORK"
@@ -98,7 +98,7 @@ prepare_migration_env() {
   echo "NETWORK: $NETWORK"
   echo "RUN_NETWORK: $RUN_NETWORK"
 
-  if [[ $RUN_NETWORK == "hardhat" ]]; then
+  if [[ $RUN_NETWORK == "default" ]]; then
     derive_rpc_url "$NETWORK"
   else
     derive_rpc_url "$RUN_NETWORK"
@@ -123,7 +123,7 @@ prepare_migration_env() {
     if [[ $NETWORK != $RUN_NETWORK ]]; then
       local remove_dst_file="false"
       # always delete any files from previous runs of HardHat in-process node
-      if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
+      if [[ $RUN_NETWORK == "default" || $command == "test" ]]; then
         remove_dst_file="true"
       fi
 
@@ -134,13 +134,13 @@ prepare_migration_env() {
 
     if [[ $UPGRADE == "true" ]]; then
       load_env_var UPGRADE_PARAMETERS_FILE "scripts/upgrade/upgrade-params-${NETWORK}.toml"
-      load_env_var STEPS_FILE "upgrade/steps-upgrade.json"
+      load_env_var STEPS_FILE "upgrade/steps.json"
 
       # if MODE env is undefined, it means run migration on external node directly
       if [[ $NETWORK != $RUN_NETWORK ]]; then
         local remove_dst_file="false"
         # always delete any files from previous runs of HardHat in-process node
-        if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
+        if [[ $RUN_NETWORK == "default" || $command == "test" ]]; then
           remove_dst_file="true"
         fi
 
@@ -179,18 +179,16 @@ prepare_migration_env() {
 }
 
 prepare_trace_args() {
+  # HH3 exposes tracing via verbosity flags; 'all' behaves like 'fulltrace'
   case "${TRACE:-}" in
     "")
-      TRACE_ARGS=(--disabletracer)
+      TRACE_ARGS=()
       ;;
     trace)
-      TRACE_ARGS=(--trace --disabletracer)
+      TRACE_ARGS=(-vvv)
       ;;
-    fulltrace)
-      TRACE_ARGS=(--fulltrace --disabletracer)
-      ;;
-    all)
-      TRACE_ARGS=(--fulltrace)
+    fulltrace | all)
+      TRACE_ARGS=(-vvvvv)
       ;;
     *)
       echo "Error: TRACE must be empty, 'trace', 'fulltrace', or 'all'"

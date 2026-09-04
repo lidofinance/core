@@ -1,49 +1,49 @@
-import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
-
 import {
   Accounting__factory,
   AccountingOracle__factory,
-  ConsolidationBus,
+  type ConsolidationBus,
   ConsolidationBus__factory,
   ConsolidationGateway__factory,
-  ConsolidationMigrator,
+  type ConsolidationMigrator,
   ConsolidationMigrator__factory,
-  DepositSecurityModule,
+  type DepositSecurityModule,
   DepositSecurityModule__factory,
-  IOracleReportSanityChecker_preV4,
+  type IOracleReportSanityChecker_preV4,
   Lido__factory,
-  LidoLocator,
+  type LidoLocator,
   LidoLocator__factory,
   OracleReportSanityChecker__factory,
   StakingRouter__factory,
-  TopUpGateway,
+  type TopUpGateway,
   TopUpGateway__factory,
-  UpgradeTemporaryAdmin,
+  type UpgradeTemporaryAdmin,
   UpgradeTemporaryAdmin__factory,
   ValidatorsExitBusOracle__factory,
   WithdrawalVault__factory,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
-  ConstructorArgs,
+  type ConstructorArgs,
   deployBehindOssifiableProxy,
   deployImplementation,
   deployWithoutProxy,
   encodeFunctionCall,
   getAddress,
   getDeployerSigner,
-  InitializeArgs,
+  type InitializeArgs,
   loadContract,
   logArgs,
   logConfirmReview as logConfirmReview,
   logScriptHeader,
   logStartReview as logStartReview,
   makeTx,
-  MethodArgs,
+  type MethodArgs,
   readNetworkState,
   Sk,
-} from "lib";
-import { OracleReportSanityCheckerSchema } from "lib/config-schemas";
+} from "#lib";
+import { OracleReportSanityCheckerSchema } from "#lib/config-schemas.js";
+
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "#scripts/utils/upgrade.js";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeTemporaryAdmin);

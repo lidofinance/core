@@ -1,17 +1,12 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
+    "module": "node20",
     "strict": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "types": ["node", "mocha", "chai-as-promised"],
     "paths": {
-      "lib": ["./lib"],
-      "test": ["./test"],
-      "scripts": ["./scripts"],
-      "typechain-types": ["./typechain-types"],
       "*": ["./*"]
     }
   },

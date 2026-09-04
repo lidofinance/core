@@ -1,19 +1,17 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { getStorageAt } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   WithdrawalsManagerProxy,
   WithdrawalsManagerStub,
   WithdrawalsVault__MockForWithdrawalManagerProxy,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { certainAddress, streccak } from "lib";
+import { certainAddress, streccak } from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("WithdrawalsManagerProxy.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -69,7 +67,7 @@ describe("WithdrawalsManagerProxy.sol", () => {
       const storageSlot = streccak("someNumberSlot");
       const someNumber = 1n;
 
-      expect(await getStorageAt(proxyAddr, storageSlot)).to.equal(0n);
+      expect(await networkHelpers.getStorageAt(proxyAddr, storageSlot)).to.equal(0n);
 
       // bytecode to execute in proxy context
       const bytecode = newImpl.interface.encodeFunctionData("mock__changeNumber", [someNumber]);
@@ -77,7 +75,7 @@ describe("WithdrawalsManagerProxy.sol", () => {
       await expect(proxy.proxy_upgradeTo(newImpl, bytecode)).to.emit(proxy, "Upgraded").withArgs(newImpl);
       expect(await proxy.implementation()).to.equal(newImpl);
 
-      expect(await getStorageAt(proxyAddr, storageSlot)).to.equal(someNumber);
+      expect(await networkHelpers.getStorageAt(proxyAddr, storageSlot)).to.equal(someNumber);
     });
   });
 

@@ -1,14 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ZeroAddress } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  ConsolidationGateway,
-  DepositSecurityModule__MockForConsolidationGateway,
-  Lido__MockForConsolidationGateway,
-  WithdrawalVault__MockForConsolidationGateway,
-} from "typechain-types";
+  type ConsolidationGateway,
+  type DepositSecurityModule__MockForConsolidationGateway,
+  type Lido__MockForConsolidationGateway,
+  type WithdrawalVault__MockForConsolidationGateway,
+} from "typechain-types/index.js";
 
 import {
   addressToWC,
@@ -16,12 +16,12 @@ import {
   generateValidator,
   getCurrentBlockTimestamp,
   prepareLocalMerkleTree,
-} from "lib";
+} from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
-import { PUBKEYS } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers.js";
 
 const dummyWitness = (pubkey: string) => ({
   proof: [] as string[],
@@ -32,7 +32,7 @@ const dummyWitness = (pubkey: string) => ({
   proposerIndex: 0,
 });
 
-const ZERO_ADDRESS = ethers.ZeroAddress;
+const ZERO_ADDRESS = ZeroAddress;
 
 describe("ConsolidationGateway.sol: pausable", () => {
   let consolidationGateway: ConsolidationGateway;

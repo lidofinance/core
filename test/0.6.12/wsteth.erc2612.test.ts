@@ -1,8 +1,8 @@
-import { ethers, network } from "hardhat";
+import { ether } from "#lib/units.js";
 
-import { ether } from "lib/units";
+import { ethers, networkConfig } from "#test/suite";
 
-import { testERC2612Compliance } from "../common/erc2612.test";
+import { testERC2612Compliance } from "../common/erc2612.test.js";
 
 testERC2612Compliance({
   tokenName: "wstETH",
@@ -21,7 +21,7 @@ testERC2612Compliance({
       domain: {
         name: "Wrapped liquid staked Ether 2.0",
         version: "1",
-        chainId: network.config.chainId!,
+        chainId: networkConfig.chainId!,
         verifyingContract: await wsteth.getAddress(),
       },
       owner: owner.address,

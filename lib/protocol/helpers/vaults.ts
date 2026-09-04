@@ -1,17 +1,18 @@
 import { expect } from "chai";
 import {
-  ContractMethodArgs,
-  ContractTransactionReceipt,
-  ContractTransactionResponse,
+  type ContractMethodArgs,
+  type ContractTransactionReceipt,
+  type ContractTransactionResponse,
   hexlify,
-  Interface,
+  type Interface,
 } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
-import {
+import type { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.js";
+import type {
   Dashboard,
   IStakingVault,
   Permissions,
@@ -19,8 +20,7 @@ import {
   PredepositGuarantee,
   StakingVault,
   VaultFactory,
-} from "typechain-types";
-import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+} from "typechain-types/index.js";
 
 import {
   days,
@@ -32,17 +32,18 @@ import {
   log,
   prepareLocalMerkleTree,
   TOTAL_BASIS_POINTS,
-  Validator,
-} from "lib";
+  type Validator,
+} from "#lib";
 
-import { ether } from "../../units";
-import { LoadedContract, ProtocolContext } from "../types";
+import { ether } from "../../units.js";
+import type { LoadedContract, ProtocolContext } from "../types.js";
 
 import {
   ensureFirstPostMigrationReport,
   normalizeWithdrawalVaultBaseline,
+  reportWithoutClActivation,
   waitNextAvailableReportTime,
-} from "./accounting";
+} from "./accounting.js";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -107,6 +108,7 @@ export async function createVaultWithDashboard(
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDashboard> {
+  const { ethers } = await hre.network.getOrCreate();
   const deployTx = await stakingVaultFactory
     .connect(owner)
     .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, {
@@ -165,6 +167,7 @@ export async function autofillRoles(
   dashboard: Dashboard,
   nodeOperatorManager: HardhatEthersSigner,
 ): Promise<VaultRoles> {
+  const { ethers } = await hre.network.getOrCreate();
   const roleMethodMap: VaultRoleMethods = getRoleMethods(dashboard);
 
   const roleIds = await Promise.all(Object.values(roleMethodMap));
@@ -223,7 +226,30 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
   // Initialize LazyOracle timestamp after the upgrade without activating
   // existing CL pending validators from the migrated state.
   await ensureFirstPostMigrationReport(ctx);
+  await anchorFreshReport(ctx);
   await normalizeWithdrawalVaultBaseline(ctx, 0n);
+}
+
+/**
+ * Anchor LazyOracle's latestReportTimestamp close to the current block time
+ * when the last report is older than 12 hours. On a fork of a lagging testnet
+ * the last real report can be a frame old or more; advancing time by a frame
+ * would then cross VaultHub's REPORT_FRESHNESS_DELTA (2 days) and flake
+ * isReportFresh checks. A no-op on scratch and right after an upgrade report.
+ */
+async function anchorFreshReport(ctx: ProtocolContext) {
+  const latestReportTimestamp = await ctx.contracts.lazyOracle.latestReportTimestamp();
+  const now = await getCurrentBlockTimestamp();
+
+  if (now - latestReportTimestamp <= days(1n) / 2n) return;
+
+  await reportWithoutClActivation(ctx, {
+    reportBurner: false,
+    reportElVault: false,
+    reportWithdrawalsVault: true,
+    skipWithdrawals: true,
+  });
+  log.success("Anchored a fresh oracle report for vault freshness checks");
 }
 
 export type VaultReportItem = {
@@ -405,6 +431,7 @@ export async function createVaultProxy(
   confirmExpiry: bigint = days(7n),
   roleAssignments: Permissions.RoleAssignmentStruct[] = [],
 ): Promise<CreateVaultResponse> {
+  const { ethers } = await hre.network.getOrCreate();
   const tx = await vaultFactory
     .connect(caller)
     .createVaultWithDashboard(
@@ -454,6 +481,7 @@ export async function createVaultProxyWithoutConnectingToVaultHub(
   confirmExpiry: bigint = days(7n),
   roleAssignments: Permissions.RoleAssignmentStruct[] = [],
 ): Promise<CreateVaultResponse> {
+  const { ethers } = await hre.network.getOrCreate();
   const tx = await vaultFactory
     .connect(caller)
     .createVaultWithDashboardWithoutConnectingToVaultHub(
@@ -665,7 +693,7 @@ export function ceilDiv(a: bigint, b: bigint): bigint {
 
 // Helper type to extract method names from a contract
 export type Methods<T> = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Contract method signatures are dynamic.
   [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
 }[keyof T];
 
@@ -682,7 +710,7 @@ export async function testMethod<
   errorName = "AccessControlUnauthorizedAccount",
 ) {
   for (const user of failingUsers) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: The method is selected dynamically.
     await expect((contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)))
       .to.be.revertedWithCustomError(contract, errorName)
       .withArgs(user, requiredRole);
@@ -690,7 +718,7 @@ export async function testMethod<
 
   for (const user of successUsers) {
     await expect(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: The method is selected dynamically.
       (contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)),
     ).to.not.be.revertedWithCustomError(contract, errorName);
   }

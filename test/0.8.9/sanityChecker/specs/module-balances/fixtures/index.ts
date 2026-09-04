@@ -1,3 +1,3 @@
-import { commonModuleBalanceFixtureSet } from "./common";
+import { commonModuleBalanceFixtureSet } from "./common.js";
 
 export const moduleBalanceFixtureSets = [commonModuleBalanceFixtureSet];

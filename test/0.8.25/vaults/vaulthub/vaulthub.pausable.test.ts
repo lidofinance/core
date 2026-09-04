@@ -1,16 +1,14 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
+import type { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { ether, MAX_UINT256, randomAddress } from "lib";
+import { ether, MAX_UINT256, randomAddress } from "#lib";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers, networkHelpers, Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
@@ -107,7 +105,7 @@ describe("VaultHub.sol:pausableUntil", () => {
       await expect(vaultHub.pauseFor(1000n)).to.emit(vaultHub, "Paused").withArgs(1000n);
 
       expect(await vaultHub.isPaused()).to.equal(true);
-      expect(await vaultHub.getResumeSinceTimestamp()).to.equal((await time.latest()) + 1000);
+      expect(await vaultHub.getResumeSinceTimestamp()).to.equal((await networkHelpers.time.latest()) + 1000);
     });
 
     it("works for MAX_UINT256 duration", async () => {
@@ -130,13 +128,15 @@ describe("VaultHub.sol:pausableUntil", () => {
     });
 
     it("emits Paused event and change state", async () => {
-      const timestamp = await time.latest();
+      const timestamp = await networkHelpers.time.latest();
 
       await expect(vaultHub.pauseUntil(timestamp + 1000)).to.emit(vaultHub, "Paused");
-      //  .withArgs(timestamp + 1000 - await time.latest()); // how to use last block timestamp in assertions
+      //  .withArgs(timestamp + 1000 - await networkHelpers.time.latest()); // how to use last block timestamp in assertions
 
       expect(await vaultHub.isPaused()).to.equal(true);
-      expect(await vaultHub.getResumeSinceTimestamp()).to.greaterThanOrEqual((await time.latest()) + 1000);
+      expect(await vaultHub.getResumeSinceTimestamp()).to.greaterThanOrEqual(
+        (await networkHelpers.time.latest()) + 1000,
+      );
     });
 
     it("works for MAX_UINT256 timestamp", async () => {
@@ -171,7 +171,7 @@ describe("VaultHub.sol:pausableUntil", () => {
       await expect(vaultHub.resume()).to.emit(vaultHub, "Resumed");
 
       expect(await vaultHub.isPaused()).to.equal(false);
-      expect(await vaultHub.getResumeSinceTimestamp()).to.equal(await time.latest());
+      expect(await vaultHub.getResumeSinceTimestamp()).to.equal(await networkHelpers.time.latest());
     });
   });
 

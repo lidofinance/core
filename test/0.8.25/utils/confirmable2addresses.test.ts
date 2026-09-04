@@ -1,9 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Confirmable2Addresses__Harness } from "typechain-types";
+import type { Confirmable2Addresses__Harness } from "typechain-types/index.js";
+
+import { ethers } from "#test/suite";
 
 describe("Confirmable2Addresses", () => {
   let confirmer1: HardhatEthersSigner;

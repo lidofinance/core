@@ -1,12 +1,12 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, getCurrentBlockTimestamp, impersonate, log } from "lib";
+import { certainAddress, ether, getCurrentBlockTimestamp, impersonate, log } from "#lib";
 
-import { SHARE_RATE_PRECISION } from "test/suite";
+import { SHARE_RATE_PRECISION } from "#test/suite/constants.js";
 
-import { ProtocolContext } from "../types";
+import type { ProtocolContext } from "../types.js";
 
-import { reportWithEffectiveClDiff } from "./accounting";
+import { reportWithEffectiveClDiff } from "./accounting.js";
 
 const DEPOSIT = 10000;
 const MIN_BURN = 1;

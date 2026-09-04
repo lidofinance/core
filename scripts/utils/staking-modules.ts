@@ -1,23 +1,28 @@
 import { execFileSync } from "child_process";
-import { HDNodeWallet } from "ethers";
+import { HDNodeWallet, Mnemonic, ZeroAddress } from "ethers";
 import fs from "fs";
-import { ethers, network as hardhatNetwork } from "hardhat";
-import { getMode } from "hardhat.helpers";
+import hre from "hardhat";
+import { getMode } from "hardhat.helpers.js";
+import type { ResolvedConfigurationVariable } from "hardhat/types/config";
 import os from "os";
 import path from "path";
+
+import { type HashConsensus, type ValidatorExitDelayVerifier } from "typechain-types/index.js";
+
+import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "#lib";
+import { type DeploymentState, Sk, updateObjectInState } from "#lib/state-file.js";
+
 import {
   readUpgradeParameters,
   writeUpgradeParameterAddress,
   writeUpgradeParameterAddresses,
-} from "scripts/utils/upgrade";
-
-import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
-
-import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
-import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
+} from "#scripts/utils/upgrade.js";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 const STAKING_MODULES_REPO_BRANCH = "develop";
+// forge caps the script simulation at `block_gas_limit` of the CSM `deploy` profile (60M);
+// the curated module deployment already exceeds it, so raise the cap explicitly.
+const STAKING_MODULES_FORGE_GAS_LIMIT = 200_000_000;
 
 type ExternalDeployArtifact = Record<string, unknown> & {
   CSModule?: string;
@@ -126,26 +131,27 @@ export function getEnvParams() {
   };
 }
 
-function getRpcUrl() {
-  const networkConfig = hardhatNetwork.config;
-  const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
+async function getRpcUrl() {
+  const { networkConfig } = await hre.network.getOrCreate();
+  const rpcUrl = "url" in networkConfig ? await networkConfig.url.get() : process.env.RPC_URL;
   if (!rpcUrl) throw new Error("RPC URL is not available");
   return rpcUrl;
 }
 
-function getPrivateKey() {
-  const accounts = hardhatNetwork.config.accounts;
+async function getPrivateKey() {
+  const { networkConfig } = await hre.network.getOrCreate();
+  const accounts = networkConfig.accounts;
   if (Array.isArray(accounts) && accounts.length > 0) {
-    return accounts[0] as string;
+    return await (accounts[0] as ResolvedConfigurationVariable).get();
   }
 
   if (typeof accounts === "object" && "mnemonic" in accounts) {
-    const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
+    const wallet = HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(await accounts.mnemonic.get()), `m/44'/60'/0'/0/0`);
     return wallet.privateKey;
   }
 
   const wallet = HDNodeWallet.fromMnemonic(
-    ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
+    Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
     `m/44'/60'/0'/0/0`,
   );
   return wallet.privateKey;
@@ -175,7 +181,7 @@ export function readArtifact(artifactPath: string): ExternalDeployArtifact {
 }
 
 function isNonZeroAddress(value: unknown): value is string {
-  return typeof value === "string" && value !== "" && value !== ethers.ZeroAddress;
+  return typeof value === "string" && value !== "" && value !== ZeroAddress;
 }
 
 function artifactAddress(artifact: ExternalDeployArtifact, key: string): string | undefined {
@@ -312,6 +318,8 @@ export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDe
  * Shared between the scratch deploy step and the protocol upgrade step.
  */
 export async function deployStakingModules(state: DeploymentState): Promise<void> {
+  const { ethers, networkName } = await hre.network.getOrCreate();
+
   // A module counts as deployed only once BOTH its proxy address and its deploy artifact are recorded.
   // During an upgrade the proxies are pre-written into the state file before the new implementations are
   // deployed, so the proxy address alone must not suppress the deploy.
@@ -325,14 +333,14 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
     return;
   }
 
-  if (hardhatNetwork.name === "hardhat") {
-    log("In-memory 'hardhat' network detected: skipping external CSM/CMv2 deployment (no RPC URL for Foundry).");
+  if (networkName === "default") {
+    log("In-process 'default' network detected: skipping external CSM/CMv2 deployment (no RPC URL for Foundry).");
     log.emptyLine();
     return;
   }
 
-  const rpcUrl = getRpcUrl();
-  const privateKey = getPrivateKey();
+  const rpcUrl = await getRpcUrl();
+  const privateKey = await getPrivateKey();
   const { chainId } = await ethers.provider.getNetwork();
   const chainSpec = state[Sk.chainSpec];
   const slotsPerEpoch = Number(chainSpec.slotsPerEpoch);
@@ -398,6 +406,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
         cmdOptions.push(`--slow`);
         artifactsFile = `upgrade-${chain}.json`;
       }
+      cmdOptions.push(`--gas-limit=${STAKING_MODULES_FORGE_GAS_LIMIT}`);
       cmdOptions.push(`--private-key=${privateKey}`);
       run("just", cmdOptions, tmpDir, externalEnv);
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm", artifactsFile));
@@ -412,6 +421,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       ///      and there's nothing to update. Reserved for future use
       const cmdOptions: string[] = [];
       cmdOptions.push("deploy-curated");
+      cmdOptions.push(`--gas-limit=${STAKING_MODULES_FORGE_GAS_LIMIT}`);
       cmdOptions.push(`--private-key=${privateKey}`);
       const artifactsFile = `deploy-${chain}.json`;
       run("just", cmdOptions, tmpDir, externalEnv);

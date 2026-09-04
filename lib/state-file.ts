@@ -1,14 +1,16 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { ethers, network as hardhatNetwork } from "hardhat";
-import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
+import { ethers } from "ethers";
+import hre from "hardhat";
+
+import { readScratchParameters, scratchParametersToDeploymentState } from "#scripts/utils/scratch.js";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
 
 export type DeploymentState = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Deployment state values vary by contract.
   [key: string]: any;
 };
 
@@ -298,7 +300,7 @@ export function readNetworkState({
   }
 
   // Validate the chainId
-  const networkChainId = hardhatNetwork.config.chainId;
+  const networkChainId = hre.config.networks[_getNetworkName()].chainId;
   if (state[Sk.chainSpec].chainId && networkChainId !== parseInt(state[Sk.chainSpec].chainId)) {
     throw new Error(
       `The chainId: ${networkChainId} does not match the one (${state[Sk.chainSpec].chainId}) in the state file!`,
@@ -336,7 +338,7 @@ export function incrementGasUsed(increment: bigint | number, useStateFile = true
   persistNetworkState(state);
 }
 
-export async function resetStateFileFromDeployParams(): Promise<void> {
+export function resetStateFileFromDeployParams(): void {
   const fileName = _getStateFileFileName();
   const scratchParams = readScratchParameters();
   const initialState = scratchParametersToDeploymentState(scratchParams);
@@ -361,7 +363,12 @@ function _getStateFileFileName(networkStateFile = "") {
   networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
   return networkStateFile
     ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
-    : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetwork.name);
+    : _getFileName(NETWORK_STATE_FILE_DIR, _getNetworkName());
+}
+
+// The network HH3 would connect to, read from the options so no connection is opened
+function _getNetworkName() {
+  return hre.globalOptions.network ?? "default";
 }
 
 function _getFileName(dir: string, networkName: string, prefix: string = NETWORK_STATE_FILE_PREFIX) {

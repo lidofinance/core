@@ -1,6 +1,6 @@
-import { ether } from "lib";
+import { ether } from "#lib";
 
-import { NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib";
+import { type NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib.js";
 
 export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "hoodi",

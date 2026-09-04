@@ -1,22 +1,20 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
-import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
+import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "#lib";
+import { EXTRA_DATA_FORMAT_LIST, type KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "#lib/oracle.js";
 import {
   getProtocolContext,
-  OracleReportParams,
-  ProtocolContext,
+  type OracleReportParams,
+  type ProtocolContext,
   reportWithEffectiveClDiff,
   seedProtocolPendingBaseline,
-} from "lib/protocol";
-import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
+} from "#lib/protocol";
+import { reportWithoutExtraData, waitNextAvailableReportTime } from "#lib/protocol/helpers/accounting.js";
+import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
-import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
+import { ethers, MAX_BASIS_POINTS, networkHelpers, Snapshot } from "#test/suite";
 
 const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;
@@ -36,7 +34,7 @@ describe("Integration: AccountingOracle extra data", () => {
     snapshot = await Snapshot.take();
 
     [stranger] = await ethers.getSigners();
-    await setBalance(stranger.address, ether("1000000"));
+    await networkHelpers.setBalance(stranger.address, ether("1000000"));
 
     async function getEligibleNodeOperators(limit: number) {
       const { nor } = ctx.contracts;

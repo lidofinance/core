@@ -1,12 +1,17 @@
-import { ethers } from "hardhat";
-import { VoteItem } from "scripts/utils/omnibus";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-
-import { IDualGovernance, ITimelock, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  DeploymentState,
+  type IDualGovernance,
+  type ITimelock,
+  type UpgradeTemplate,
+  type UpgradeVoteScript,
+  type Voting,
+} from "typechain-types/index.js";
+
+import {
+  type DeploymentState,
   ether,
   getAddress,
   getAddressValidated,
@@ -18,7 +23,9 @@ import {
   or,
   readNetworkState,
   Sk,
-} from "lib";
+} from "#lib";
+
+import { type VoteItem } from "#scripts/utils/omnibus.js";
 
 const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");
 const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
@@ -101,6 +108,8 @@ async function isProposalEnacted(state: DeploymentState, proposalId: bigint): Pr
 }
 
 async function execVoteItems(voteItems: VoteItem[], executor: HardhatEthersSigner) {
+  const { ethers } = await hre.network.getOrCreate();
+
   for (const item of voteItems) {
     log(`Execute vote item: ${or(item.description)}`);
     const tx = await executor.sendTransaction({

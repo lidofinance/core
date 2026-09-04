@@ -1,11 +1,10 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionReceipt, ZeroAddress } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
+import type {
   ACL,
   DepositContract__MockForVaultHub,
   LazyOracle__MockForVaultHub,
@@ -18,8 +17,7 @@ import {
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
   VaultHub,
-} from "typechain-types";
-import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
+} from "typechain-types/index.js";
 
 import {
   advanceChainTime,
@@ -30,12 +28,12 @@ import {
   GENESIS_FORK_VERSION,
   getCurrentBlockTimestamp,
   impersonate,
-} from "lib";
-import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
-import { ceilDiv } from "lib/protocol";
+} from "#lib";
+import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "#lib/constants.js";
+import { ceilDiv } from "#lib/protocol";
 
-import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers, networkHelpers, Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const TIER_PARAMS: TierParamsStruct = {
   shareLimit: ether("1"),
@@ -239,7 +237,7 @@ describe("VaultHub.sol:hub", () => {
 
   context("vaultByIndex", () => {
     it("reverts if index is out of bounds", async () => {
-      await expect(vaultHub.vaultByIndex(100n)).to.be.reverted;
+      await expect(vaultHub.vaultByIndex(100n)).to.revert(ethers);
     });
 
     it("returns the vault", async () => {
@@ -506,12 +504,12 @@ describe("VaultHub.sol:hub", () => {
         forcedRebalanceThresholdBP: 10_00n, // 10%
       });
 
-      await expect(vaultHub.healthShortfallShares(vault)).not.to.be.reverted;
+      await expect(vaultHub.healthShortfallShares(vault)).not.to.revert(ethers);
     });
 
     it("does not revert when vault address is ZeroAddress", async () => {
       const zeroAddress = ethers.ZeroAddress;
-      await expect(vaultHub.healthShortfallShares(zeroAddress)).not.to.be.reverted;
+      await expect(vaultHub.healthShortfallShares(zeroAddress)).not.to.revert(ethers);
     });
 
     it("returns 0 when stETH was not minted", async () => {
@@ -611,12 +609,12 @@ describe("VaultHub.sol:hub", () => {
         forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
-      await expect(vaultHub.obligationsShortfallValue(vault)).not.to.be.reverted;
+      await expect(vaultHub.obligationsShortfallValue(vault)).not.to.revert(ethers);
     });
 
     it("does not revert when vault address is ZeroAddress", async () => {
       const zeroAddress = ethers.ZeroAddress;
-      await expect(vaultHub.obligationsShortfallValue(zeroAddress)).not.to.be.reverted;
+      await expect(vaultHub.obligationsShortfallValue(zeroAddress)).not.to.revert(ethers);
     });
 
     it("different cases when vault is healthy, unhealthy and minted > totalValue, and fees are > MIN_BEACON_DEPOSIT", async () => {
@@ -637,13 +635,13 @@ describe("VaultHub.sol:hub", () => {
       expect(await vaultHub.obligationsShortfallValue(vault)).to.equal(0n);
 
       const balanceBefore = await ethers.provider.getBalance(vault);
-      await setBalance(await vault.getAddress(), 0n);
+      await networkHelpers.setBalance(await vault.getAddress(), 0n);
       // below the threshold, but with fees
       await reportVault({ vault, totalValue: ether("0.5") - 1n, cumulativeLidoFees: ether("1") });
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
       expect(await vaultHub.obligationsShortfallValue(vault)).to.equal(ether("1"));
 
-      await setBalance(await vault.getAddress(), balanceBefore);
+      await networkHelpers.setBalance(await vault.getAddress(), balanceBefore);
       await reportVault({ vault, totalValue: 0n }); // minted > totalValue
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(false);
       expect(await vaultHub.obligationsShortfallValue(vault)).to.equal(MAX_UINT256);
@@ -1215,7 +1213,7 @@ describe("VaultHub.sol:hub", () => {
       const cumulativeLidoFees = totalValue - 1n;
       await reportVault({ vault, totalValue, cumulativeLidoFees });
 
-      await setBalance(vaultAddress, cumulativeLidoFees - 1n);
+      await networkHelpers.setBalance(vaultAddress, cumulativeLidoFees - 1n);
 
       await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,

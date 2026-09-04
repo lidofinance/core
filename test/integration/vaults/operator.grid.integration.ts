@@ -1,22 +1,21 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, OperatorGrid, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, OperatorGrid, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ether, MAX_SANE_SETTLED_GROWTH, randomValidatorPubkey } from "lib";
+import { ether, MAX_SANE_SETTLED_GROWTH, randomValidatorPubkey } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   reportWithoutClActivation,
   setupLidoForVaults,
-} from "lib/protocol";
-import { advanceChainTime, days } from "lib/time";
+} from "#lib/protocol";
+import { advanceChainTime, days } from "#lib/time.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: OperatorGrid", () => {
   let ctx: ProtocolContext;
@@ -320,7 +319,7 @@ describe("Integration: OperatorGrid", () => {
 
       await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, false);
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.false;
-      await expect(dashboard.mintShares(owner, 100n)).to.not.be.reverted;
+      await expect(dashboard.mintShares(owner, 100n)).to.not.revert(ethers);
     });
 
     it("Changing tier doesn't affect jail status", async () => {
@@ -442,21 +441,22 @@ describe("Integration: OperatorGrid", () => {
       // 2. Verify burning is NOT blocked
       const sharesToBurn = ether("0.1");
       await lido.connect(owner).approve(dashboard, 10n * sharesToBurn);
-      await expect(dashboard.connect(owner).burnShares(sharesToBurn)).to.not.be.reverted;
+      await expect(dashboard.connect(owner).burnShares(sharesToBurn)).to.not.revert(ethers);
 
       // 3. Verify withdrawals are NOT blocked
       const withdrawAmount = ether("0.1");
-      await expect(dashboard.withdraw(owner, withdrawAmount)).to.not.be.reverted;
+      await expect(dashboard.withdraw(owner, withdrawAmount)).to.not.revert(ethers);
 
       // 4. Verify rebalancing is NOT blocked
       // Add more funds to enable rebalancing
       await dashboard.fund({ value: ether("2") });
       const sharesToRebalance = await vaultHub.vaultRecord(stakingVault).then((r) => r.liabilityShares);
-      await expect(dashboard.rebalanceVaultWithShares(sharesToRebalance)).to.not.be.reverted;
+      await expect(dashboard.rebalanceVaultWithShares(sharesToRebalance)).to.not.revert(ethers);
 
       // 5. Verify lazy reports are NOT blocked
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: await dashboard.totalValue() })).to.not.be
-        .reverted;
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, { totalValue: await dashboard.totalValue() }),
+      ).to.not.revert(ethers);
 
       // 6. Verify disconnect is NOT blocked by jail status
       // Ensure fresh report first
@@ -464,7 +464,7 @@ describe("Integration: OperatorGrid", () => {
         waitForNextRefSlot: true,
         totalValue: await dashboard.totalValue(),
       });
-      await expect(dashboard.connect(owner).voluntaryDisconnect()).to.not.be.reverted;
+      await expect(dashboard.connect(owner).voluntaryDisconnect()).to.not.revert(ethers);
 
       // Verify disconnect was initiated successfully
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;

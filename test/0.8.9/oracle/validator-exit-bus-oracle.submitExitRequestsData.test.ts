@@ -1,13 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { AbiCoder, keccak256 } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import type { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
-import { de0x, numberToHex } from "lib";
+import { de0x, numberToHex } from "#lib";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
+import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers
@@ -47,9 +48,7 @@ const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
 };
 
 const hashExitRequest = (request: { dataFormat: number; data: string }) => {
-  return ethers.keccak256(
-    ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [request.data, request.dataFormat]),
-  );
+  return keccak256(AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [request.data, request.dataFormat]));
 };
 
 // Helper to extract timestamp from ValidatorExitRequest event

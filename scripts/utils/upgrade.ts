@@ -1,42 +1,49 @@
-import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
+import { type ContractTransactionReceipt, type ContractTransactionResponse } from "ethers";
 import fs from "fs";
-import { getMode } from "hardhat.helpers";
+import { getMode } from "hardhat.helpers.js";
 
 import * as toml from "@iarna/toml";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { IDualGovernance, ITimelock, TokenManager, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types";
+import type {
+  IDualGovernance,
+  ITimelock,
+  TokenManager,
+  UpgradeTemplate,
+  UpgradeVoteScript,
+  Voting,
+} from "typechain-types/index.js";
 
 import {
-  advanceChainTime,
   bl,
-  ConvertibleToString,
-  ether,
+  type ConvertibleToString,
   findEventsWithInterfaces,
   getCurrentBlockTimestamp,
   getSignerOrImpersonate,
-  impersonate,
   isContractDeployed,
-  loadContract,
-  LoadedContract,
-  log,
+  type LoadedContract,
   or,
   yl,
-} from "lib";
-import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
-import { getTxLink } from "lib/explorer";
+} from "#lib";
+import { impersonate } from "#lib/account.js";
+import { type UpgradeParameters, validateUpgradeParameters } from "#lib/config-schemas.js";
+import { loadContract } from "#lib/contract.js";
+import { getTxLink } from "#lib/explorer.js";
+import { log } from "#lib/log.js";
 import {
-  DeploymentState,
+  type DeploymentState,
   getAddress,
   getAddressValidated,
   readNetworkState,
   Sk,
   updateObjectInState,
-} from "lib/state-file";
+} from "#lib/state-file.js";
+import { advanceChainTime } from "#lib/time.js";
+import { ether } from "#lib/units.js";
 
-import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite";
+import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "#test/suite";
 
-import { encodeCallScript, VoteItem } from "./omnibus";
+import { encodeCallScript, type VoteItem } from "./omnibus.js";
 
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");
@@ -45,7 +52,7 @@ const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
 const VOTE_DESCRIPTION = process.env.VOTE_DESCRIPTION || "vote-description";
 const VOTE_MODE = process.env.VOTE_MODE || "dg"; // DG mode by default
 
-export { UpgradeParameters };
+export type { UpgradeParameters };
 
 ///
 /// ---- Upgrade helpers ----
@@ -350,7 +357,7 @@ async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, e
       try {
         execTx = await timelock.connect(executor).execute(proposalId);
         revertedDueToTimeConstraints = false;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // biome-ignore lint/suspicious/noExplicitAny: RPC errors have provider-specific shapes.
       } catch (e: any) {
         // const data = e?.data ?? e?.error?.data ?? e?.revert?.data;
         // if (data) {

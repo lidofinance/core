@@ -1,29 +1,26 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, LogDescription, TransactionResponse, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { ContractTransactionReceipt, type LogDescription, TransactionResponse, ZeroAddress } from "ethers";
 
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
-
-import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
-import { LIMITER_PRECISION_BASE } from "lib/constants";
+import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "#lib";
+import { LIMITER_PRECISION_BASE } from "#lib/constants.js";
 import {
   ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
   getReportTimeElapsed,
   normalizeWithdrawalVaultBaseline,
-  ProtocolContext,
+  type ProtocolContext,
   removeStakingLimit,
   report,
   reportWithoutClActivation,
   seedProtocolPendingBaseline,
   updateOracleReportLimits,
   waitNextAvailableReportTime,
-} from "lib/protocol";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
+} from "#lib/protocol";
+import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "test/suite";
-import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
+import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "#test/suite/constants.js";
 
 describe("Integration: Accounting", () => {
   let ctx: ProtocolContext;
@@ -952,7 +949,7 @@ describe("Integration: Accounting", () => {
     // target report still passes full WVB, so only Accounting's smoothing cap
     // decides how much can be collected.
     await normalizeWithdrawalVaultBaseline(ctx, limitWithExcess);
-    await setBalance(elRewardsVault.address, limitWithExcess);
+    await networkHelpers.setBalance(elRewardsVault.address, limitWithExcess);
 
     const beforeState = await readState();
 

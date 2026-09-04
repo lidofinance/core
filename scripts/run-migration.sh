@@ -7,7 +7,7 @@ set -o pipefail
 prepare_migration_env
 
 echo "Compiling contracts..."
-yarn hardhat compile
+yarn hardhat build
 
 echo "Starting migration..."
 yarn hardhat --network "$RUN_NETWORK" run --no-compile scripts/utils/migrate.ts

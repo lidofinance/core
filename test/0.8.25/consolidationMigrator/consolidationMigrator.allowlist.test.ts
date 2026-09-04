@@ -1,17 +1,16 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  ConsolidationBus__MockForConsolidationMigrator,
-  ConsolidationMigrator,
-  StakingRouter__MockForConsolidationMigrator,
-} from "typechain-types";
+  type ConsolidationBus__MockForConsolidationMigrator,
+  type ConsolidationMigrator,
+  type StakingRouter__MockForConsolidationMigrator,
+} from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "#lib/proxy.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("ConsolidationMigrator.sol: allowlist", () => {
   let consolidationMigrator: ConsolidationMigrator;

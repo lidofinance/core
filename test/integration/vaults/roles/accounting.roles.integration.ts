@@ -1,15 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Accounting } from "typechain-types";
+import type { Accounting } from "typechain-types/index.js";
 
-import { ether, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
+import { ether, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext, setupLidoForVaults } from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Accounting Roles and Access Control", () => {
   let ctx: ProtocolContext;

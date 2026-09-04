@@ -1,12 +1,11 @@
 import { bigintToHex } from "bigint-conversion";
-import { keccak256, ZeroHash } from "ethers";
-import { ethers } from "hardhat";
+import { AbiCoder, keccak256, ZeroHash } from "ethers";
 
-import { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types";
+import type { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types/index.js";
 
-import { numberToHex } from "./string";
-
-import { ether, impersonate } from ".";
+import { impersonate } from "./account.js";
+import { numberToHex } from "./string.js";
+import { ether } from "./units.js";
 
 function splitArrayIntoChunks<T>(inputArray: T[], maxItemsPerChunk: number): T[][] {
   const result: T[][] = [];
@@ -47,10 +46,10 @@ export const DEFAULT_REPORT_FIELDS: OracleReport = {
   withdrawalFinalizationBatches: [],
   simulatedShareRate: 10n ** 27n,
   isBunkerMode: false,
-  vaultsDataTreeRoot: ethers.ZeroHash,
+  vaultsDataTreeRoot: ZeroHash,
   vaultsDataTreeCid: "",
   extraDataFormat: 0n,
-  extraDataHash: ethers.ZeroHash,
+  extraDataHash: ZeroHash,
   extraDataItemsCount: 0n,
 };
 
@@ -79,13 +78,13 @@ export function getReportDataItems(r: OracleReport) {
 }
 
 export function calcReportDataHash(reportItems: ReportAsArray) {
-  const data = ethers.AbiCoder.defaultAbiCoder().encode(
+  const data = AbiCoder.defaultAbiCoder().encode(
     [
       "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, bytes32, string, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );
-  return ethers.keccak256(data);
+  return keccak256(data);
 }
 
 export async function prepareOracleReport({
@@ -166,7 +165,7 @@ export function packExtraDataItemsToChunksLinkedByHash(extraDataItems: string[],
   const chunks = splitArrayIntoChunks(extraDataItems, maxItemsPerChunk);
   const packedChunks = [];
 
-  let nextHash = ethers.ZeroHash;
+  let nextHash = ZeroHash;
   for (let i = chunks.length - 1; i >= 0; i--) {
     const packed = packChunk(chunks[i], nextHash);
     packedChunks.push(packed);

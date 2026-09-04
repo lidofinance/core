@@ -10,8 +10,8 @@ load_env_var NETWORK || {
 }
 echo "NETWORK: $NETWORK"
 
-if [[ $NETWORK == "local" || $NETWORK == "hardhat" ]]; then
-  echo "Error: Network cannot be $(${NETWORK})"
+if [[ $NETWORK == "local" || $NETWORK == "default" ]]; then
+  echo "Error: Network cannot be ${NETWORK}"
   exit 1
 fi
 
@@ -60,12 +60,13 @@ if [[ ${FORK_NODE:-} == "anvil" ]]; then
   fi
 else
 
-  export HARDHAT_CHAIN_ID="$(cast chain-id --rpc-url "$RPC_URL")"
-  echo "HARDHAT_CHAIN_ID: $HARDHAT_CHAIN_ID"
+  # without this a forked `hardhat node` reports chainId 31337
+  CHAIN_ID="$(cast chain-id --rpc-url "$RPC_URL")"
+  echo "CHAIN_ID: $CHAIN_ID"
 
   if [[ -n ${TRACE:-} ]]; then
-    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile --trace --gascost --vvv
+    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --chain-id "$CHAIN_ID" -vvv
   else
-    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile
+    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --chain-id "$CHAIN_ID"
   fi
 fi

@@ -1,24 +1,23 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 import { before, beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   Burner,
   Burner__MockForMigration,
   ERC20__Harness,
   ERC721__Harness,
   LidoLocator,
-  OssifiableProxy__factory,
   StETH__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
+import { OssifiableProxy__factory } from "typechain-types/index.js";
 
-import { batch, certainAddress, ether, impersonate } from "lib";
+import { batch, certainAddress, ether, impersonate } from "#lib";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Burner.sol", () => {
   let deployer: HardhatEthersSigner;

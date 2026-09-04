@@ -1,13 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Versioned__Harness089 } from "typechain-types";
+import type { Versioned__Harness089 } from "typechain-types/index.js";
 
-import { MAX_UINT256, proxify, streccak } from "lib";
+import { MAX_UINT256, proxify, streccak } from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Versioned.sol", () => {
   let admin: HardhatEthersSigner;
@@ -61,7 +60,7 @@ describe("Versioned.sol", () => {
 
     it("Reverts if the current and expected versions do not match", async () => {
       const expectedVersion = 1n;
-      await expect(consumer.checkContractVersion(expectedVersion)).to.be.reverted;
+      await expect(consumer.checkContractVersion(expectedVersion)).to.revert(ethers);
     });
   });
 
@@ -74,7 +73,7 @@ describe("Versioned.sol", () => {
 
     it("Reverts if the previous contract version is not 0", async () => {
       await consumer.updateContractVersion(1);
-      await expect(consumer.initializeContractVersionTo(1)).to.be.reverted;
+      await expect(consumer.initializeContractVersionTo(1)).to.revert(ethers);
     });
   });
 
@@ -88,7 +87,7 @@ describe("Versioned.sol", () => {
 
     it("Reverts if the new version is not incremental", async () => {
       const newVersion = initialVersion + 2n;
-      await expect(consumer.updateContractVersion(newVersion)).to.be.reverted;
+      await expect(consumer.updateContractVersion(newVersion)).to.revert(ethers);
     });
   });
 });

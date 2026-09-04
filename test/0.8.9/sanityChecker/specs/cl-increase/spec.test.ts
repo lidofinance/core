@@ -1,33 +1,38 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForSanityChecker,
-  Lido__MockForSanityChecker,
-  OracleReportSanityCheckerWrapper,
-} from "typechain-types";
+  type Accounting__MockForSanityChecker,
+  type AccountingOracle__MockForSanityChecker,
+  type Lido__MockForSanityChecker,
+  type OracleReportSanityCheckerWrapper,
+} from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib";
+import { ether, impersonate, randomAddress } from "#lib";
+
+import { ethers, networkHelpers } from "#test/suite";
 
 import {
   deployFinalizeUpgradeV4Checker,
-  FinalizeUpgradeV4CheckerFixture,
+  type FinalizeUpgradeV4CheckerFixture,
   getMigrationCLValidatorsBalance,
   hasFinalizeUpgradeV4State,
-  LidoBalanceStats,
+  type LidoBalanceStats,
   migrateFinalizeUpgradeV4State,
-  MigrationStep,
+  type MigrationStep,
   moveToFirstPostMigrationReportFrame,
   resolveScenarioSteps,
   setLastVaultBalanceAfterTransfer,
-} from "../lib";
+} from "../lib.js";
 
-import { clIncreaseFixtureSets } from "./fixtures/index";
-import { calcClIncreaseFormula, ClIncreaseCase, OracleReportLimits, ResolvedClIncreaseReport } from "./lib";
+import { clIncreaseFixtureSets } from "./fixtures/index.js";
+import {
+  calcClIncreaseFormula,
+  type ClIncreaseCase,
+  type OracleReportLimits,
+  type ResolvedClIncreaseReport,
+} from "./lib.js";
 
 describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   type MockCheckerFixture = {
@@ -119,11 +124,11 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     if (fixture.kind === "finalizeUpgradeV4") {
       state.migrationSameFrameStats = await migrateFinalizeUpgradeV4State(fixture, step);
     } else {
-      await setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
+      await networkHelpers.setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
       await fixture.lido.mock__setContractVersion(4n);
       await fixture.lido.mock__setBalanceStats(getMigrationCLValidatorsBalance(step), 0n, 0n, 0n);
 
-      await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
+      await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.revert(ethers);
     }
     state.lastVaultBalanceAfterTransfer = step.withdrawalVaultBalance;
   };
@@ -162,12 +167,12 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     title: string,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
-    await setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
+    await networkHelpers.setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
 
     await expect(
       callAccountingReport(checker, accountingSigner, state, report),
       `${title}: setup report '${report.label}'`,
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
     state.lastVaultBalanceAfterTransfer =
       withdrawalVaultBalance - (report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals);
   };
@@ -279,7 +284,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
           expectFormulaFields(testCase, formula);
 
           if (testCase.expected.outcome === "accepted") {
-            await expect(call).not.to.be.reverted;
+            await expect(call).not.to.be.revert(ethers);
 
             if (testCase.expected.counterfactualZeroVaultBaseline) {
               const withdrawalVaultBalance =
@@ -295,7 +300,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
                 limits,
               );
 
-              await setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
+              await networkHelpers.setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
               await setLastVaultBalanceAfterTransfer(checker, 0n);
               await expect(
                 callAccountingReport(
@@ -326,7 +331,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
               getPreValidatorsAfterWithdrawals(checkedReport) + formula.validatorsGrowthLimit + 1n,
             );
 
-            await expect(callPendingBalanceCheck(checker, state, atLimitReport)).not.to.be.reverted;
+            await expect(callPendingBalanceCheck(checker, state, atLimitReport)).not.to.be.revert(ethers);
             await expect(callPendingBalanceCheck(checker, state, excessiveReport))
               .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
               .withArgs(formula.validatorsGrowthLimit, formula.validatorsGrowthLimit + 1n);

@@ -1,11 +1,9 @@
 import { expect } from "chai";
 import { getBigInt, MaxUint256, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   Dashboard,
   DepositContract__MockForStakingVault,
   LazyOracle__MockForNodeOperatorFee,
@@ -21,7 +19,7 @@ import {
   VaultHub__MockForDashboard,
   WETH9__MockForVault,
   WstETH__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
   certainAddress,
@@ -35,10 +33,10 @@ import {
   impersonate,
   PDGPolicy,
   randomValidatorPubkey,
-} from "lib";
+} from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 
@@ -164,7 +162,7 @@ describe("Dashboard.sol", () => {
     });
 
     if (vaultBalance > 0n) {
-      await setBalance(await vault.getAddress(), vaultBalance);
+      await networkHelpers.setBalance(await vault.getAddress(), vaultBalance);
     }
   };
 
@@ -514,7 +512,7 @@ describe("Dashboard.sol", () => {
       });
 
       it("returns totalValue if balance > totalValue and locked = 0", async () => {
-        await setBalance(await vault.getAddress(), ether("100"));
+        await networkHelpers.setBalance(await vault.getAddress(), ether("100"));
         const amount = ether("1");
         await setup({ totalValue: amount, maxLiabilityShares: 0n });
 
@@ -522,7 +520,7 @@ describe("Dashboard.sol", () => {
       });
 
       it("returns totalValue - locked if balance > totalValue and locked > 0", async () => {
-        await setBalance(await vault.getAddress(), ether("100"));
+        await networkHelpers.setBalance(await vault.getAddress(), ether("100"));
         const amount = ether("1");
         await setup({ totalValue: amount, maxLiabilityShares: amount / 2n });
 
@@ -531,20 +529,20 @@ describe("Dashboard.sol", () => {
 
       it("returns balance if balance < totalValue and locked = 0", async () => {
         const amount = ether("1");
-        await setBalance(await vault.getAddress(), amount - 1n);
+        await networkHelpers.setBalance(await vault.getAddress(), amount - 1n);
         await setup({ totalValue: amount, maxLiabilityShares: 0n });
         expect(await dashboard.withdrawableValue()).to.equal(await hub.withdrawableValue(vault));
       });
 
       it("returns balance if balance < totalValue and locked <= (totalValue - balance)", async () => {
         const amount = ether("1");
-        await setBalance(await vault.getAddress(), amount - 2n);
+        await networkHelpers.setBalance(await vault.getAddress(), amount - 2n);
         await setup({ totalValue: amount, maxLiabilityShares: 1n });
         expect(await dashboard.withdrawableValue()).to.equal(await hub.withdrawableValue(vault));
       });
 
       it("returns 0 if no balance, even if totalValue > locked", async () => {
-        await setBalance(await vault.getAddress(), 0n);
+        await networkHelpers.setBalance(await vault.getAddress(), 0n);
         const amount = ether("1");
         await setup({ totalValue: amount, maxLiabilityShares: amount / 2n });
 
@@ -693,7 +691,7 @@ describe("Dashboard.sol", () => {
 
         expect(await dashboard.accruedFee()).to.be.greaterThan(0);
 
-        await setBalance(await hub.getAddress(), ether("100"));
+        await networkHelpers.setBalance(await hub.getAddress(), ether("100"));
         await hub.mock__setSendWithdraw(true);
 
         await expect(dashboard.voluntaryDisconnect())
@@ -719,7 +717,7 @@ describe("Dashboard.sol", () => {
 
         expect(await dashboard.accruedFee()).to.be.greaterThan(0);
 
-        await setBalance(await hub.getAddress(), ether("100"));
+        await networkHelpers.setBalance(await hub.getAddress(), ether("100"));
         await hub.mock__setSendWithdraw(true);
 
         await expect(dashboard.voluntaryDisconnect())
@@ -757,7 +755,7 @@ describe("Dashboard.sol", () => {
   context("withdraw", () => {
     beforeEach(async () => {
       await setup({ totalValue: ether("1"), maxLiabilityShares: 0n });
-      await setBalance(await vault.getAddress(), ether("1"));
+      await networkHelpers.setBalance(await vault.getAddress(), ether("1"));
     });
 
     it("reverts if called by a non-admin", async () => {
@@ -1204,7 +1202,7 @@ describe("Dashboard.sol", () => {
       const ethAmount = ether("1");
       const ethTokenAddress = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"; // ETH pseudo-token address
 
-      await setBalance(await dashboard.getAddress(), ethAmount);
+      await networkHelpers.setBalance(await dashboard.getAddress(), ethAmount);
       const preBalance = await ethers.provider.getBalance(stranger);
 
       await expect(dashboard.recoverERC20(ethTokenAddress, stranger, ethAmount))
@@ -1258,7 +1256,7 @@ describe("Dashboard.sol", () => {
 
     it("does not allow fallback behavior", async () => {
       const tx = vaultOwner.sendTransaction({ to: dashboard, data: "0x111111111111", value: amount });
-      await expect(tx).to.be.revertedWithoutReason();
+      await expect(tx).to.be.revertedWithoutReason(ethers);
     });
 
     it("receive funds the vault", async () => {
@@ -1434,7 +1432,7 @@ describe("Dashboard.sol", () => {
 
     it("performs unguaranteed deposit", async () => {
       await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("1") });
-      await setBalance(await hub.getAddress(), ether("100"));
+      await networkHelpers.setBalance(await hub.getAddress(), ether("100"));
       await hub.mock__setSendWithdraw(true);
 
       await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits))

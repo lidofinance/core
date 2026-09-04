@@ -1,14 +1,13 @@
-import { ethers } from "hardhat";
+import { ZeroHash } from "ethers";
 
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import { loadContract } from "#lib/contract.js";
+import { getDeployerState, makeTx } from "#lib/deploy.js";
+import { Sk } from "#lib/state-file.js";
 
-const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
+const DEFAULT_ADMIN_ROLE = ZeroHash;
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { deployer, state } = await getDeployerState();
 
   const agent = state[Sk.appAgent].proxy.address;
   const voting = state[Sk.appVoting].proxy.address;

@@ -2,8 +2,8 @@ import {
   MAX_EFFECTIVE_BALANCE_WC_TYPE_01,
   MAX_EFFECTIVE_BALANCE_WC_TYPE_02,
   WithdrawalCredentialsType,
-} from "./constants";
-import { de0x, en0x, randomString } from "./string";
+} from "./constants.js";
+import { de0x, en0x, randomString } from "./string.js";
 
 /**
  * Returns the max effective balance for the given withdrawal credentials type

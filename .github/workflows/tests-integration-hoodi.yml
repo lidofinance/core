@@ -9,13 +9,12 @@ jobs:
     timeout-minutes: 120
     env:
       NODE_OPTIONS: --max_old_space_size=10240
-      SKIP_GAS_REPORT: true
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.28.0-hoodi
+        image: ghcr.io/lidofinance/hardhat-node:3.15.0-hoodi
         env:
           ETH_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
         ports:
@@ -27,18 +26,10 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      # https://github.com/foundry-rs/foundry-toolchain
-      - name: Install foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Install just
-        run: cargo install just
-
       - name: Run integration tests
-        # Use the following command if there are upgrade steps
-        # run: yarn test:integration:upgrade
         run: yarn test:integration
         env:
           NETWORK: "hoodi"
-          RPC_URL: "http://localhost:8565"
+          # the "local" network reads LOCAL_RPC_URL; derive_rpc_url derives RPC_URL from it
+          LOCAL_RPC_URL: "http://localhost:8565"
           RUN_NETWORK: "local"

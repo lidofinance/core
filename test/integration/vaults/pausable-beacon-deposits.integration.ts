@@ -1,21 +1,19 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { days, ether } from "lib";
+import { days, ether } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("Integration: Vault hub beacon deposits pause flows", () => {
   let ctx: ProtocolContext;
@@ -129,7 +127,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await dashboard.fund({ value: ether("1") });
       await dashboard.mintStETH(agentSigner, ether("1"));
 
-      await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
+      await networkHelpers.setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
 
       // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
       await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(
@@ -148,7 +146,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await dashboard.fund({ value: ether("1") });
       await dashboard.mintStETH(agentSigner, ether("1"));
 
-      await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
+      await networkHelpers.setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
 
       // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
       await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(
@@ -195,7 +193,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await dashboard.fund({ value: ether("1") });
       await dashboard.mintStETH(agentSigner, ether("1"));
 
-      await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
+      await networkHelpers.setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
 
       // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
       await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(

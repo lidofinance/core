@@ -1,9 +1,8 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
+import type { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types/index.js";
 
 import {
   BASE_CONSENSUS_VERSION,
@@ -12,10 +11,10 @@ import {
   INITIAL_EPOCH,
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
-} from "lib";
+} from "#lib";
 
-import { deployBaseOracle, HASH_1, SECONDS_PER_EPOCH, SLOTS_PER_FRAME } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployBaseOracle, HASH_1, SECONDS_PER_EPOCH, SLOTS_PER_FRAME } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("BaseOracle.sol:accessControl", () => {
   let admin: HardhatEthersSigner;

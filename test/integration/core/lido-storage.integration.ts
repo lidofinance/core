@@ -1,12 +1,11 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, streccak, updateBalance } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ether, streccak, updateBalance } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Lido storage slots after V3", () => {
   let ctx: ProtocolContext;

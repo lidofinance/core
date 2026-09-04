@@ -1,8 +1,8 @@
-import { BytesLike } from "ethers";
+import { type BytesLike } from "ethers";
 
 import { SecretKey } from "@chainsafe/blst";
 
-import { ether } from "lib";
+import { ether } from "#lib";
 
 export function generateConsolidationRequestPayload(numberOfRequests: number): {
   sourcePubkeys: BytesLike[];
