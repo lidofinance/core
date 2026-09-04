@@ -283,35 +283,5 @@ export default defineConfig({
         },
       },
     },
-    17000: {
-      name: "holesky",
-      blockExplorers: {
-        etherscan: {
-          name: "holesky",
-          apiUrl: "https://api-holesky.etherscan.io/api",
-          url: "https://holesky.etherscan.io/",
-        },
-      },
-    },
-    11155111: {
-      name: "sepolia",
-      blockExplorers: {
-        etherscan: {
-          name: "sepolia",
-          apiUrl: "https://api-sepolia.etherscan.io/api",
-          url: "https://sepolia.etherscan.io/",
-        },
-      },
-    },
-    560048: {
-      name: "hoodi",
-      blockExplorers: {
-        etherscan: {
-          name: "hoodi",
-          apiUrl: "https://api-hoodi.etherscan.io/api",
-          url: "https://hoodi.etherscan.io/",
-        },
-      },
-    },
   },
 });
