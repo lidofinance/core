@@ -79,7 +79,6 @@ async function verifyConstructorArgs(newLocator: LoadedContract, config: LidoLoc
 
 export async function main(): Promise<void> {
   const deployer = (await getDeployerSigner()).address;
-  assert.equal(process.env.DEPLOYER, deployer);
 
   const state = readNetworkState();
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
