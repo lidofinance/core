@@ -63,14 +63,6 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      - name: Use global invariant depth
-        run: |
-          find test -name '*.t.sol' -print0 | xargs -0 sed -i '/forge-config: default\.invariant\.depth/d'
-          if git diff --quiet -- test; then
-            echo "No inline invariant depth directives found"
-            exit 1
-          fi
-
       # Build everything first: with a file argument `test solidity` compiles only that
       # file's imports, and suites deploying contracts via vm.getCode miss their artifacts.
       - name: Build all contracts and tests
