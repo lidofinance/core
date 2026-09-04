@@ -30,10 +30,31 @@ jobs:
       - name: Run fuzzing and invariant tests
         run: yarn hardhat test solidity -vvv
 
-  test_solidity_fuzzing_deep:
-    name: Solidity / Fuzzing & Invariants (deep)
+  test_solidity_fuzzing_deep_files:
+    name: Solidity / Deep test files
     if: github.event_name == 'workflow_dispatch' || github.ref_name == 'develop' || github.ref_name == 'master'
     runs-on: ubuntu-latest
+    outputs:
+      files: ${{ steps.list.outputs.files }}
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: List test files with test or invariant functions
+        id: list
+        run: |
+          files=$(grep -lE 'function (test|invariant)' $(find test -name '*.t.sol') | sort | jq -Rsc 'split("\n") | map(select(. != ""))')
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+          echo "$files"
+
+  test_solidity_fuzzing_deep:
+    name: Solidity / Fuzzing & Invariants (deep)
+    needs: test_solidity_fuzzing_deep_files
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJSON(needs.test_solidity_fuzzing_deep_files.outputs.files) }}
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -50,4 +71,4 @@ jobs:
           fi
 
       - name: Run fuzzing and invariant tests (deep profile, 10k runs)
-        run: FUZZ_PROFILE=deep yarn hardhat test solidity
+        run: FUZZ_PROFILE=deep yarn hardhat test solidity ${{ matrix.file }}
