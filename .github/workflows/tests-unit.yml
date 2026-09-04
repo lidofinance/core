@@ -70,5 +70,10 @@ jobs:
             exit 1
           fi
 
+      # Build everything first: with a file argument `test solidity` compiles only that
+      # file's imports, and suites deploying contracts via vm.getCode miss their artifacts.
+      - name: Build all contracts and tests
+        run: yarn hardhat build
+
       - name: Run fuzzing and invariant tests (deep profile, 10k runs)
-        run: FUZZ_PROFILE=deep yarn hardhat test solidity ${{ matrix.file }}
+        run: FUZZ_PROFILE=deep yarn hardhat test solidity --no-compile ${{ matrix.file }}
