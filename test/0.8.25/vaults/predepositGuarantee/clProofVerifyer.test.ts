@@ -15,6 +15,10 @@ import {
 
 import { Snapshot } from "test/suite";
 
+const GLOAS_VALIDATORS_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000016600";
+const NULL_GINDEX = ethers.ZeroHash;
+const MAX_UINT64 = (1n << 64n) - 1n;
+
 // CSM "borrowed" prefab validator object with precalculated proofs & root
 // allows us to be sure that core merkle proof validation is working correctly
 const STATIC_VALIDATOR = {
@@ -118,7 +122,7 @@ describe("CLProofVerifier.sol", () => {
 
     CLProofVerifier = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [localTree.gIFirstValidator, localTree.gIFirstValidator, 0],
+      [localTree.gIFirstValidator, NULL_GINDEX, MAX_UINT64],
       {},
     );
 
@@ -139,7 +143,7 @@ describe("CLProofVerifier.sol", () => {
   it("should verify precalclulated validator object in merkle tree", async () => {
     const StaticCLProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [STATIC_VALIDATOR.gIFirstValidator, STATIC_VALIDATOR.gIFirstValidator, 0],
+      [STATIC_VALIDATOR.gIFirstValidator, NULL_GINDEX, MAX_UINT64],
       {},
     );
 
@@ -228,17 +232,22 @@ describe("CLProofVerifier.sol", () => {
 
   it("should change gIndex on pivot slot", async () => {
     const pivotSlot = 1000;
-    const giPrev = randomBytes32();
-    const giCurr = randomBytes32();
+    const giPrev = STATIC_VALIDATOR.gIFirstValidator;
     const clProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [giPrev, giCurr, pivotSlot],
+      [giPrev, GLOAS_VALIDATORS_GINDEX, pivotSlot],
       {},
     );
 
-    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot - 1)).to.equal(giPrev);
-    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(giCurr);
-    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot + 1)).to.equal(giCurr);
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot - 1)).to.equal(
+      "0x0000000000000000000000000000000000000000000000000056000000000128",
+    );
+    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(
+      "0x0000000000000000000000000000000000000000000000000000000000059800",
+    );
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot + 1)).to.equal(
+      "0x00000000000000000000000000000000000000000000000000000000002cc800",
+    );
   });
 
   it("should validate proof with different gIndex", async () => {
@@ -246,7 +255,7 @@ describe("CLProofVerifier.sol", () => {
     const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(provenValidator.container);
     const pivotSlot = 1000;
 
-    const prepareCLState = async (gIndex: string, slot: number) => {
+    const preparePreGloasCLState = async (gIndex: string, slot: number) => {
       const {
         sszMerkleTree: localTree,
         gIFirstValidator,
@@ -270,16 +279,38 @@ describe("CLProofVerifier.sol", () => {
       };
     };
 
+    const prepareGloasCLState = async (slot: number) => {
+      const localTree: SSZMerkleTree = await ethers.deployContract(
+        "SSZMerkleTree",
+        ["0x00000000000000000000000000000000000000000000000000000000002cc800"],
+        {},
+      );
+      const validatorLeafIndex = await localTree.leafCount();
+      await localTree.addValidatorLeaf(provenValidator.container);
+
+      const stateProof = await localTree.getMerkleProof(validatorLeafIndex);
+      const beaconHeader = generateBeaconHeader(await localTree.getMerkleRoot(), slot);
+      const beaconMerkle = await localTree.getBeaconBlockHeaderProof(beaconHeader);
+
+      return {
+        gIValidators: GLOAS_VALIDATORS_GINDEX,
+        gIndexProven: "0x00000000000000000000000000000000000000000000000000000000002cc800",
+        proof: [...validatorMerkle.proof, ...stateProof, ...beaconMerkle.proof],
+        beaconHeader,
+        beaconRoot: beaconMerkle.root,
+      };
+    };
+
     const [prev, curr] = await Promise.all([
-      prepareCLState("0x0000000000000000000000000000000000000000000000000056000000000028", pivotSlot - 1),
-      prepareCLState("0x0000000000000000000000000000000000000000000000000096000000000028", pivotSlot + 1),
+      preparePreGloasCLState("0x0000000000000000000000000000000000000000000000000056000000000028", pivotSlot - 1),
+      prepareGloasCLState(pivotSlot + 1),
     ]);
 
     // current CL state
 
     const clProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [prev.gIFirstValidator, curr.gIFirstValidator, pivotSlot],
+      [prev.gIFirstValidator, curr.gIValidators, pivotSlot],
       {},
     );
 

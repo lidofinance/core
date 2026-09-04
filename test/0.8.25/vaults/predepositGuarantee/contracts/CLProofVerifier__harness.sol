@@ -9,10 +9,10 @@ import {CLProofVerifier, SSZ, GIndex} from "contracts/0.8.25/vaults/predeposit_g
 
 contract CLProofVerifier__Harness is CLProofVerifier {
     constructor(
-        GIndex _gIFirstValidator,
-        GIndex _gIFirstValidatorAfterChange,
+        GIndex _gIFirstValidatorPreGloas,
+        GIndex _gIValidators,
         uint64 _pivotSlot
-    ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _pivotSlot) {}
+    ) CLProofVerifier(_gIFirstValidatorPreGloas, _gIValidators, _pivotSlot) {}
 
     function TEST_validatePubKeyWCProof(
         IPredepositGuarantee.ValidatorWitness calldata _witness,

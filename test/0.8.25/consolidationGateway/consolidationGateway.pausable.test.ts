@@ -21,7 +21,7 @@ import {
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS } from "../consolidation-helpers";
+import { NULL_GINDEX, PUBKEYS } from "../consolidation-helpers";
 
 const dummyWitness = (pubkey: string) => ({
   proof: [] as string[],
@@ -104,8 +104,8 @@ describe("ConsolidationGateway.sol: pausable", () => {
       1,
       48,
       localMerkle.gIFirstValidator,
-      localMerkle.gIFirstValidator,
-      0,
+      NULL_GINDEX,
+      (1n << 64n) - 1n,
     ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();

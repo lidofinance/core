@@ -232,8 +232,8 @@ export async function main() {
     deployer,
     [
       locator.address,
-      topUpGatewayParams.gIFirstValidatorPrev,
-      topUpGatewayParams.gIFirstValidatorCurr,
+      topUpGatewayParams.gIFirstValidatorPreGloas,
+      topUpGatewayParams.gIValidators,
       topUpGatewayParams.pivotSlot,
       chainSpec.slotsPerEpoch,
     ],
@@ -385,8 +385,8 @@ export async function main() {
     consolidationGatewayParams.maxConsolidationRequestsLimit,
     consolidationGatewayParams.consolidationsPerFrame,
     consolidationGatewayParams.frameDurationInSec,
-    consolidationGatewayParams.gIFirstValidatorPrev,
-    consolidationGatewayParams.gIFirstValidatorCurr,
+    consolidationGatewayParams.gIFirstValidatorPreGloas,
+    consolidationGatewayParams.gIValidators,
     consolidationGatewayParams.pivotSlot,
   ]);
 
@@ -484,12 +484,11 @@ export async function main() {
   const validatorExitDelayVerifierCtorArgs = [
     locator.address,
     {
-      gIFirstValidatorPrev: validatorExitDelayVerifierParams.gIFirstValidatorPrev,
-      gIFirstValidatorCurr: validatorExitDelayVerifierParams.gIFirstValidatorCurr,
+      gIFirstValidatorPreGloas: validatorExitDelayVerifierParams.gIFirstValidatorPreGloas,
+      gIValidators: validatorExitDelayVerifierParams.gIValidators,
       gIFirstHistoricalSummaryPrev: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryPrev,
       gIFirstHistoricalSummaryCurr: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryCurr,
-      gIFirstBlockRootInSummaryPrev: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryPrev,
-      gIFirstBlockRootInSummaryCurr: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryCurr,
+      gIFirstBlockRootInSummary: validatorExitDelayVerifierParams.gIFirstBlockRootInSummary,
     },
     validatorExitDelayVerifierParams.firstSupportedSlot,
     validatorExitDelayVerifierParams.pivotSlot,
@@ -500,6 +499,21 @@ export async function main() {
     chainSpec.genesisTime,
     validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
   ];
+
+  // Sanity check: firstSupportedSlot must not be in the future on the target chain, otherwise every
+  // proof reverts with UnsupportedSlot until the verifier is redeployed with a chain-specific profile.
+  const latestBlockTimestamp = (await ethers.provider.getBlock("latest"))!.timestamp;
+  const firstSupportedSlotTimestamp =
+    BigInt(chainSpec.genesisTime) +
+    BigInt(validatorExitDelayVerifierParams.firstSupportedSlot) * BigInt(chainSpec.secondsPerSlot);
+  if (firstSupportedSlotTimestamp > BigInt(latestBlockTimestamp)) {
+    throw new Error(
+      `ValidatorExitDelayVerifier firstSupportedSlot (${validatorExitDelayVerifierParams.firstSupportedSlot}) ` +
+        `maps to timestamp ${firstSupportedSlotTimestamp}, which is in the future for the target chain ` +
+        `(latest block timestamp ${latestBlockTimestamp}). The deploy parameters profile does not match the chain.`,
+    );
+  }
+
   await deployWithoutProxy(
     Sk.validatorExitDelayVerifier,
     "ValidatorExitDelayVerifier",

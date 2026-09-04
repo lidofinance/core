@@ -127,10 +127,10 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 maxConsolidationRequestsLimit,
         uint256 consolidationsPerFrame,
         uint256 frameDurationInSec,
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
+        GIndex _gIFirstValidatorPreGloas,
+        GIndex _gIValidators,
         uint64 _pivotSlot
-    ) CLProofVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
+    ) CLProofVerifier(_gIFirstValidatorPreGloas, _gIValidators, _pivotSlot) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (lidoLocator == address(0)) revert ZeroArgument("lidoLocator");
         LOCATOR = ILidoLocator(lidoLocator);

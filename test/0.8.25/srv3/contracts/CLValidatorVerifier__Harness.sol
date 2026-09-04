@@ -9,10 +9,10 @@ import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopU
 
 contract CLValidatorVerifier__Harness is CLValidatorVerifier {
     constructor(
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
+        GIndex _gIFirstValidatorPreGloas,
+        GIndex _gIValidators,
         uint64 _pivotSlot
-    ) CLValidatorVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {}
+    ) CLValidatorVerifier(_gIFirstValidatorPreGloas, _gIValidators, _pivotSlot) {}
 
     function TEST_verifyValidator(
         BeaconRootData calldata beaconData,

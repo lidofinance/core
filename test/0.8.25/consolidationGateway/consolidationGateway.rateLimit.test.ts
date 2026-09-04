@@ -15,7 +15,7 @@ import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTre
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS } from "../consolidation-helpers";
+import { NULL_GINDEX, PUBKEYS } from "../consolidation-helpers";
 
 // Helper functions
 const grantLimitManagerRole = async (consolidationGateway: ConsolidationGateway, account: HardhatEthersSigner) => {
@@ -123,8 +123,8 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
       1, // consolidationsPerFrame
       48, // frameDurationInSec
       localMerkle.gIFirstValidator,
-      localMerkle.gIFirstValidator,
-      0,
+      NULL_GINDEX,
+      (1n << 64n) - 1n,
     ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();

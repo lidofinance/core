@@ -73,11 +73,17 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const stEthHolderAmount = ether("1000");
 
-    // Deposit some eth
+    // The holder is a well-known hardhat account that may already hold stETH on a live fork,
+    // so check the balance delta rather than the absolute value.
+    const stEthHolderBalanceBefore = await lido.balanceOf(stEthHolder.address);
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: stEthHolderAmount });
 
-    const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
-    expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
+    const stEthHolderBalanceAfter = await lido.balanceOf(stEthHolder.address);
+    expect(stEthHolderBalanceAfter - stEthHolderBalanceBefore).to.approximately(
+      stEthHolderAmount,
+      10n,
+      "stETH balance increased",
+    );
 
     await finalizeWQViaElVault(ctx);
 
