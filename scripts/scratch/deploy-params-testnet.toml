@@ -163,7 +163,7 @@ gIFirstHistoricalSummaryCurr = "0x0000000000000000000000000000000000000000000000
 gIFirstBlockRootInSummary = "0x000000000000000000000000000000000000000000000000000000000040000d"
 # Additional deployment parameters for ValidatorExitDelayVerifier
 firstSupportedSlot = 0                     # Devnet: full history supported from genesis
-pivotSlot = 51744                          # Devnet Gloas fork: epoch 1617 x 32 slots
+pivotSlot = 28736                           # Devnet Gloas fork: epoch 898 x 32 slots
 capellaSlot = 0                            # Devnet: Capella active from genesis
 slotsPerHistoricalRoot = 8192              # Number of slots per historical root
 shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (2^8 * 32 * 12)
@@ -180,7 +180,7 @@ consolidationsPerFrame = 1            # Number of consolidations processed per f
 frameDurationInSec = 36               # Duration of each processing frame in seconds
 gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator before Gloas
 gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"  # Generalized index for the Gloas validators field
-pivotSlot = 51744                          # Devnet Gloas fork: epoch 1617 x 32 slots
+pivotSlot = 28736                           # Devnet Gloas fork: epoch 898 x 32 slots
 
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
@@ -197,7 +197,7 @@ targetModuleId = 4                    # Target staking module ID: CMv2 is plugge
 [predepositGuarantee]
 gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"
-changeSlot = 51744                         # Devnet Gloas fork: epoch 1617 x 32 slots
+changeSlot = 28736                         # Devnet Gloas fork: epoch 898 x 32 slots
 
 # Operator grid configuration for managing staking operators
 [operatorGrid]
@@ -220,7 +220,7 @@ minTopUpGwei = 1000000000
 # Generalized indices for validator/balance/pending state verification
 gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"
-pivotSlot = 51744                          # Devnet Gloas fork: epoch 1617 x 32 slots
+pivotSlot = 28736                           # Devnet Gloas fork: epoch 898 x 32 slots
 
 # StakingRouter configuration
 [stakingRouter]
