@@ -145,17 +145,16 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     /**
      * @param _genesisForkVersion genesis fork version for the current chain
-     * @param _gIFirstValidator packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in CL state tree
-     * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
+     * @param _gIFirstValidatorPreGloas packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in a pre-Gloas CL state tree
+     * @param _gIValidators packed GIndex of the Gloas validators field
      * @param _pivotSlot slot of the fork that alters first validator GIndex
-     * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _pivotSlot = 0
      */
     constructor(
         bytes4 _genesisForkVersion,
-        GIndex _gIFirstValidator,
-        GIndex _gIFirstValidatorAfterChange,
+        GIndex _gIFirstValidatorPreGloas,
+        GIndex _gIValidators,
         uint64 _pivotSlot
-    ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _pivotSlot) {
+    ) CLProofVerifier(_gIFirstValidatorPreGloas, _gIValidators, _pivotSlot) {
         DEPOSIT_DOMAIN = BLS12_381.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);

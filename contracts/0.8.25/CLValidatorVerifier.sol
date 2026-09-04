@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
+import {GIndex, pack, concat, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/ValidatorWitness.sol";
@@ -26,17 +26,18 @@ abstract contract CLValidatorVerifier {
     // EIP-4788 system contract
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
-    // validators[0] gindex before/after fork layout change
-    GIndex public immutable GI_FIRST_VALIDATOR_PREV;
-    GIndex public immutable GI_FIRST_VALIDATOR_CURR;
+    // validators[0] gindex before Gloas
+    GIndex public immutable GI_FIRST_VALIDATOR_PRE_GLOAS;
+    // validators field gindex starting from Gloas
+    GIndex public immutable GI_VALIDATORS;
     uint64 public immutable PIVOT_SLOT;
 
     error InvalidSlot();
     error RootNotFound();
 
-    constructor(GIndex _gIFirstValidatorPrev, GIndex _gIFirstValidatorCurr, uint64 _pivotSlot) {
-        GI_FIRST_VALIDATOR_PREV = _gIFirstValidatorPrev;
-        GI_FIRST_VALIDATOR_CURR = _gIFirstValidatorCurr;
+    constructor(GIndex _gIFirstValidatorPreGloas, GIndex _gIValidators, uint64 _pivotSlot) {
+        GI_FIRST_VALIDATOR_PRE_GLOAS = _gIFirstValidatorPreGloas;
+        GI_VALIDATORS = _gIValidators;
         PIVOT_SLOT = _pivotSlot;
     }
 
@@ -95,8 +96,10 @@ abstract contract CLValidatorVerifier {
 
     /// @dev GIndex for Validator[i] given slot (fork-aware).
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
-        GIndex gI = _provenSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
-        return gI.shr(_offset);
+        if (_provenSlot < PIVOT_SLOT) {
+            return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(_offset);
+        }
+        return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));
     }
 
     /// @dev Reads parent_beacon_block_root from EIP-4788 by timestamp.

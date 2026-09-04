@@ -8,11 +8,11 @@ import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopU
 contract TopUpGateway__Harness is TopUpGateway {
     constructor(
         address _lidoLocator,
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
+        GIndex _gIFirstValidatorPreGloas,
+        GIndex _gIValidators,
         uint64 _pivotSlot,
         uint256 _slotsPerEpoch
-    ) TopUpGateway(_lidoLocator, _gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot, _slotsPerEpoch) {}
+    ) TopUpGateway(_lidoLocator, _gIFirstValidatorPreGloas, _gIValidators, _pivotSlot, _slotsPerEpoch) {}
 
     function harness_setLastTopUpData() external {
         _setLastTopUpData();

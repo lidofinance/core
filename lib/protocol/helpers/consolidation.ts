@@ -36,10 +36,10 @@ export interface ConsolidationWitnessSet {
  * Build CL witnesses for consolidation target pubkeys against a local state tree
  * committed to EIP-4788.
  *
- * The generalized index and slot come from the deployed ConsolidationGateway
- * (GI_FIRST_VALIDATOR_CURR / PIVOT_SLOT), so the proofs stay valid for any verifier
- * constants a deployment uses. Validators are active, non-exited, with 0x02
- * withdrawal credentials pointing to the real WithdrawalVault.
+ * This helper builds fixed-depth pre-Gloas proofs and requires a non-zero pivot
+ * later than its fixture slot. It does not support Gloas-only deployments.
+ * Validators are active, non-exited, with 0x02 withdrawal credentials pointing
+ * to the real WithdrawalVault.
  */
 export const prepareConsolidationTargetWitnesses = async (
   ctx: ProtocolContext,
@@ -47,10 +47,23 @@ export const prepareConsolidationTargetWitnesses = async (
 ): Promise<ConsolidationWitnessSet> => {
   const { consolidationGateway, withdrawalVault } = ctx.contracts;
 
-  const gIFirstValidator = await consolidationGateway.GI_FIRST_VALIDATOR_CURR();
   const pivotSlot = await consolidationGateway.PIVOT_SLOT();
-  // Any slot at/after the pivot resolves to GI_FIRST_VALIDATOR_CURR in the verifier
-  const slot = Number(pivotSlot) + 3200;
+  const slot = 8192;
+  if (BigInt(slot) >= pivotSlot) {
+    if (pivotSlot !== 0n) {
+      throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+    }
+  }
+
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS PIVOT SLOT.
+  const gIFirstValidator =
+    pivotSlot === 0n
+      ? await new ethers.Contract(
+          await consolidationGateway.getAddress(),
+          ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+          ethers.provider,
+        ).GI_FIRST_VALIDATOR_CURR()
+      : await consolidationGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
 
   const merkleTree = await prepareLocalMerkleTree(gIFirstValidator);
   const withdrawalCredentials = addressToWC(await withdrawalVault.getAddress(), 2);
