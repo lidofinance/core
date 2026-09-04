@@ -17,7 +17,7 @@ jobs:
         run: NODE_OPTIONS="--max-old-space-size=10240" yarn test
 
   test_solidity_fuzzing:
-    name: Solidity / Fuzzing & Invariants
+    name: Solidity / Fuzzing & Invariants / Normal
     if: github.ref_name != 'develop' && github.ref_name != 'master'
     runs-on: ubuntu-latest
 
@@ -31,11 +31,11 @@ jobs:
         run: yarn hardhat test solidity -vvv
 
   test_solidity_fuzzing_deep_files:
-    name: Solidity / Deep test files
+    name: Solidity / Fuzzing & Invariants / Deep / Collect suites
     if: github.event_name == 'workflow_dispatch' || github.ref_name == 'develop' || github.ref_name == 'master'
     runs-on: ubuntu-latest
     outputs:
-      files: ${{ steps.list.outputs.files }}
+      suites: ${{ steps.list.outputs.suites }}
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -43,18 +43,19 @@ jobs:
       - name: List test files with test or invariant functions
         id: list
         run: |
-          files=$(grep -lE 'function (test|invariant)' $(find test -name '*.t.sol') | sort | jq -Rsc 'split("\n") | map(select(. != ""))')
-          echo "files=$files" >> "$GITHUB_OUTPUT"
-          echo "$files"
+          suites=$(grep -lE 'function (test|invariant)' $(find test -name '*.t.sol') | sort \
+            | jq -Rsc 'split("\n") | map(select(. != "")) | map({file: ., suite: (split("/") | last | sub("\\.t\\.sol$"; ""))})')
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+          echo "$suites"
 
   test_solidity_fuzzing_deep:
-    name: Solidity / Fuzzing & Invariants (deep)
+    name: Solidity / Fuzzing & Invariants / Deep / ${{ matrix.suite }}
     needs: test_solidity_fuzzing_deep_files
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        file: ${{ fromJSON(needs.test_solidity_fuzzing_deep_files.outputs.files) }}
+        include: ${{ fromJSON(needs.test_solidity_fuzzing_deep_files.outputs.suites) }}
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
