@@ -185,7 +185,8 @@ export function writeUpgradeParameterAddresses(sectionName: string, paramKey: st
 }
 
 export const mockAragonVoting = async (state: DeploymentState) => {
-  const holderAddress = process.env.HOLDER || process.env.DEPLOYER || "";
+  const defaultHolder = state[Sk.chainId] === 1 ? getAddress(Sk.appAgent, state) : process.env.DEPLOYER;
+  const holderAddress = process.env.HOLDER || defaultHolder || "";
   const holder = await getSignerOrImpersonate(holderAddress, ether("100"));
   log("Starting mock Aragon voting...");
 

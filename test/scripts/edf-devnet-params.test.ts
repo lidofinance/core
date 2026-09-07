@@ -5,13 +5,107 @@ import {
   buildEDFDevnetNewVoteScript,
   buildEDFDevnetUpgradeParameters,
 } from "scripts/utils/edf-devnet";
-import { buildDelegationDeploymentPlan, getDelegationContractsForScope } from "scripts/utils/edf-upgrade";
+import {
+  buildDelegationDeploymentPlan,
+  getDelegationContractsForScope,
+  StoredDelegationContract,
+} from "scripts/utils/edf-upgrade";
 
 import * as toml from "@iarna/toml";
 
 import { validateEDFUpgradeParameters } from "lib/config-schemas";
 
-describe("EDF devnet parameters", () => {
+describe("EDF upgrade parameters", () => {
+  it("uses mainnet council contracts and leaves oracle contracts for the voting step", () => {
+    const manifest = toml.parse(fs.readFileSync("scripts/upgrade/upgrade-params-mainnet.toml", "utf8"));
+    const parameters = validateEDFUpgradeParameters(manifest);
+    const protocolContracts = getDelegationContractsForScope(parameters, "protocol");
+
+    expect(parameters.chainId).to.equal(1);
+    expect(parameters.executionDelegationFramework.factory.address).to.equal(
+      "0xD990770eB2B4b6062EDdB06892fF179C693b46e6",
+    );
+    expect(parameters.depositSecurityModule.quorum).to.equal(4);
+    expect(protocolContracts.map(({ id, address, delegate }) => ({ id, address, delegate }))).to.deep.equal([
+      {
+        id: "lido-dev-team",
+        address: "0x915F0Fa50E1af761B113b41c79ab33Bf4734C36E",
+        delegate: "0x5ecf14e7a3831D44e2F7d4542Ba98C6c96E47420",
+      },
+      {
+        id: "p2p",
+        address: "0xe387Ba1d5C9f6306eCe9ac949C7fB6233dD5411E",
+        delegate: "0xAEbd3E0c29111C02166FB2d560f7158a6ccE6841",
+      },
+      {
+        id: "staking-facilities",
+        address: "0x35506190Ca6df385aA6Bc4a970646dd4f49426c1",
+        delegate: "0x06d6c4F26354aA1426c0Abd79A5f18A5d5fF684f",
+      },
+      {
+        id: "blockscape",
+        address: "0xDc1579636686C082fc3b00B9EB25259A110D0C44",
+        delegate: "0x6aF45f506fD171994D26d014Fc079137532Db219",
+      },
+      {
+        id: "stakefish",
+        address: "0x031E597BcF680f1f2293b119b4b2B14096B15497",
+        delegate: "0xA4512893C5B8BCD8E7AE1cAa56b8402951720D14",
+      },
+      {
+        id: "stakely",
+        address: "0x6A22d74a816662078f2371A7138E7614874cd61d",
+        delegate: "0xc04c1979e37e53FD21E40bd089D311EEfFdb4E00",
+      },
+      {
+        id: "depositor-bot",
+        address: "0x6Aa249bA53A3abcaC52F91146583B3eE2Ee4C7F5",
+        delegate: "0x2df4013EF30b09100A027192E700114cD0D13900",
+      },
+    ]);
+    expect(
+      parameters.depositSecurityModule.guardianMappings.find(
+        ({ delegationContractId }) => delegationContractId === "stakely",
+      )?.oldMember,
+    ).to.equal("0x6d22aE126eB2c37F67a1391B37FF4f2863e61389");
+    expect(buildDelegationDeploymentPlan(protocolContracts).every(({ action }) => action === "reuse")).to.equal(true);
+    expect(parameters.oracleCommittees).to.have.length(4);
+    for (const committee of parameters.oracleCommittees) {
+      expect(committee.memberMappings).to.have.length(9);
+      expect(committee.quorum).to.equal(5);
+    }
+    expect(
+      buildDelegationDeploymentPlan(parameters.executionDelegationFramework.delegationContracts).filter(
+        ({ action }) => action === "deploy",
+      ),
+    ).to.have.length(9);
+    expect(parameters.topUpGateway).to.deep.equal({
+      address: "0x3FC2C71579D80790Aaa3fc7Be8B66ac39dC57374",
+      delegationContractId: "depositor-bot",
+    });
+    expect(parameters.upgradeVoteScript.expiryTimestamp).to.equal(undefined);
+  });
+
+  it("provides mainnet deployment state for the protocol preflight and EDF fixtures", () => {
+    const state = JSON.parse(fs.readFileSync("deployed-mainnet.json", "utf8"));
+    const parameters = validateEDFUpgradeParameters(
+      toml.parse(fs.readFileSync("scripts/upgrade/upgrade-params-mainnet.toml", "utf8")),
+    );
+    expect(state.chainId).to.equal(parameters.chainId);
+    expect(state.delegationFactory.address).to.equal(parameters.executionDelegationFramework.factory.address);
+    expect(state.delegationFactory.runtimeCodeHash).to.equal(
+      parameters.executionDelegationFramework.factory.runtimeCodeHash,
+    );
+    const protocolContracts = getDelegationContractsForScope(parameters, "protocol");
+    const stored = state.delegationFactory.delegationContracts as Record<string, StoredDelegationContract>;
+    expect(Object.keys(stored).sort()).to.deep.equal(protocolContracts.map(({ id }) => id).sort());
+    const plan = buildDelegationDeploymentPlan(protocolContracts, stored);
+    expect(plan.every(({ action }) => action === "reuse")).to.equal(true);
+    for (const contract of plan) {
+      expect(contract.runtimeCodeHash).to.match(/^0x[0-9a-f]{64}$/);
+    }
+  });
+
   it("expands the maintained manifests to the expected voting topology", () => {
     const hoodiManifest = toml.parse(fs.readFileSync("scripts/upgrade/upgrade-params-hoodi.toml", "utf8"));
     const hoodi = validateEDFUpgradeParameters(hoodiManifest);

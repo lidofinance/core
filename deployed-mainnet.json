@@ -255,6 +255,7 @@
       "constructorArgs": ["0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb", "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
     }
   },
+  "chainId": 1,
   "chainSpec": {
     "depositContractAddress": "0x00000000219ab540356cBB839Cbe05303d7705Fa",
     "slotsPerEpoch": 32,
@@ -356,6 +357,63 @@
     ]
   },
   "deployCommit": "e45c4d6fb8120fd29426b8d969c19d8a798ca974",
+  "delegationFactory": {
+    "address": "0xD990770eB2B4b6062EDdB06892fF179C693b46e6",
+    "runtimeCodeHash": "0x0898ad72098301345c44103c8aca22cd8a0a02a339bffe222c6487ec25ff3591",
+    "repository": "https://github.com/lidofinance/execution-delegation-framework.git",
+    "ref": "557299104ad3eb1a74198933bd016328c490e276",
+    "delegationContracts": {
+      "lido-dev-team": {
+        "address": "0x915F0Fa50E1af761B113b41c79ab33Bf4734C36E",
+        "owner": "0x2E6e175F57D7a18b3CA5490844034600FC18EF83",
+        "delegate": "0x5ecf14e7a3831D44e2F7d4542Ba98C6c96E47420",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x46a3f2e13ebb9ff53d4ae49f460c52fcf1213793c6fa60849f6fd595cc90db09"
+      },
+      "p2p": {
+        "address": "0xe387Ba1d5C9f6306eCe9ac949C7fB6233dD5411E",
+        "owner": "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A",
+        "delegate": "0xAEbd3E0c29111C02166FB2d560f7158a6ccE6841",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x4a75c94b356c64241dea7252089f7bb3a557b44a6a615c17db7cb25eae827e5c"
+      },
+      "staking-facilities": {
+        "address": "0x35506190Ca6df385aA6Bc4a970646dd4f49426c1",
+        "owner": "0x3d49967d09637B83E465Cc32b1C5d968e3d34eA8",
+        "delegate": "0x06d6c4F26354aA1426c0Abd79A5f18A5d5fF684f",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x9127ec398c753b1ac3565b4b1c79d61ec35eb37856d15281a270adb128bda876"
+      },
+      "blockscape": {
+        "address": "0xDc1579636686C082fc3b00B9EB25259A110D0C44",
+        "owner": "0xFcBC1BB96b3F521fe7BFD1E2E309eC032F078fDE",
+        "delegate": "0x6aF45f506fD171994D26d014Fc079137532Db219",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x1df72bae32352508f084c3818b72905aece6fb426e44ed6a549b7ffbb551b63d"
+      },
+      "stakefish": {
+        "address": "0x031E597BcF680f1f2293b119b4b2B14096B15497",
+        "owner": "0xaB61339Cb8A5BBED2dEaC4D2c6E71B912919aBdB",
+        "delegate": "0xA4512893C5B8BCD8E7AE1cAa56b8402951720D14",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0xe4bab4398f923579cc5e6cc6a57dc803d31fd402dc0ae772c26c996d8ee0e259"
+      },
+      "stakely": {
+        "address": "0x6A22d74a816662078f2371A7138E7614874cd61d",
+        "owner": "0xce0F8F5019856D79840F9463b5D05c44c7d9B791",
+        "delegate": "0xc04c1979e37e53FD21E40bd089D311EEfFdb4E00",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0xa3a98836267e83dca0cd885e4487e2caea164622512fe0ab4879341b22399cea"
+      },
+      "depositor-bot": {
+        "address": "0x6Aa249bA53A3abcaC52F91146583B3eE2Ee4C7F5",
+        "owner": "0x2E6e175F57D7a18b3CA5490844034600FC18EF83",
+        "delegate": "0x2df4013EF30b09100A027192E700114cD0D13900",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x46a3f2e13ebb9ff53d4ae49f460c52fcf1213793c6fa60849f6fd595cc90db09"
+      }
+    }
+  },
   "deployer": "0x55Bc991b2edF3DDb4c520B222bE4F378418ff0fA",
   "depositSecurityModule": {
     "address": "0xF573E9E3de1f86B085417ab294f56E7920B4e9Be",

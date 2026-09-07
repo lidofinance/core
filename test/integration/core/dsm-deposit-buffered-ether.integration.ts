@@ -29,8 +29,6 @@ describe("Integration: DSM buffered ether deposit", () => {
     ctx = await getProtocolContext();
     suiteSnapshot = await Snapshot.take();
 
-    if (ctx.isMainnet) this.skip();
-
     dsm = ctx.contracts.depositSecurityModule;
     depositContract = new ethers.Contract(await dsm.DEPOSIT_CONTRACT(), DEPOSIT_CONTRACT_ABI, ethers.provider);
     DSMAttestMessage.setMessagePrefix(await dsm.ATTEST_MESSAGE_PREFIX());

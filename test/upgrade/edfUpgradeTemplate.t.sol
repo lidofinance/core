@@ -57,14 +57,19 @@ contract EDFUpgradeTemplateTest is Test {
     uint256 internal expiry;
 
     function setUp() public {
+        _setUp(560048);
+    }
+
+    function _setUp(uint256 chainId) private {
+        vm.chainId(chainId);
         executor = new EDFUpgradeExecutor();
 
         stakingRouter = new EDFStakingRouter__Mock();
         topUpGateway = new EDFStakingRouter__Mock();
 
-        address[] memory oldGuardians = new address[](2);
+        address[] memory oldGuardians = new address[](chainId == 560048 ? 2 : 1);
         oldGuardians[0] = OLD_GUARDIAN;
-        oldGuardians[1] = REMOVED_DEV_COUNCIL_MEMBER;
+        if (chainId == 560048) oldGuardians[1] = REMOVED_DEV_COUNCIL_MEMBER;
         oldDSM = new EDFDepositSecurityModule__Mock(
             4,
             address(stakingRouter),
@@ -199,6 +204,25 @@ contract EDFUpgradeTemplateTest is Test {
         executor.enact();
         vm.expectRevert(EDFUpgradeTemplate.UpgradeAlreadyFinished.selector);
         executor.enact();
+    }
+
+    function test_mainnetPreservesGuardianCount() public {
+        _setUp(1);
+        assertEq(oldDSM.getGuardians().length, config.guardiansCount());
+        executor.enact();
+        assertTrue(template.isUpgradeFinished());
+        assertEq(ILidoLocator(address(locator)).depositSecurityModule(), address(newDSM));
+    }
+
+    function test_mainnetRejectsWrongOldGuardian() public {
+        _setUp(1);
+        EDFUpgradeParameters memory params = _makeParams();
+        params.guardianMappings[0].oldMember = address(0xDEAD);
+        template = new EDFUpgradeTemplate__Harness(params, expiry);
+        vm.prank(address(executor));
+        vm.expectRevert(abi.encodeWithSelector(EDFUpgradeTemplate.InvalidMembers.selector, address(oldDSM)));
+        template.startUpgrade();
+        assertEq(template.upgradeBlockNumber(), 0);
     }
 
     function test_preValidationFailureRollsBackStart() public {

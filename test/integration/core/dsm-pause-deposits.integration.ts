@@ -28,7 +28,6 @@ describe("Integration: DSM pause deposits", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    if (ctx.isMainnet) this.skip();
     dsm = ctx.contracts.depositSecurityModule;
 
     [stranger, delegationOwner, delegate] = await ethers.getSigners();

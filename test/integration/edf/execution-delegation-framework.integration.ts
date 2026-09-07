@@ -46,11 +46,9 @@ describe("Integration: Execution Delegation Framework", () => {
     ctx = await getProtocolContext();
     suiteSnapshot = await Snapshot.take();
 
-    if (ctx.isMainnet) this.skip();
-
     const factoryAddress = readNetworkState()[Sk.delegationFactory]?.address;
     if (!factoryAddress) {
-      throw new Error("DelegationFactory address is missing in scratch deployment state");
+      throw new Error("DelegationFactory address is missing in deployment state");
     }
     if ((await ethers.provider.getCode(factoryAddress)) === "0x") {
       throw new Error(`DelegationFactory at ${factoryAddress} has no bytecode`);

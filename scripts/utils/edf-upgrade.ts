@@ -151,12 +151,16 @@ async function validateSourceMembership(
   const dsm = new ethers.Contract(activeDSMAddress, DSM_MEMBERSHIP_ABI, ethers.provider);
   const guardianMappings = parameters.depositSecurityModule.guardianMappings;
   const guardians = await dsm.getGuardians();
-  // The target maps Kiln's old address to the Stakely holder. The old DSM also has one extra Lido dev council member
-  // that the upgrade removes, so its source count must be exactly one greater than the target count.
-  if (guardians.length !== guardianMappings.length + 1) {
+  // Hoodi removes an extra Lido dev council seat. Other networks keep the guardian count.
+  const expectedGuardianCount = guardianMappings.length + (parameters.chainId === 560048 ? 1 : 0);
+  if (guardians.length !== expectedGuardianCount) {
     throw new Error(
-      `DepositSecurityModule guardian count mismatch: expected ${guardianMappings.length + 1}, got ${guardians.length}`,
+      `DepositSecurityModule guardian count mismatch: expected ${expectedGuardianCount}, got ${guardians.length}`,
     );
+  }
+  const actualGuardians = new Set(guardians.map((address: string) => ethers.getAddress(address)));
+  if (guardianMappings.some(({ oldMember }) => !actualGuardians.has(ethers.getAddress(oldMember)))) {
+    throw new Error("DepositSecurityModule members do not match the pre-EDF manifest");
   }
   const quorum = await dsm.getGuardianQuorum();
   if (quorum !== BigInt(parameters.depositSecurityModule.quorum)) {
