@@ -35,7 +35,9 @@ jobs:
         run: cargo install just
 
       - name: Run integration tests
-        run: yarn test:integration:edf-upgrade:hoodi
+        # Use the following command if there are upgrade steps
+        # run: yarn test:integration:upgrade
+        run: yarn test:integration
         env:
           NETWORK: "hoodi"
           RPC_URL: "http://localhost:8565"
