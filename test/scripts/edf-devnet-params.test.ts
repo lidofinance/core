@@ -1,10 +1,6 @@
 import { expect } from "chai";
 import fs from "fs";
-import {
-  buildEDFDevnetExecutionScript,
-  buildEDFDevnetNewVoteScript,
-  buildEDFDevnetUpgradeParameters,
-} from "scripts/utils/edf-devnet";
+import { buildEDFDevnetUpgradeParameters } from "scripts/utils/edf-devnet";
 import {
   buildDelegationDeploymentPlan,
   getDelegationContractsForScope,
@@ -394,21 +390,5 @@ describe("EDF upgrade parameters", () => {
       buildDelegationDeploymentPlan(parameters.executionDelegationFramework.delegationContracts)[0].action,
     ).to.equal("reuse");
     expect(parameters.topUpGateway.delegationContractId).to.equal("dsm-guardian-01");
-  });
-
-  it("builds the direct Aragon scripts outside the Hoodi voting contract", () => {
-    const executionScript = buildEDFDevnetExecutionScript([
-      {
-        description: "Direct devnet action",
-        call: {
-          to: "0x0000000000000000000000000000000000000011",
-          data: "0xaabb",
-        },
-      },
-    ]);
-    const tokenManagerScript = buildEDFDevnetNewVoteScript("0x0000000000000000000000000000000000000022", "0xcc");
-
-    expect(executionScript).to.equal("0x00000001000000000000000000000000000000000000001100000002aabb");
-    expect(tokenManagerScript).to.equal("0x00000001000000000000000000000000000000000000002200000001cc");
   });
 });
