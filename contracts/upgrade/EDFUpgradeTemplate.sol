@@ -17,7 +17,8 @@ import {
 } from "./EDFUpgradeTypes.sol";
 
 /// @title EDFUpgradeTemplate
-/// @notice Validates the atomic migration from EOA oracle/DSM members to EDF delegation contracts.
+/// @notice Test-only pre/post checks for the EDF/DSM v5 vote fixture on devnets and forks.
+/// @dev This fixture is not a production upgrade template.
 contract EDFUpgradeTemplate {
     event UpgradeStarted();
     event UpgradeFinished();
