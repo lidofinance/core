@@ -1,13 +1,4 @@
 # EDF / DSM v5 Hoodi release manifest.
-#
-# Each guardian and oracle member has the current address removed by the vote
-# and the DelegationContract address added by the vote. An empty
-# delegationContract makes a local Hoodi fork deploy a test contract. A filled
-# address is reused as-is and skips that deployment.
-#
-# When approved contracts exist, replace the empty delegationContract values.
-# owner, delegate, cooldown, runtimeCodeHash and deploymentTx are optional extra
-# checks. Also configure the approved Factory address and runtimeCodeHash.
 
 chainId = 560048
 
@@ -44,45 +35,85 @@ delegationContract = "0x4EEC6BEd8d5E45f0a6a99F067bC5F6370f2f7221"
 currentAddress = "0x8C4C15870d27c1194B6893F6B94DD0CE9C2c8ba2"
 delegationContract = "0x03224cFc446F3166c83E875095e872DD1E098076"
 
+# Instadapp
 [oracleMembers.oracle-member-01]
 currentAddress = "0x43C45C2455C49eed320F463fF4f1Ece3D2BF5aE2"
-delegationContract = ""
+delegationContract = "0x929de74c921f3e719Ad2bb026EDeF747d443dC8E"
+owner = "0xd1d7238f88839cB9b06D116Ae735F22C4D9692Ef"
+delegate = "0xcad8AeeEd49158E20F8429B28520541cFa2C27b1"
+cooldown = 172800
 
+# Caliber
 [oracleMembers.oracle-member-02]
 currentAddress = "0x948A62cc0414979dc7aa9364BA5b96ECb29f8736"
-delegationContract = ""
+delegationContract = "0x9F81976E461B82cfe3CAec06De8eFA8aD5543408"
+owner = "0x604245617aFdde8951813eC4D7f02EdfB8b28957"
+delegate = "0xe9FCd8c6CA10414E1955a8366Ea72eD1BbAFC3Bf"
+cooldown = 172800
 
+# Chorus One(Bitwise)
 [oracleMembers.oracle-member-03]
 currentAddress = "0x1932f53B1457a5987791a40Ba91f71c5Efd5788F"
-delegationContract = ""
+delegationContract = "0x9950477b8D8154ef44745612832464C3c2155F79"
+owner = "0xd963ae585757479a74b71C7f7c22280954921Ec8"
+delegate = "0x6070B31816E11A8b222Fa232266FFdDC02bED02b"
+cooldown = 172800
 
+# Chainlayer
 [oracleMembers.oracle-member-04]
 currentAddress = "0xf7aE520e99ed3C41180B5E12681d31Aa7302E4e5"
-delegationContract = ""
+delegationContract = "0xC51fE2B136a24D6eC8368C858Ae5211dc2FE0e0B"
+owner = "0xcB23CED94CF83745783C413Ac1f3467d001C662f"
+delegate = "0x3E32F6E0E9A2f55eF6Ee4075bb249c8E88a42A15"
+cooldown = 172800
 
+# p2p
 [oracleMembers.oracle-member-05]
 currentAddress = "0x99B2B75F490fFC9A29E4E1f5987BE8e30E690aDF"
-delegationContract = ""
+delegationContract = "0x43c97fEfeF1e41D6429814e2a3Ad37aA096d633e"
+owner = "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A"
+delegate = "0xEDF5163607997899B91BEBD4feb1d5D78c896b57"
+cooldown = 172800
 
+# Staking Facilities
 [oracleMembers.oracle-member-06]
 currentAddress = "0x219743f1911d84B32599BdC2Df21fC8Dba6F81a2"
-delegationContract = ""
+delegationContract = "0xc19a08e427351F51DA7A82136aF66d8F01931738"
+owner = "0x7ACcbffD1aF1A5813CEAf2c444d77851525f5d48"
+delegate = "0xad4C09E3cc0bCE7FF70bb23f624Cc9dE86eba556"
+cooldown = 172800
 
+# Stakefish
 [oracleMembers.oracle-member-07]
 currentAddress = "0xD3b1e36A372Ca250eefF61f90E833Ca070559970"
-delegationContract = ""
+delegationContract = "0x9d7bFAa500b5DeC4FBab2257dfbC0cB3D5c1Fbc8"
+owner = "0x6393a3d18Cb3924A1DDFe64c349abA8615ffDFb5"
+delegate = "0xBD9d87c5CAD402447408665E36b1e550a84E746B"
+cooldown = 172800
 
+# bloXroute
 [oracleMembers.oracle-member-08]
 currentAddress = "0x4c75FA734a39f3a21C57e583c1c29942F021C6B7"
-delegationContract = ""
+delegationContract = "0x443e31892Ffd51f6f0Fef6DAE4ac2e2795f311Bf"
+owner = "0x2c1C56642F5F935918F0eb14d70B6DF28FD95C03"
+delegate = "0xAe13D937a042aeD48Eb67EFa935972b188578977"
+cooldown = 172800
 
+# MatrixedLink
 [oracleMembers.oracle-member-09]
 currentAddress = "0xfe43A8B0b481Ae9fB1862d31826532047d2d538c"
-delegationContract = ""
+delegationContract = "0x89E9FCB24CC82e9A449A69f3932C70ca2FA07E1D"
+owner = "0xbA63b701bee1c8B4969eaC2F548E594dcFd33C85"
+delegate = "0x049B1d2F7578Bb56F9B75fcE6a3ee5C40551e694"
+cooldown = 172800
 
+# Lido
 [oracleMembers.oracle-member-10]
 currentAddress = "0xcA80ee7313A315879f326105134F938676Cfd7a9"
-delegationContract = ""
+delegationContract = "0xAFca4694c06720Ad03037db3760a920320037217"
+owner = "0xff513731aAc4ceaa1239Cf6fEe824b7536B6D25c"
+delegate = "0xcA80ee7313A315879f326105134F938676Cfd7a9"
+cooldown = 172800
 
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200

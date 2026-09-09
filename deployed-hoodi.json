@@ -496,6 +496,76 @@
         "delegate": "0x9b186cE78Ddd6fF098b4a533Dd17a139e1FFeD76",
         "cooldown": 172800,
         "runtimeCodeHash": "0x12bcbe501a2f61c5d486eacd2065f3dc1d5185591796bded2cda2e1fc81001ed"
+      },
+      "oracle-member-01": {
+        "address": "0x929de74c921f3e719Ad2bb026EDeF747d443dC8E",
+        "owner": "0xd1d7238f88839cB9b06D116Ae735F22C4D9692Ef",
+        "delegate": "0xcad8AeeEd49158E20F8429B28520541cFa2C27b1",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x8b97b39c93064991ad26f56d7e5bb3f5132efe75b2148b4704808521e9d11317"
+      },
+      "oracle-member-02": {
+        "address": "0x9F81976E461B82cfe3CAec06De8eFA8aD5543408",
+        "owner": "0x604245617aFdde8951813eC4D7f02EdfB8b28957",
+        "delegate": "0xe9FCd8c6CA10414E1955a8366Ea72eD1BbAFC3Bf",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0xc25aed21fca28b9ed92796524d9717ced93c1972b66c5f40c8777f784bae543d"
+      },
+      "oracle-member-03": {
+        "address": "0x9950477b8D8154ef44745612832464C3c2155F79",
+        "owner": "0xd963ae585757479a74b71C7f7c22280954921Ec8",
+        "delegate": "0x6070B31816E11A8b222Fa232266FFdDC02bED02b",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x1c7a2bd5b8f93944311ba60eefabcc4d163fb88c0add6607314e14cf49b73679"
+      },
+      "oracle-member-04": {
+        "address": "0xC51fE2B136a24D6eC8368C858Ae5211dc2FE0e0B",
+        "owner": "0xcB23CED94CF83745783C413Ac1f3467d001C662f",
+        "delegate": "0x3E32F6E0E9A2f55eF6Ee4075bb249c8E88a42A15",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x99263849f2a950a8764a5727d4e072eb226a2e72d747c5e939a33d38b5243328"
+      },
+      "oracle-member-05": {
+        "address": "0x43c97fEfeF1e41D6429814e2a3Ad37aA096d633e",
+        "owner": "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A",
+        "delegate": "0xEDF5163607997899B91BEBD4feb1d5D78c896b57",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x4a75c94b356c64241dea7252089f7bb3a557b44a6a615c17db7cb25eae827e5c"
+      },
+      "oracle-member-06": {
+        "address": "0xc19a08e427351F51DA7A82136aF66d8F01931738",
+        "owner": "0x7ACcbffD1aF1A5813CEAf2c444d77851525f5d48",
+        "delegate": "0xad4C09E3cc0bCE7FF70bb23f624Cc9dE86eba556",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x6fcb55c06744b3f35a3ad1621a0b03875fc47c2c1ce1daa29851e241d45bd1b7"
+      },
+      "oracle-member-07": {
+        "address": "0x9d7bFAa500b5DeC4FBab2257dfbC0cB3D5c1Fbc8",
+        "owner": "0x6393a3d18Cb3924A1DDFe64c349abA8615ffDFb5",
+        "delegate": "0xBD9d87c5CAD402447408665E36b1e550a84E746B",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x115b9d80b0e2604764a6032143962d43ab7139e8440a00eee5059c53786998ca"
+      },
+      "oracle-member-08": {
+        "address": "0x443e31892Ffd51f6f0Fef6DAE4ac2e2795f311Bf",
+        "owner": "0x2c1C56642F5F935918F0eb14d70B6DF28FD95C03",
+        "delegate": "0xAe13D937a042aeD48Eb67EFa935972b188578977",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0xe5ddca310f90c72011a35f50f957e23d7edc8e9b6cbb84ef65d0f85bf3b870ba"
+      },
+      "oracle-member-09": {
+        "address": "0x89E9FCB24CC82e9A449A69f3932C70ca2FA07E1D",
+        "owner": "0xbA63b701bee1c8B4969eaC2F548E594dcFd33C85",
+        "delegate": "0x049B1d2F7578Bb56F9B75fcE6a3ee5C40551e694",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x3afe8225eb090d618c9ddbd8b2f5793cc17400d616322c69ce59133dc1aadf6d"
+      },
+      "oracle-member-10": {
+        "address": "0xAFca4694c06720Ad03037db3760a920320037217",
+        "owner": "0xff513731aAc4ceaa1239Cf6fEe824b7536B6D25c",
+        "delegate": "0xcA80ee7313A315879f326105134F938676Cfd7a9",
+        "cooldown": 172800,
+        "runtimeCodeHash": "0x12bcbe501a2f61c5d486eacd2065f3dc1d5185591796bded2cda2e1fc81001ed"
       }
     }
   },

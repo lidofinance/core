@@ -1,10 +1,4 @@
 # EDF / DSM v5 Mainnet release manifest.
-# Council addresses: Daemon Council Members CSV, received 2026-09-07.
-# Mainnet Delegator is the contract; Post EDF is its delegate.
-# Owner, delegate, cooldown and source committees checked at block 25924027.
-# Protocol deploy uses the six guardians and depositor only.
-# Empty oracle delegationContract values are for local fork deployment only;
-# fill the approved addresses before live voting deployment.
 
 chainId = 1
 
@@ -59,41 +53,77 @@ owner = "0xce0F8F5019856D79840F9463b5D05c44c7d9B791"
 delegate = "0xc04c1979e37e53FD21E40bd089D311EEfFdb4E00"
 cooldown = 172800
 
+# Instadapp
 [oracleMembers.oracle-member-01]
 currentAddress = "0x73181107c8D9ED4ce0bbeF7A0b4ccf3320C41d12"
-delegationContract = ""
+delegationContract = "0xE75A431A98487DC69A14Bdd13d858E3238e9C1b3"
+owner = "0x772E9D0387671Ce641f17FD1fCFB3a9cE8ED05fB"
+delegate = "0x5595033F304217aFDB8ffB35E42C22B72184730b"
+cooldown = 172800
 
+# Caliber
 [oracleMembers.oracle-member-02]
 currentAddress = "0x4118DAD7f348A4063bD15786c299De2f3B1333F3"
-delegationContract = ""
+delegationContract = "0xc77d0Bf3AA4778E36a89CDC8bbc9c34d8060637d"
+owner = "0x84225B558e224dc6C38f4eda1d3591fE6b5E34aa"
+delegate = "0x82A821E8a2585D1AC8f346BE7Da6995490d21Ca6"
+cooldown = 172800
 
+# Staking Facilities
 [oracleMembers.oracle-member-03]
 currentAddress = "0x404335BcE530400a5814375E7Ec1FB55fAff3eA2"
-delegationContract = ""
+delegationContract = "0xc7442d4d8F3FfEa0fA4a18Ad3062c8137cE21749"
+owner = "0x035AcCF7E230f32028a1134134A035dda567C86e"
+delegate = "0x7abC999C7E1f22a7E12b2A1024bC17676FE18b4b"
+cooldown = 172800
 
+# Chorus One(Bitwise)
 [oracleMembers.oracle-member-04]
 currentAddress = "0x8dB977C13CAA938BC58464bFD622DF0570564b78"
-delegationContract = ""
+delegationContract = "0x56B3eA8016Da18C6E8CD8135492d242F0dE0DBBC"
+owner = "0x6057526Da2Dc9Bd23a3C6F1b15C74De2D7593378"
+delegate = "0x5416CAAb6f37BF81cb2dc7ce0a363AfB9DD92d57"
+cooldown = 172800
 
+# p2p
 [oracleMembers.oracle-member-05]
 currentAddress = "0x007DE4a5F7bc37E2F26c0cb2E8A95006EE9B89b5"
-delegationContract = ""
+delegationContract = "0x4E3F2DEeb59eB9a205D82D17647b3e56422e0FEe"
+owner = "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A"
+delegate = "0x565F04cB319EC2295E1fcbBbe5F708687FFcCE75"
+cooldown = 172800
 
+# Chainlayer
 [oracleMembers.oracle-member-06]
 currentAddress = "0xc79F702202E3A6B0B6310B537E786B9ACAA19BAf"
-delegationContract = ""
+delegationContract = "0xd524101C3c40f71Fce7B9312D299603880a06Bdb"
+owner = "0x48D10eaec45e330003E62115e56d2A05F29eca70"
+delegate = "0x4D3aD7E8e591d389B612Fc063f53837E284d3F86"
+cooldown = 172800
 
+# bloXroute
 [oracleMembers.oracle-member-07]
 currentAddress = "0x61c91ECd902EB56e314bB2D5c5C07785444Ea1c8"
-delegationContract = ""
+delegationContract = "0x99Cd2EF33040879D40BBC77Df81863D97f13C64d"
+owner = "0x9462A9FfF5646d0b6517D8eac49de49277e89dB9"
+delegate = "0x375ABa35EA2011Af97b51bd395494C827d1C39BD"
+cooldown = 172800
 
+# MatrixedLink
 [oracleMembers.oracle-member-08]
 currentAddress = "0xe57B3792aDCc5da47EF4fF588883F0ee0c9835C9"
-delegationContract = ""
+delegationContract = "0xC4f2704273598d51A0ec76A31C12553ec8f5A891"
+owner = "0x60D78785B763374bd552F5cE270da77781C6066C"
+delegate = "0xC10258969442c7957351A0ddc8194D2685B2a2c2"
+cooldown = 172800
 
+# Stakefish
 [oracleMembers.oracle-member-09]
 currentAddress = "0x042a9e5acCfa17e28300F1b5967f20891E973922"
-delegationContract = ""
+delegationContract = "0x5e8Ed9f10307eD6FA793A347e4D0f407D00B9C6f"
+owner = "0x3F7c24Cc2C91E8BEb20498E61b51a696ffb2AbA5"
+delegate = "0x2aE828F10DfeE5b4c42f6E61D3d30033D4520753"
+cooldown = 172800
 
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200
