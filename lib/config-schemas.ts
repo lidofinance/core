@@ -21,11 +21,11 @@ const ChainSpecSchema = z.object({
 const ValidatorExitDelayVerifierSchema = z.object({
   gIFirstValidatorPreGloas: HexStringSchema,
   gIValidators: HexStringSchema,
-  gIFirstHistoricalSummaryPrev: HexStringSchema,
-  gIFirstHistoricalSummaryCurr: HexStringSchema,
+  gIFirstHistoricalSummaryPreGloas: HexStringSchema,
+  gIFirstHistoricalSummary: HexStringSchema,
   gIFirstBlockRootInSummary: HexStringSchema,
   firstSupportedSlot: NonNegativeIntSchema,
-  pivotSlot: NonNegativeIntSchema,
+  gloasSlot: NonNegativeIntSchema,
   capellaSlot: NonNegativeIntSchema,
   slotsPerHistoricalRoot: PositiveIntSchema,
   shardCommitteePeriodInSeconds: PositiveIntSchema,
@@ -410,7 +410,7 @@ export const UpgradeParametersSchema = z.object({
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ changeSlot: true }).extend({
     genesisForkVersion: HexStringSchema,
-    pivotSlot: NonNegativeIntSchema,
+    gloasSlot: NonNegativeIntSchema,
   }),
 
   // csm

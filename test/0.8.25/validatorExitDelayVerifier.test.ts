@@ -63,8 +63,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         {
           gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
           gIValidators: GI_VALIDATORS,
-          gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-          gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
           gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
         },
         FIRST_SUPPORTED_SLOT,
@@ -82,17 +82,15 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       expect(await validatorExitDelayVerifier.LOCATOR()).to.equal(LIDO_LOCATOR);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PRE_GLOAS()).to.equal(GI_FIRST_VALIDATOR_PRE_GLOAS);
       expect(await validatorExitDelayVerifier.GI_VALIDATORS()).to.equal(GI_VALIDATORS);
-      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_PREV()).to.equal(
+      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS()).to.equal(
         GI_FIRST_HISTORICAL_SUMMARY_PREV,
       );
-      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_CURR()).to.equal(
-        GI_FIRST_HISTORICAL_SUMMARY_CURR,
-      );
+      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY()).to.equal(GI_FIRST_HISTORICAL_SUMMARY_CURR);
       expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY()).to.equal(
         GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
       );
       expect(await validatorExitDelayVerifier.FIRST_SUPPORTED_SLOT()).to.equal(FIRST_SUPPORTED_SLOT);
-      expect(await validatorExitDelayVerifier.PIVOT_SLOT()).to.equal(PIVOT_SLOT);
+      expect(await validatorExitDelayVerifier.GLOAS_SLOT()).to.equal(PIVOT_SLOT);
       expect(await validatorExitDelayVerifier.SLOTS_PER_EPOCH()).to.equal(SLOTS_PER_EPOCH);
       expect(await validatorExitDelayVerifier.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
       expect(await validatorExitDelayVerifier.GENESIS_TIME()).to.equal(GENESIS_TIME);
@@ -103,15 +101,15 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       expect(await validatorExitDelayVerifier.SLOTS_PER_HISTORICAL_ROOT()).to.equal(SLOTS_PER_HISTORICAL_ROOT);
     });
 
-    it("reverts with 'InvalidPivotSlot' if firstSupportedSlot > pivotSlot", async () => {
+    it("reverts with 'InvalidGloasSlot' if firstSupportedSlot > gloasSlot", async () => {
       await expect(
         ethers.deployContract("ValidatorExitDelayVerifier", [
           LIDO_LOCATOR,
           {
             gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
             gIValidators: GI_VALIDATORS,
-            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           200_000, // firstSupportedSlot
@@ -123,7 +121,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           GENESIS_TIME,
           SHARD_COMMITTEE_PERIOD_IN_SECONDS,
         ]),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidPivotSlot");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidGloasSlot");
     });
 
     it("reverts with 'ZeroLidoLocatorAddress' if lidoLocator is zero address", async () => {
@@ -133,8 +131,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           {
             gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
             gIValidators: GI_VALIDATORS,
-            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
@@ -159,8 +157,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           {
             gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
             gIValidators: GI_VALIDATORS,
-            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
@@ -182,8 +180,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           {
             gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
             gIValidators: GI_VALIDATORS,
-            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
@@ -205,8 +203,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           {
             gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
             gIValidators: GI_VALIDATORS,
-            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
           },
           FIRST_SUPPORTED_SLOT,
@@ -254,8 +252,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         {
           gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
           gIValidators: GI_VALIDATORS,
-          gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-          gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
           gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
         },
         FIRST_SUPPORTED_SLOT,
@@ -806,8 +804,8 @@ describe("GIndex helpers", () => {
       {
         gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
         gIValidators: GI_VALIDATORS,
-        gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
-        gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+        gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+        gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY_CURR,
         gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
       },
       FIRST_SUPPORTED_SLOT,

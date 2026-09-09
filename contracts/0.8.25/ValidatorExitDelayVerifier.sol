@@ -65,8 +65,8 @@ struct HistoricalHeaderWitness {
 struct GIndices {
     GIndex gIFirstValidatorPreGloas;
     GIndex gIValidators;
-    GIndex gIFirstHistoricalSummaryPrev;
-    GIndex gIFirstHistoricalSummaryCurr;
+    GIndex gIFirstHistoricalSummaryPreGloas;
+    GIndex gIFirstHistoricalSummary;
     GIndex gIFirstBlockRootInSummary;
 }
 
@@ -97,11 +97,11 @@ contract ValidatorExitDelayVerifier {
     /// @dev This index is relative to a Gloas state like: `BeaconState.validators`.
     GIndex public immutable GI_VALIDATORS;
 
-    /// @dev This index is relative to a state like: `BeaconState.historical_summaries[0]`.
-    GIndex public immutable GI_FIRST_HISTORICAL_SUMMARY_PREV;
+    /// @dev This index is relative to a pre-Gloas state like: `BeaconState.historical_summaries[0]`.
+    GIndex public immutable GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS;
 
-    /// @dev This index is relative to a state like: `BeaconState.historical_summaries[0]`.
-    GIndex public immutable GI_FIRST_HISTORICAL_SUMMARY_CURR;
+    /// @dev This index is relative to a Gloas state like: `BeaconState.historical_summaries[0]`.
+    GIndex public immutable GI_FIRST_HISTORICAL_SUMMARY;
 
     /// @dev HistoricalSummary is a plain container whose layout does not vary across forks.
     ///      This index is relative to HistoricalSummary like: HistoricalSummary.blockRoots[0].
@@ -110,8 +110,8 @@ contract ValidatorExitDelayVerifier {
     /// @notice The first slot this verifier will accept proofs for.
     uint64 public immutable FIRST_SUPPORTED_SLOT;
 
-    /// @notice The first slot of the currently-compatible fork.
-    uint64 public immutable PIVOT_SLOT;
+    /// @notice The first slot of the Gloas fork.
+    uint64 public immutable GLOAS_SLOT;
 
     /// @notice The slot where Capella fork started (when historical summaries became available).
     uint64 public immutable CAPELLA_SLOT;
@@ -123,10 +123,9 @@ contract ValidatorExitDelayVerifier {
     ILidoLocator public immutable LOCATOR;
 
     error RootNotFound();
-    error InvalidGIndex();
     error InvalidBlockHeader();
     error UnsupportedSlot(uint64 slot);
-    error InvalidPivotSlot();
+    error InvalidGloasSlot();
     error InvalidPerHistoricalRootSlot();
     error ZeroLidoLocatorAddress();
     error ExitIsNotEligibleOnProvableBeaconBlock(
@@ -137,12 +136,11 @@ contract ValidatorExitDelayVerifier {
     error HistoricalSummaryDoesNotExist();
 
     /**
-     * @dev The previous and current forks can be essentially the same.
      * @param lidoLocator The address of the LidoLocator contract.
      * @param gIndices Struct containing all GIndices for the contract.
      * @param firstSupportedSlot The earliest slot number that proofs can be submitted for verification.
-     * @param pivotSlot The pivot slot number used to differentiate "previous" vs "current" fork indexing.
-     * @param capellaSlot The slot where Capella fork started.
+     * @param gloasSlot The slot when Gloas fork starts.
+     * @param capellaSlot The slot when Capella fork starts.
      * @param slotsPerHistoricalRoot Number of slots per historical root.
      * @param slotsPerEpoch Number of slots per epoch in Ethereum consensus.
      * @param secondsPerSlot Duration of a single slot, in seconds, in Ethereum consensus.
@@ -153,7 +151,7 @@ contract ValidatorExitDelayVerifier {
         address lidoLocator,
         GIndices memory gIndices,
         uint64 firstSupportedSlot,
-        uint64 pivotSlot,
+        uint64 gloasSlot,
         uint64 capellaSlot,
         uint64 slotsPerHistoricalRoot,
         uint32 slotsPerEpoch,
@@ -162,7 +160,7 @@ contract ValidatorExitDelayVerifier {
         uint32 shardCommitteePeriodInSeconds
     ) {
         if (lidoLocator == address(0)) revert ZeroLidoLocatorAddress();
-        if (firstSupportedSlot > pivotSlot) revert InvalidPivotSlot();
+        if (firstSupportedSlot > gloasSlot) revert InvalidGloasSlot();
         if (capellaSlot > firstSupportedSlot) revert InvalidCapellaSlot();
         if (!_isPowerOfTwo(slotsPerHistoricalRoot)) revert InvalidPerHistoricalRootSlot();
 
@@ -171,12 +169,12 @@ contract ValidatorExitDelayVerifier {
         // Assign individual GIndex values from the struct
         GI_FIRST_VALIDATOR_PRE_GLOAS = gIndices.gIFirstValidatorPreGloas;
         GI_VALIDATORS = gIndices.gIValidators;
-        GI_FIRST_HISTORICAL_SUMMARY_PREV = gIndices.gIFirstHistoricalSummaryPrev;
-        GI_FIRST_HISTORICAL_SUMMARY_CURR = gIndices.gIFirstHistoricalSummaryCurr;
+        GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS = gIndices.gIFirstHistoricalSummaryPreGloas;
+        GI_FIRST_HISTORICAL_SUMMARY = gIndices.gIFirstHistoricalSummary;
         GI_FIRST_BLOCK_ROOT_IN_SUMMARY = gIndices.gIFirstBlockRootInSummary;
 
         FIRST_SUPPORTED_SLOT = firstSupportedSlot;
-        PIVOT_SLOT = pivotSlot;
+        GLOAS_SLOT = gloasSlot;
         CAPELLA_SLOT = capellaSlot;
         SLOTS_PER_HISTORICAL_ROOT = slotsPerHistoricalRoot;
         SLOTS_PER_EPOCH = slotsPerEpoch;
@@ -359,7 +357,7 @@ contract ValidatorExitDelayVerifier {
     }
 
     function _getValidatorGI(uint256 offset, uint64 stateSlot) internal view returns (GIndex) {
-        if (stateSlot < PIVOT_SLOT) {
+        if (stateSlot < GLOAS_SLOT) {
             return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(offset);
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(offset));
@@ -375,7 +373,9 @@ contract ValidatorExitDelayVerifier {
             revert HistoricalSummaryDoesNotExist();
         }
 
-        gI = recentSlot < PIVOT_SLOT ? GI_FIRST_HISTORICAL_SUMMARY_PREV : GI_FIRST_HISTORICAL_SUMMARY_CURR;
+        gI = recentSlot < GLOAS_SLOT
+            ? GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS
+            : GI_FIRST_HISTORICAL_SUMMARY;
 
         gI = gI.shr(summaryIndex); // historicalSummaries[summaryIndex]
         gI = gI.concat(GI_FIRST_BLOCK_ROOT_IN_SUMMARY); // historicalSummaries[summaryIndex].blockRoots[0]
