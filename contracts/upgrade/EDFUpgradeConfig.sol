@@ -5,6 +5,8 @@ pragma solidity 0.8.25;
 
 import {EDFDelegationContract, EDFMemberMapping, EDFOracleCommittee, EDFUpgradeParameters} from "./EDFUpgradeTypes.sol";
 
+/// @notice Configuration for EDF vote fixtures on testnets and local forks only.
+/// @dev Not for mainnet deployment or production governance.
 contract EDFUpgradeConfig {
     error ZeroAddress(string field);
     error InvalidChainId(uint256 chainId);

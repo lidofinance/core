@@ -3,6 +3,9 @@
 
 pragma solidity 0.8.25;
 
+// Types and interfaces for EDF vote fixtures on testnets and local forks only.
+// Not for mainnet deployment or production governance.
+
 struct EDFMemberMapping {
     address oldMember;
     address newMember;

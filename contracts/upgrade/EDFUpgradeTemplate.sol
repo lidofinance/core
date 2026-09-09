@@ -17,8 +17,8 @@ import {
 } from "./EDFUpgradeTypes.sol";
 
 /// @title EDFUpgradeTemplate
-/// @notice Test-only pre/post checks for the EDF/DSM v5 vote fixture on devnets and forks.
-/// @dev This fixture is not a production upgrade template.
+/// @notice Pre/post checks for EDF vote fixtures on testnets and local forks only.
+/// @dev Not for mainnet deployment or production governance.
 contract EDFUpgradeTemplate {
     event UpgradeStarted();
     event UpgradeFinished();

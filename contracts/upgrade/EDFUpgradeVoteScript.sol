@@ -16,8 +16,8 @@ import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 
 /// @title EDFUpgradeVoteScript
-/// @notice Test-only vote for EDF/DSM v5 integration tests on devnets and forks.
-/// @dev This fixture is not a production governance proposal.
+/// @notice EDF/DSM v5 vote fixture for testnets and local forks only.
+/// @dev Not for mainnet deployment or production governance.
 contract EDFUpgradeVoteScript is OmnibusBase {
     using CallsScriptBuilder for CallsScriptBuilder.Context;
     using Strings for uint256;
