@@ -356,7 +356,6 @@
       "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"
     ]
   },
-  "deployCommit": "e45c4d6fb8120fd29426b8d969c19d8a798ca974",
   "delegationFactory": {
     "address": "0xD990770eB2B4b6062EDdB06892fF179C693b46e6",
     "runtimeCodeHash": "0x0898ad72098301345c44103c8aca22cd8a0a02a339bffe222c6487ec25ff3591",
@@ -477,9 +476,10 @@
       }
     }
   },
+  "deployCommit": "e45c4d6fb8120fd29426b8d969c19d8a798ca974",
   "deployer": "0x55Bc991b2edF3DDb4c520B222bE4F378418ff0fA",
   "depositSecurityModule": {
-    "address": "0xF573E9E3de1f86B085417ab294f56E7920B4e9Be",
+    "address": "0x39BB5d491e98A44D1bfe8047A737a81E296a63E0",
     "contract": "contracts/0.8.9/DepositSecurityModule.sol",
     "deployTx": "0x21307a2321f167f99de11ccec86d7bdd8233481bbffa493e15c519ca8d662c4f",
     "constructorArgs": [
@@ -620,11 +620,11 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0xF2Ffb952e129a63F0614Ff87126E1d4a494A2313",
+      "address": "0x60E09F1791F1168d0450E4F100616B4a3F95119C",
       "constructorArgs": [
         {
           "accountingOracle": "0x852deD011285fe67063a08005c71a85690503Cee",
-          "depositSecurityModule": "0xF573E9E3de1f86B085417ab294f56E7920B4e9Be",
+          "depositSecurityModule": "0x39BB5d491e98A44D1bfe8047A737a81E296a63E0",
           "elRewardsVault": "0x388C818CA8B9251b393131C08a736A67ccB19297",
           "lido": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
           "oracleReportSanityChecker": "0x147f8d3cf3004FAf9Bf94E88B54b6C06De507be9",
@@ -773,7 +773,7 @@
   "resealManager": {
     "address": "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
   },
-  "scratchDeployGasUsed": "124595783",
+  "scratchDeployGasUsed": "127488213",
   "sm:CM": {
     "proxy": {
       "address": "0xDa5F930cE326EB5205085D66c72A4E79d60cB8C1",
