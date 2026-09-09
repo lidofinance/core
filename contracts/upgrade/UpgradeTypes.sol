@@ -313,6 +313,7 @@ struct CoreUpgradeParams {
     address newStakingRouterImpl;
     address newWithdrawalVaultImpl;
     address newValidatorsExitBusOracleImpl;
+    address newPredepositGuaranteeImpl;
     address consolidationBusImpl;
     address consolidationMigratorImpl;
     address topUpGatewayImpl;
@@ -419,6 +420,7 @@ struct CoreUpgradeConfig {
     address newValidatorsExitBusOracleImpl;
     address newOracleReportSanityChecker;
     address newDepositSecurityModule;
+    address newPredepositGuaranteeImpl;
     address consolidationBusImpl;
     address consolidationMigratorImpl;
     address topUpGatewayImpl;
@@ -431,6 +433,9 @@ struct CoreUpgradeConfig {
     address consolidationBus;
     address consolidationMigrator;
     address topUpGateway;
+    address predepositGuarantee;
+    address oldValidatorExitDelayVerifier;
+    address newValidatorExitDelayVerifier;
 
     uint256 lidoDepositsReserveTarget;
     address consolidationCommittee;

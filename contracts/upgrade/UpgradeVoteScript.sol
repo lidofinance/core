@@ -56,7 +56,7 @@ contract UpgradeVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant DG_ITEMS_COUNT = 69;
+    uint256 public constant DG_ITEMS_COUNT = 72;
     uint256 public constant VOTING_ITEMS_COUNT = 11;
 
     // Aragon Kernel APP_BASES_NAMESPACE
@@ -65,6 +65,7 @@ contract UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant BUFFER_RESERVE_MANAGER_ROLE = keccak256("BUFFER_RESERVE_MANAGER_ROLE");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
 
     bytes32 internal constant REPORT_EL_REWARDS_STEALING_PENALTY_ROLE =
         keccak256("REPORT_EL_REWARDS_STEALING_PENALTY_ROLE");
@@ -271,8 +272,28 @@ contract UpgradeVoteScript is OmnibusBase {
         {
             CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
 
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant REPORT_VALIDATOR_EXITING_STATUS_ROLE to the new ValidatorExitDelayVerifier",
+                to: stakingRouter,
+                role: REPORT_VALIDATOR_EXITING_STATUS_ROLE,
+                account: c.newValidatorExitDelayVerifier
+            });
+
             items[i++] = _proxyUpgradeToItem({
                 description: "Upgrade LidoLocator implementation", to: c.locator, impl: c.newLocatorImpl
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade PredepositGuarantee implementation",
+                to: c.predepositGuarantee,
+                impl: c.newPredepositGuaranteeImpl
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke REPORT_VALIDATOR_EXITING_STATUS_ROLE from the old ValidatorExitDelayVerifier",
+                to: stakingRouter,
+                role: REPORT_VALIDATOR_EXITING_STATUS_ROLE,
+                account: c.oldValidatorExitDelayVerifier
             });
 
             /// @notice updating StakingRouter implementation and call finalizeUpgrade_v4

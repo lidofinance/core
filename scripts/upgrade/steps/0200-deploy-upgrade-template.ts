@@ -118,6 +118,10 @@ export async function main() {
         state[Sk.validatorsExitBusOracle].implementation.address,
         "newValidatorsExitBusOracleImpl",
       ),
+      newPredepositGuaranteeImpl: nonZeroAddress(
+        state[Sk.predepositGuarantee].implementation.address,
+        "newPredepositGuaranteeImpl",
+      ),
       consolidationBusImpl: nonZeroAddress(state[Sk.consolidationBus].implementation.address, "consolidationBusImpl"),
       consolidationMigratorImpl: nonZeroAddress(
         state[Sk.consolidationMigrator].implementation.address,

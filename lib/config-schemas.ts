@@ -407,6 +407,11 @@ export const UpgradeParametersSchema = z.object({
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   accountingOracle: OracleSchema,
   validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
+  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
+  predepositGuarantee: PredepositGuaranteeSchema.omit({ changeSlot: true }).extend({
+    genesisForkVersion: HexStringSchema,
+    pivotSlot: NonNegativeIntSchema,
+  }),
 
   // csm
   csmUpgrade: CSMUpgradeConfigSchema,

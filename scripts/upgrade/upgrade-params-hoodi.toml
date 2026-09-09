@@ -55,6 +55,24 @@ balancePerFrameEth = 32
 frameDurationInSec = 48
 consensusVersion = 5
 
+[validatorExitDelayVerifier]
+gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"
+gIFirstHistoricalSummaryPrev = "0x000000000000000000000000000000000000000000000000000000b600000018"
+gIFirstHistoricalSummaryCurr = "0x0000000000000000000000000000000000000000000000000000170c00000018"
+gIFirstBlockRootInSummary = "0x000000000000000000000000000000000000000000000000000000000040000d"
+firstSupportedSlot = 1
+pivotSlot = 1_000_000_000 # Placeholder; replace with the Gloas fork slot before deployment
+capellaSlot = 0
+slotsPerHistoricalRoot = 8192
+shardCommitteePeriodInSeconds = 98304
+
+[predepositGuarantee]
+genesisForkVersion = "0x10000910"
+gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"
+pivotSlot = 1_000_000_000 # Placeholder; replace with the Gloas fork slot before deployment
+
 # Deposit security module configuration
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
