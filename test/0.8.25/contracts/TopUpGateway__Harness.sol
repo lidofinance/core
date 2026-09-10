@@ -2,17 +2,14 @@
 pragma solidity 0.8.25;
 
 import {TopUpGateway} from "contracts/0.8.25/TopUpGateway.sol";
-import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
 
 contract TopUpGateway__Harness is TopUpGateway {
     constructor(
         address _lidoLocator,
-        GIndex _gIFirstValidatorPreGloas,
-        GIndex _gIValidators,
-        uint64 _pivotSlot,
+        uint64 _gloasSlot,
         uint256 _slotsPerEpoch
-    ) TopUpGateway(_lidoLocator, _gIFirstValidatorPreGloas, _gIValidators, _pivotSlot, _slotsPerEpoch) {}
+    ) TopUpGateway(_lidoLocator, _gloasSlot, _slotsPerEpoch) {}
 
     function harness_setLastTopUpData() external {
         _setLastTopUpData();

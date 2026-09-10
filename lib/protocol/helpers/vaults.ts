@@ -613,18 +613,29 @@ export const getFirstValidatorGIndexForProof = async (
   predepositGuarantee: PredepositGuarantee,
   slot: bigint | number,
 ) => {
-  const pivotSlot = await predepositGuarantee.PIVOT_SLOT();
-  if (BigInt(slot) < pivotSlot) {
+  let gloasSlot: bigint;
+  try {
+    gloasSlot = await predepositGuarantee.GLOAS_SLOT();
+  } catch {
+    const legacyVerifier = new ethers.Contract(
+      await predepositGuarantee.getAddress(),
+      ["function PIVOT_SLOT() view returns (uint64)"],
+      ethers.provider,
+    );
+    gloasSlot = await legacyVerifier.PIVOT_SLOT();
+  }
+
+  if (BigInt(slot) < gloasSlot) {
     return predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS();
   }
 
-  if (pivotSlot !== 0n) {
-    throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+  if (gloasSlot !== 0n) {
+    throw new Error(`Pre-Gloas proof slot ${slot} must be below Gloas slot ${gloasSlot}`);
   }
 
-  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS PDG IS DEPLOYED WITH A REAL GLOAS PIVOT SLOT.
-  // Fork tests use the deployed legacy verifier, where the zero pivot selects
-  // a static post-pivot validator gindex.
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS PDG IS DEPLOYED WITH A REAL GLOAS SLOT.
+  // Fork tests use the deployed legacy verifier, where the zero slot selects
+  // a static post-fork validator gindex.
   const legacyVerifier = new ethers.Contract(
     await predepositGuarantee.getAddress(),
     ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],

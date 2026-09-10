@@ -69,18 +69,28 @@ export const prepareTopUpWitnesses = async (
 ): Promise<TopUpWitnessBundle> => {
   const { topUpGateway, withdrawalVault } = ctx.contracts;
 
-  const pivotSlot = await topUpGateway.PIVOT_SLOT();
+  let gloasSlot: bigint;
+  try {
+    gloasSlot = await topUpGateway.GLOAS_SLOT();
+  } catch {
+    const legacyGateway = new ethers.Contract(
+      await topUpGateway.getAddress(),
+      ["function PIVOT_SLOT() view returns (uint64)"],
+      ethers.provider,
+    );
+    gloasSlot = await legacyGateway.PIVOT_SLOT();
+  }
 
   const slot = 8192;
-  if (slot >= pivotSlot) {
-    if (pivotSlot !== 0n) {
-      throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+  if (slot >= gloasSlot) {
+    if (gloasSlot !== 0n) {
+      throw new Error(`Pre-Gloas proof slot ${slot} must be below Gloas slot ${gloasSlot}`);
     }
   }
 
-  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS PIVOT SLOT.
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS SLOT.
   const gIFirstValidator =
-    pivotSlot === 0n
+    gloasSlot === 0n
       ? await new ethers.Contract(
           await topUpGateway.getAddress(),
           ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],

@@ -21,13 +21,6 @@ import { ConsolidationGateway, LidoLocator } from "typechain-types";
 
 import { deployContract, getAddress, getDeployerSigner, loadContract, log, readNetworkState, Sk } from "lib";
 
-// Canonical mainnet-preset GIs for the pre-Gloas and Gloas consensus state layouts.
-const GI_FIRST_VALIDATOR_PRE_GLOAS = "0x0000000000000000000000000000000000000000000000000096000000000028";
-const GI_VALIDATORS = "0x0000000000000000000000000000000000000000000000000000000000016600";
-const GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS = "0x000000000000000000000000000000000000000000000000000000b600000018";
-const GI_FIRST_HISTORICAL_SUMMARY = "0x0000000000000000000000000000000000000000000000000000170c00000018";
-const GI_FIRST_BLOCK_ROOT_IN_SUMMARY = "0x000000000000000000000000000000000000000000000000000000000040000d";
-
 const SLOTS_PER_HISTORICAL_ROOT = 8192n;
 const SHARD_COMMITTEE_PERIOD_EPOCHS = 256n;
 
@@ -85,13 +78,6 @@ async function main(): Promise<void> {
     "ValidatorExitDelayVerifier",
     [
       locatorAddress,
-      {
-        gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
-        gIValidators: GI_VALIDATORS,
-        gIFirstHistoricalSummaryPreGloas: GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS,
-        gIFirstHistoricalSummary: GI_FIRST_HISTORICAL_SUMMARY,
-        gIFirstBlockRootInSummary: GI_FIRST_BLOCK_ROOT_IN_SUMMARY,
-      },
       firstSupportedSlot,
       gloasForkSlot,
       capellaForkSlot,
@@ -107,14 +93,14 @@ async function main(): Promise<void> {
 
   const predepositGuarantee = await deployContract(
     "PredepositGuarantee",
-    [genesisForkVersion, GI_FIRST_VALIDATOR_PRE_GLOAS, GI_VALIDATORS, gloasForkSlot],
+    [genesisForkVersion, gloasForkSlot],
     deployer.address,
     false,
   );
 
   const topUpGateway = await deployContract(
     "TopUpGateway",
-    [locatorAddress, GI_FIRST_VALIDATOR_PRE_GLOAS, GI_VALIDATORS, gloasForkSlot, slotsPerEpoch],
+    [locatorAddress, gloasForkSlot, slotsPerEpoch],
     deployer.address,
     false,
   );
@@ -127,8 +113,6 @@ async function main(): Promise<void> {
       consolidationLimits.maxConsolidationRequestsLimit,
       consolidationLimits.consolidationsPerFrame,
       consolidationLimits.frameDurationInSec,
-      GI_FIRST_VALIDATOR_PRE_GLOAS,
-      GI_VALIDATORS,
       gloasForkSlot,
     ],
     deployer.address,

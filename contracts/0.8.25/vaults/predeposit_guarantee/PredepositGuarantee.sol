@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
@@ -125,8 +125,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // thus if activation_eligibility_epoch is FAR_FUTURE_EPOCH, all other epochs
     // (activation_epoch, exit_epoch, withdrawable_epoch) is also set to FAR_FUTURE_EPOCH
     // so we can prove them together
-    bytes32 internal constant UNSET_VALIDATOR_EPOCHS_PROOF_NODE
-        = 0x2c84ba62dc4e7011c24fb0878e3ef2245a9e2cf2cacbbaf2978a4efa47037283;
+    bytes32 internal constant UNSET_VALIDATOR_EPOCHS_PROOF_NODE =
+        0x2c84ba62dc4e7011c24fb0878e3ef2245a9e2cf2cacbbaf2978a4efa47037283;
 
     /**
      * @notice computed DEPOSIT_DOMAIN for current chain
@@ -145,16 +145,12 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     /**
      * @param _genesisForkVersion genesis fork version for the current chain
-     * @param _gIFirstValidatorPreGloas packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in a pre-Gloas CL state tree
-     * @param _gIValidators packed GIndex of the Gloas validators field
-     * @param _pivotSlot slot of the fork that alters first validator GIndex
+     * @param _gloasSlot first slot of the Gloas fork
      */
     constructor(
         bytes4 _genesisForkVersion,
-        GIndex _gIFirstValidatorPreGloas,
-        GIndex _gIValidators,
-        uint64 _pivotSlot
-    ) CLProofVerifier(_gIFirstValidatorPreGloas, _gIValidators, _pivotSlot) {
+        uint64 _gloasSlot
+    ) CLProofVerifier(CLGIndices.FIRST_VALIDATOR_PRE_GLOAS, _gloasSlot) {
         DEPOSIT_DOMAIN = BLS12_381.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
@@ -706,7 +702,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             }
         }
     }
-
 
     // * * * * * * * * * * * * * * * * * * * * //
     // * * * * * Internal Functions * * * * *  //

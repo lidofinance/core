@@ -4,6 +4,7 @@
 pragma solidity 0.8.25;
 
 import {GIndex, pack, concat, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
+import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/ValidatorWitness.sol";
@@ -29,16 +30,15 @@ abstract contract CLValidatorVerifier {
     // validators[0] gindex before Gloas
     GIndex public immutable GI_FIRST_VALIDATOR_PRE_GLOAS;
     // validators field gindex starting from Gloas
-    GIndex public immutable GI_VALIDATORS;
-    uint64 public immutable PIVOT_SLOT;
+    GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
+    uint64 public immutable GLOAS_SLOT;
 
     error InvalidSlot();
     error RootNotFound();
 
-    constructor(GIndex _gIFirstValidatorPreGloas, GIndex _gIValidators, uint64 _pivotSlot) {
+    constructor(GIndex _gIFirstValidatorPreGloas, uint64 _gloasSlot) {
         GI_FIRST_VALIDATOR_PRE_GLOAS = _gIFirstValidatorPreGloas;
-        GI_VALIDATORS = _gIValidators;
-        PIVOT_SLOT = _pivotSlot;
+        GLOAS_SLOT = _gloasSlot;
     }
 
     /// @notice Proves validator[i] under the same EIP-4788 anchor, checks WC
@@ -96,7 +96,7 @@ abstract contract CLValidatorVerifier {
 
     /// @dev GIndex for Validator[i] given slot (fork-aware).
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
-        if (_provenSlot < PIVOT_SLOT) {
+        if (_provenSlot < GLOAS_SLOT) {
             return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(_offset);
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));

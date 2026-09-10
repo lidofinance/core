@@ -15,7 +15,7 @@ import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTre
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { NULL_GINDEX, PUBKEYS } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers";
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
 
@@ -132,8 +132,6 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       100, // maxConsolidationRequestsLimit
       1, // consolidationsPerFrame
       48, // frameDurationInSec
-      localMerkle.gIFirstValidator,
-      NULL_GINDEX,
       (1n << 64n) - 1n,
     ]);
 

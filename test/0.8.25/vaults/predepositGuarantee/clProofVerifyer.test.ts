@@ -15,8 +15,6 @@ import {
 
 import { Snapshot } from "test/suite";
 
-const GLOAS_VALIDATORS_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000016600";
-const NULL_GINDEX = ethers.ZeroHash;
 const MAX_UINT64 = (1n << 64n) - 1n;
 
 // CSM "borrowed" prefab validator object with precalculated proofs & root
@@ -122,7 +120,7 @@ describe("CLProofVerifier.sol", () => {
 
     CLProofVerifier = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [localTree.gIFirstValidator, NULL_GINDEX, MAX_UINT64],
+      [localTree.gIFirstValidator, MAX_UINT64],
       {},
     );
 
@@ -143,7 +141,7 @@ describe("CLProofVerifier.sol", () => {
   it("should verify precalclulated validator object in merkle tree", async () => {
     const StaticCLProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [STATIC_VALIDATOR.gIFirstValidator, NULL_GINDEX, MAX_UINT64],
+      [STATIC_VALIDATOR.gIFirstValidator, MAX_UINT64],
       {},
     );
 
@@ -230,22 +228,22 @@ describe("CLProofVerifier.sol", () => {
     );
   });
 
-  it("should change gIndex on pivot slot", async () => {
-    const pivotSlot = 1000;
+  it("should change gIndex on Gloas slot", async () => {
+    const gloasSlot = 1000;
     const giPrev = STATIC_VALIDATOR.gIFirstValidator;
     const clProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [giPrev, GLOAS_VALIDATORS_GINDEX, pivotSlot],
+      [giPrev, gloasSlot],
       {},
     );
 
-    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot - 1)).to.equal(
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(
       "0x0000000000000000000000000000000000000000000000000056000000000128",
     );
-    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(
+    expect(await clProofVerifier.TEST_getValidatorGI(0n, gloasSlot)).to.equal(
       "0x0000000000000000000000000000000000000000000000000000000000059800",
     );
-    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot + 1)).to.equal(
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(
       "0x00000000000000000000000000000000000000000000000000000000002cc800",
     );
   });
@@ -253,7 +251,7 @@ describe("CLProofVerifier.sol", () => {
   it("should validate proof with different gIndex", async () => {
     const provenValidator = generateValidator();
     const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(provenValidator.container);
-    const pivotSlot = 1000;
+    const gloasSlot = 1000;
 
     const preparePreGloasCLState = async (gIndex: string, slot: number) => {
       const {
@@ -293,7 +291,6 @@ describe("CLProofVerifier.sol", () => {
       const beaconMerkle = await localTree.getBeaconBlockHeaderProof(beaconHeader);
 
       return {
-        gIValidators: GLOAS_VALIDATORS_GINDEX,
         gIndexProven: "0x00000000000000000000000000000000000000000000000000000000002cc800",
         proof: [...validatorMerkle.proof, ...stateProof, ...beaconMerkle.proof],
         beaconHeader,
@@ -302,23 +299,23 @@ describe("CLProofVerifier.sol", () => {
     };
 
     const [prev, curr] = await Promise.all([
-      preparePreGloasCLState("0x0000000000000000000000000000000000000000000000000056000000000028", pivotSlot - 1),
-      prepareGloasCLState(pivotSlot + 1),
+      preparePreGloasCLState("0x0000000000000000000000000000000000000000000000000056000000000028", gloasSlot - 1),
+      prepareGloasCLState(gloasSlot + 1),
     ]);
 
     // current CL state
 
     const clProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [prev.gIFirstValidator, curr.gIValidators, pivotSlot],
+      [prev.gIFirstValidator, gloasSlot],
       {},
     );
 
     //
 
-    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot - 1)).to.equal(prev.gIndexProven);
-    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot)).to.equal(curr.gIndexProven);
-    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot + 1)).to.equal(curr.gIndexProven);
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(prev.gIndexProven);
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot)).to.equal(curr.gIndexProven);
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(curr.gIndexProven);
 
     // prev works
     const timestampPrev = await setBeaconBlockRoot(prev.beaconRoot);

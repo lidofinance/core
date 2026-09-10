@@ -36,7 +36,7 @@ export interface ConsolidationWitnessSet {
  * Build CL witnesses for consolidation target pubkeys against a local state tree
  * committed to EIP-4788.
  *
- * This helper builds fixed-depth pre-Gloas proofs and requires a non-zero pivot
+ * This helper builds fixed-depth pre-Gloas proofs and requires a non-zero Gloas slot
  * later than its fixture slot. It does not support Gloas-only deployments.
  * Validators are active, non-exited, with 0x02 withdrawal credentials pointing
  * to the real WithdrawalVault.
@@ -47,17 +47,27 @@ export const prepareConsolidationTargetWitnesses = async (
 ): Promise<ConsolidationWitnessSet> => {
   const { consolidationGateway, withdrawalVault } = ctx.contracts;
 
-  const pivotSlot = await consolidationGateway.PIVOT_SLOT();
+  let gloasSlot: bigint;
+  try {
+    gloasSlot = await consolidationGateway.GLOAS_SLOT();
+  } catch {
+    const legacyGateway = new ethers.Contract(
+      await consolidationGateway.getAddress(),
+      ["function PIVOT_SLOT() view returns (uint64)"],
+      ethers.provider,
+    );
+    gloasSlot = await legacyGateway.PIVOT_SLOT();
+  }
   const slot = 8192;
-  if (BigInt(slot) >= pivotSlot) {
-    if (pivotSlot !== 0n) {
-      throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+  if (BigInt(slot) >= gloasSlot) {
+    if (gloasSlot !== 0n) {
+      throw new Error(`Pre-Gloas proof slot ${slot} must be below Gloas slot ${gloasSlot}`);
     }
   }
 
-  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS PIVOT SLOT.
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS SLOT.
   const gIFirstValidator =
-    pivotSlot === 0n
+    gloasSlot === 0n
       ? await new ethers.Contract(
           await consolidationGateway.getAddress(),
           ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],

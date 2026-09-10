@@ -21,7 +21,7 @@ import {
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { NULL_GINDEX, PUBKEYS } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers";
 
 const dummyWitness = (pubkey: string) => ({
   proof: [] as string[],
@@ -103,8 +103,6 @@ describe("ConsolidationGateway.sol: pausable", () => {
       100,
       1,
       48,
-      localMerkle.gIFirstValidator,
-      NULL_GINDEX,
       (1n << 64n) - 1n,
     ]);
 

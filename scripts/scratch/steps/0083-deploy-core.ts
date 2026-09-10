@@ -28,9 +28,8 @@ import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
 
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 
-// These exports are kept for compatibility with other modules that might import them
 export const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
-export const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+export const GLOAS_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
 export const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
 export const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
@@ -230,13 +229,7 @@ export async function main() {
     "TopUpGateway",
     proxyContractsOwner,
     deployer,
-    [
-      locator.address,
-      topUpGatewayParams.gIFirstValidatorPreGloas,
-      topUpGatewayParams.gIValidators,
-      topUpGatewayParams.pivotSlot,
-      chainSpec.slotsPerEpoch,
-    ],
+    [locator.address, topUpGatewayParams.gloasSlot, chainSpec.slotsPerEpoch],
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions
@@ -385,9 +378,7 @@ export async function main() {
     consolidationGatewayParams.maxConsolidationRequestsLimit,
     consolidationGatewayParams.consolidationsPerFrame,
     consolidationGatewayParams.frameDurationInSec,
-    consolidationGatewayParams.gIFirstValidatorPreGloas,
-    consolidationGatewayParams.gIValidators,
-    consolidationGatewayParams.pivotSlot,
+    consolidationGatewayParams.gloasSlot,
   ]);
 
   const consolidationGateway = await loadContract<ConsolidationGateway>(
@@ -483,13 +474,6 @@ export async function main() {
 
   const validatorExitDelayVerifierCtorArgs = [
     locator.address,
-    {
-      gIFirstValidatorPreGloas: validatorExitDelayVerifierParams.gIFirstValidatorPreGloas,
-      gIValidators: validatorExitDelayVerifierParams.gIValidators,
-      gIFirstHistoricalSummaryPreGloas: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryPreGloas,
-      gIFirstHistoricalSummary: validatorExitDelayVerifierParams.gIFirstHistoricalSummary,
-      gIFirstBlockRootInSummary: validatorExitDelayVerifierParams.gIFirstBlockRootInSummary,
-    },
     validatorExitDelayVerifierParams.firstSupportedSlot,
     validatorExitDelayVerifierParams.gloasSlot,
     validatorExitDelayVerifierParams.capellaSlot,

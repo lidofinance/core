@@ -56,22 +56,15 @@ frameDurationInSec = 48
 consensusVersion = 5
 
 [validatorExitDelayVerifier]
-gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"
-gIFirstHistoricalSummaryPreGloas = "0x000000000000000000000000000000000000000000000000000000b600000018"
-gIFirstHistoricalSummary = "0x0000000000000000000000000000000000000000000000000000170c00000018"
-gIFirstBlockRootInSummary = "0x000000000000000000000000000000000000000000000000000000000040000d"
 firstSupportedSlot = 11_649_024
-gloasSlot = 1_000_000_000 # Placeholder; replace with the Gloas fork slot before deployment
+gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
 capellaSlot = 6_209_536
 slotsPerHistoricalRoot = 8192
 shardCommitteePeriodInSeconds = 98304
 
 [predepositGuarantee]
 genesisForkVersion = "0x00000000"
-gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"
-gloasSlot = 1_000_000_000 # Placeholder; replace with the Gloas fork slot before deployment
+gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
 
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
@@ -81,9 +74,7 @@ pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 30               # Duration of each processing frame in seconds
-gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator before Gloas
-gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"  # Generalized index for the Gloas validators field
-pivotSlot = 1_000_000_000             # Placeholder; replace with the Gloas fork slot before deployment
+gloasSlot = "18446744073709551615"    # Disabled until the Gloas fork slot is known
 
 [consolidationBus]
 initialBatchSize = 200                # Max number of requests in a batch
@@ -102,10 +93,7 @@ minBlockDistance = 75 # Minimum block distance between topUp calls
 maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove validator state
 targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
 minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
-# Generalized indices for validator/balance/pending state verification
-gIFirstValidatorPreGloas = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIValidators = "0x0000000000000000000000000000000000000000000000000000000000016600"
-pivotSlot = 1_000_000_000 # Placeholder; replace with the Gloas fork slot before deployment
+gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
 depositor = "0xF82aC5937A20dC862F9bc0668779031E06000f17"
 
 [stakingRouter]

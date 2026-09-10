@@ -8,7 +8,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "contracts/common/lib/RateLimit.sol";
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
-import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {CLProofVerifier} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
@@ -127,10 +127,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 maxConsolidationRequestsLimit,
         uint256 consolidationsPerFrame,
         uint256 frameDurationInSec,
-        GIndex _gIFirstValidatorPreGloas,
-        GIndex _gIValidators,
-        uint64 _pivotSlot
-    ) CLProofVerifier(_gIFirstValidatorPreGloas, _gIValidators, _pivotSlot) {
+        uint64 _gloasSlot
+    ) CLProofVerifier(CLGIndices.FIRST_VALIDATOR_PRE_GLOAS, _gloasSlot) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (lidoLocator == address(0)) revert ZeroArgument("lidoLocator");
         LOCATOR = ILidoLocator(lidoLocator);

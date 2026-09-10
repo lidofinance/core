@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {GIndex, pack, concat, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
+import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 
@@ -62,7 +63,9 @@ abstract contract CLProofVerifier {
     GIndex public immutable GI_PUBKEY_WC_PARENT = pack((1 << WC_PUBKEY_PARENT_DEPTH) + WC_PUBKEY_PARENT_POSITION, 0);
 
     /**  GIndex of validator in state tree is calculated dynamically
-     *   offsetting from GIndex of first validator by proving validator numerical index
+     *   offsetting from GIndex of first validator by proving validator numerical index.
+     *
+     * NB! This works for pre-Gloas static lists only.
      *
      * NB! Position of validators in CL state tree can change between ethereum hardforks
      *     so two values must be stored and used depending on the slot of beacon block in proof.
@@ -85,10 +88,10 @@ abstract contract CLProofVerifier {
     /// @notice GIndex of first validator in CL state tree
     /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
     GIndex public immutable GI_FIRST_VALIDATOR_PRE_GLOAS;
-    /// @notice GIndex of the validators field in CL state tree starting from Gloas at PIVOT_SLOT
-    GIndex public immutable GI_VALIDATORS;
-    /// @notice slot when GIndex change will occur due to the hardfork
-    uint64 public immutable PIVOT_SLOT;
+    /// @notice GIndex of the validators field in CL state tree starting from Gloas at GLOAS_SLOT
+    GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
+    /// @notice First slot of the Gloas fork, when the validator GIndex changes.
+    uint64 public immutable GLOAS_SLOT;
 
     /**
      *   GIndex of stateRoot in BeaconBlockHeader is
@@ -124,13 +127,11 @@ abstract contract CLProofVerifier {
 
     /**
      * @param _gIFirstValidatorPreGloas packed(general index | depth in Merkle tree, see GIndex.sol) GIndex of first validator in a pre-Gloas CL state tree
-     * @param _gIValidators packed GIndex of the Gloas validators field
-     * @param _pivotSlot first slot of the Gloas fork
+     * @param _gloasSlot first slot of the Gloas fork
      */
-    constructor(GIndex _gIFirstValidatorPreGloas, GIndex _gIValidators, uint64 _pivotSlot) {
+    constructor(GIndex _gIFirstValidatorPreGloas, uint64 _gloasSlot) {
         GI_FIRST_VALIDATOR_PRE_GLOAS = _gIFirstValidatorPreGloas;
-        GI_VALIDATORS = _gIValidators;
-        PIVOT_SLOT = _pivotSlot;
+        GLOAS_SLOT = _gloasSlot;
     }
 
     /**
@@ -175,7 +176,7 @@ abstract contract CLProofVerifier {
     /**
      * @notice returns parent CL block root for given child block timestamp
      * @param _witness object containing proof, slot and proposerIndex
-     * @dev checks slot and proposerIndex against proof[:-2] which latter is verified against Beacon block root
+     * @dev checks slot and proposerIndex against proof[:-2] which later is verified against Beacon block root
      * This is a trivial case of multi Merkle proofs where a short proof branch proves slot
      */
     function _verifySlot(IPredepositGuarantee.ValidatorWitness calldata _witness) internal view {
@@ -195,7 +196,7 @@ abstract contract CLProofVerifier {
      * @return gIndex of container in CL state tree
      */
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
-        if (_provenSlot < PIVOT_SLOT) {
+        if (_provenSlot < GLOAS_SLOT) {
             return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(_offset);
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));

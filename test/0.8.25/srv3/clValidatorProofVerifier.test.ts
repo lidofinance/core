@@ -6,8 +6,6 @@ import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain
 import { generateBeaconHeader, generateValidator, setBeaconBlockRoot } from "lib/pdg";
 import { prepareLocalMerkleTree } from "lib/top-ups";
 
-const GLOAS_VALIDATORS_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000016600";
-const NULL_GINDEX = ethers.ZeroHash;
 const MAX_UINT64 = (1n << 64n) - 1n;
 
 const STATIC_VALIDATOR = {
@@ -172,8 +170,7 @@ describe("CLTopUpProofVerifier", () => {
     // 2) Keep the fixed-depth fixture on the pre-Gloas path.
     verifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       gIFirstValidator, // GI_FIRST_VALIDATOR_PRE_GLOAS
-      NULL_GINDEX, // GI_VALIDATORS is unused before MAX_UINT64
-      MAX_UINT64, // PIVOT_SLOT
+      MAX_UINT64, // GLOAS_SLOT
     ]);
   });
 
@@ -421,7 +418,6 @@ describe("CLTopUpProofVerifier", () => {
   it("should verify static validator 12345 with real mainnet proof", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      NULL_GINDEX,
       MAX_UINT64,
     ]);
 
@@ -444,7 +440,6 @@ describe("CLTopUpProofVerifier", () => {
   it("should verify static validator 67890 with real mainnet proof", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      NULL_GINDEX,
       MAX_UINT64,
     ]);
 
@@ -467,7 +462,6 @@ describe("CLTopUpProofVerifier", () => {
   it("should reject static validator with wrong withdrawal credentials", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      NULL_GINDEX,
       MAX_UINT64,
     ]);
 
@@ -486,7 +480,6 @@ describe("CLTopUpProofVerifier", () => {
   it("should reject static validator with fake proof", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      NULL_GINDEX,
       MAX_UINT64,
     ]);
 
@@ -514,22 +507,18 @@ describe("CLTopUpProofVerifier", () => {
     ).to.be.reverted;
   });
 
-  it("should change gIndex on pivot slot", async () => {
-    const pivotSlot = 1000;
+  it("should change gIndex on Gloas slot", async () => {
+    const gloasSlot = 1000;
     const giPrev = "0x0000000000000000000000000000000000000000000000000096000000000028";
 
-    const proofVerifier = await ethers.deployContract(
-      "CLValidatorVerifier__Harness",
-      [giPrev, GLOAS_VALIDATORS_GINDEX, pivotSlot],
-      {},
-    );
-    expect(await proofVerifier.TEST_getValidatorGI(1n, pivotSlot - 1)).to.equal(
+    const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [giPrev, gloasSlot], {});
+    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(
       "0x0000000000000000000000000000000000000000000000000096000000000128",
     );
-    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(
+    expect(await proofVerifier.TEST_getValidatorGI(0n, gloasSlot)).to.equal(
       "0x0000000000000000000000000000000000000000000000000000000000059800",
     );
-    expect(await proofVerifier.TEST_getValidatorGI(1n, pivotSlot + 1)).to.equal(
+    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(
       "0x00000000000000000000000000000000000000000000000000000000002cc800",
     );
   });

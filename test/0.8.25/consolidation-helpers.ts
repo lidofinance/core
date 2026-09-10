@@ -2,10 +2,6 @@
  * Shared test helpers for ConsolidationGateway, ConsolidationBus, and ConsolidationMigrator tests.
  */
 
-import { ZeroHash } from "ethers";
-
-export const NULL_GINDEX = ZeroHash;
-
 /** Sample 48-byte validator public keys for testing. */
 export const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
