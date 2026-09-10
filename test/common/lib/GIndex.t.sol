@@ -7,8 +7,7 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 
-import {GIndex, pack, IndexOutOfRange, fls} from "contracts/common/lib/GIndex.sol";
-import {SSZ} from "contracts/common/lib/SSZ.sol";
+import {GIndex, pack, IndexOutOfRange, fls, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 
 // Wrap the library internal methods to make an actual call to them.
 // Supposed to be used with `expectRevert` cheatcode.
@@ -24,9 +23,15 @@ contract Library {
     function shl(GIndex self, uint256 n) public pure returns (GIndex) {
         return self.shl(n);
     }
+
+    function progressiveListNode(uint256 i) external pure returns (GIndex) {
+        return progressiveListNodeGIndex(i);
+    }
 }
 
 contract GIndexTest is Test {
+    uint256 internal constant LARGEST_PROGRESSIVE_LIST_INDEX = ((4 ** 81 - 1) * 4) / 3;
+
     GIndex internal ZERO = GIndex.wrap(bytes32(0));
     GIndex internal ROOT = GIndex.wrap(0x0000000000000000000000000000000000000000000000000000000000000100);
     GIndex internal MAX = GIndex.wrap(bytes32(type(uint256).max));
@@ -310,5 +315,53 @@ contract GIndexTest is Test {
         assertEq(fls(10), 3); // 1010
         assertEq(fls(300), 8); // 0001 0010 1100
         assertEq(fls(0), 256);
+    }
+
+    function test_progressiveListNodeGIndex() public {
+        assertEq(progressiveListNodeGIndex(0).unwrap(), pack(0x4, 0).unwrap());
+        assertEq(progressiveListNodeGIndex(1).unwrap(), pack(0x28, 0).unwrap());
+        assertEq(progressiveListNodeGIndex(2).unwrap(), pack(0x29, 0).unwrap());
+        assertEq(progressiveListNodeGIndex(4).unwrap(), pack(0x2b, 0).unwrap());
+        assertEq(progressiveListNodeGIndex(5).unwrap(), pack(0x160, 0).unwrap());
+        assertEq(progressiveListNodeGIndex(128).unwrap(), pack(0x5e2b, 0).unwrap());
+        assertEq(progressiveListNodeGIndex(12345678).unwrap(), pack(0x5ffe670bf9, 0).unwrap());
+        assertEq(progressiveListNodeGIndex((1 << 40) - 1).unwrap(), pack(0x5ffffeaaaaaaaaaa, 0).unwrap());
+    }
+
+    function testFuzz_progressiveListNodeGIndex(uint256 i) public {
+        i = bound(i, 0, LARGEST_PROGRESSIVE_LIST_INDEX);
+
+        GIndex gI = progressiveListNodeGIndex(i);
+        assertEq(gI.index(), _progressiveListNodeGIndexReference(i));
+        assertEq(gI.pow(), 0);
+    }
+
+    function test_progressiveListNodeGIndex_RevertsWhenIndexTooLarge() public {
+        vm.expectRevert(IndexOutOfRange.selector);
+        lib.progressiveListNode(LARGEST_PROGRESSIVE_LIST_INDEX + 1);
+
+        vm.expectRevert(IndexOutOfRange.selector);
+        lib.progressiveListNode(type(uint256).max / 3);
+
+        vm.expectRevert(IndexOutOfRange.selector);
+        lib.progressiveListNode(type(uint256).max);
+    }
+
+    function _progressiveListNodeGIndexReference(uint256 i) private pure returns (uint256) {
+        uint256 depth;
+        uint256 gI = 2;
+
+        while (true) {
+            uint256 chunkSize = 1 << depth;
+            if (i < chunkSize) {
+                return ((gI << 1) << depth) + i;
+            }
+
+            i -= chunkSize;
+            depth += 2;
+            gI = (gI << 1) + 1;
+        }
+
+        return 0;
     }
 }

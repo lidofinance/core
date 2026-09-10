@@ -26,6 +26,7 @@ import {
   calculateLockedValue,
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
+  getFirstValidatorGIndexForProof,
   getProtocolContext,
   getPubkeys,
   ProtocolContext,
@@ -101,8 +102,8 @@ describe("Integration: Dashboard Full Coverage", () => {
     // Set PDG policy to ALLOW_DEPOSIT_AND_PROVE for testing
     await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 
-    slot = await predepositGuarantee.PIVOT_SLOT();
-    mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
+    slot = 8192n;
+    mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(predepositGuarantee, slot));
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));

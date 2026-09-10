@@ -7,6 +7,9 @@ const BigIntStringSchema = z.string().regex(/^\d+$/, "Invalid BigInt string");
 const BasisPointsSchema = z.number().int().min(0).max(10000);
 const PositiveIntSchema = z.number().int().positive();
 const NonNegativeIntSchema = z.number().int().nonnegative();
+const Uint64Schema = z
+  .union([NonNegativeIntSchema.max(Number.MAX_SAFE_INTEGER), BigIntStringSchema])
+  .refine((value) => BigInt(value) <= (1n << 64n) - 1n, "Value exceeds uint64");
 const PercentSchema = z.number().int().min(0).max(100);
 
 // Chain specification schema
@@ -19,14 +22,8 @@ const ChainSpecSchema = z.object({
 
 // Validator exit delay verifier schema
 const ValidatorExitDelayVerifierSchema = z.object({
-  gIFirstValidatorPrev: HexStringSchema,
-  gIFirstValidatorCurr: HexStringSchema,
-  gIFirstHistoricalSummaryPrev: HexStringSchema,
-  gIFirstHistoricalSummaryCurr: HexStringSchema,
-  gIFirstBlockRootInSummaryPrev: HexStringSchema,
-  gIFirstBlockRootInSummaryCurr: HexStringSchema,
   firstSupportedSlot: NonNegativeIntSchema,
-  pivotSlot: NonNegativeIntSchema,
+  gloasSlot: Uint64Schema,
   capellaSlot: NonNegativeIntSchema,
   slotsPerHistoricalRoot: PositiveIntSchema,
   shardCommitteePeriodInSeconds: PositiveIntSchema,
@@ -48,9 +45,7 @@ const LazyOracleSchema = z.object({
 // Predeposit guarantee schema
 const PredepositGuaranteeSchema = z.object({
   genesisForkVersion: HexStringSchema.optional(),
-  gIndex: HexStringSchema,
-  gIndexAfterChange: HexStringSchema,
-  changeSlot: NonNegativeIntSchema,
+  gloasSlot: Uint64Schema,
 });
 
 // Operator grid schema
@@ -89,9 +84,7 @@ const ConsolidationGatewaySchema = z.object({
   maxConsolidationRequestsLimit: PositiveIntSchema,
   consolidationsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
-  gIFirstValidatorPrev: HexStringSchema,
-  gIFirstValidatorCurr: HexStringSchema,
-  pivotSlot: NonNegativeIntSchema,
+  gloasSlot: Uint64Schema,
   pauser: EthereumAddressSchema.optional(),
 });
 
@@ -114,9 +107,7 @@ const TopUpGatewaySchema = z.object({
   maxRootAge: PositiveIntSchema,
   targetBalanceGwei: PositiveIntSchema,
   minTopUpGwei: PositiveIntSchema,
-  gIFirstValidatorPrev: HexStringSchema,
-  gIFirstValidatorCurr: HexStringSchema,
-  pivotSlot: NonNegativeIntSchema,
+  gloasSlot: Uint64Schema,
   depositor: EthereumAddressSchema.optional(),
 });
 
@@ -408,6 +399,10 @@ export const UpgradeParametersSchema = z.object({
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   accountingOracle: OracleSchema,
   validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
+  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
+  predepositGuarantee: PredepositGuaranteeSchema.extend({
+    genesisForkVersion: HexStringSchema,
+  }),
 
   // csm
   csmUpgrade: CSMUpgradeConfigSchema,

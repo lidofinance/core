@@ -132,9 +132,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       100, // maxConsolidationRequestsLimit
       1, // consolidationsPerFrame
       48, // frameDurationInSec
-      localMerkle.gIFirstValidator,
-      localMerkle.gIFirstValidator,
-      0,
+      (1n << 64n) - 1n,
     ]);
 
     await grantConsolidationRequestRole(consolidationGateway, authorizedEntity);

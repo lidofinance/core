@@ -3,7 +3,8 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
+import {GIndex, pack, concat, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
+import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/ValidatorWitness.sol";
@@ -19,25 +20,26 @@ abstract contract CLValidatorVerifier {
     // BeaconBlockHeader: state_root field gindex
     uint8 private constant STATE_ROOT_DEPTH = 3;
     uint256 private constant STATE_ROOT_POSITION = 3;
-    GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, STATE_ROOT_DEPTH);
+    GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, 0);
 
     // Position (from the end) of parent(slot, proposerIndex) node inside concatenated proof
     uint256 private constant SLOT_PROPOSER_PARENT_PROOF_OFFSET = 2;
     // EIP-4788 system contract
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
-    // validators[0] gindex before/after fork layout change
-    GIndex public immutable GI_FIRST_VALIDATOR_PREV;
-    GIndex public immutable GI_FIRST_VALIDATOR_CURR;
-    uint64 public immutable PIVOT_SLOT;
+    // validators[0] gindex before Gloas
+    GIndex public constant GI_FIRST_VALIDATOR_PRE_GLOAS = CLGIndices.FIRST_VALIDATOR_PRE_GLOAS;
+    // validators field gindex starting from Gloas
+    GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
+
+    /// First slot of the Gloas fork.
+    uint64 public immutable GLOAS_SLOT;
 
     error InvalidSlot();
     error RootNotFound();
 
-    constructor(GIndex _gIFirstValidatorPrev, GIndex _gIFirstValidatorCurr, uint64 _pivotSlot) {
-        GI_FIRST_VALIDATOR_PREV = _gIFirstValidatorPrev;
-        GI_FIRST_VALIDATOR_CURR = _gIFirstValidatorCurr;
-        PIVOT_SLOT = _pivotSlot;
+    constructor(uint64 _gloasSlot) {
+        GLOAS_SLOT = _gloasSlot;
     }
 
     /// @notice Proves validator[i] under the same EIP-4788 anchor, checks WC
@@ -95,8 +97,10 @@ abstract contract CLValidatorVerifier {
 
     /// @dev GIndex for Validator[i] given slot (fork-aware).
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
-        GIndex gI = _provenSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
-        return gI.shr(_offset);
+        if (_provenSlot < GLOAS_SLOT) {
+            return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(_offset);
+        }
+        return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));
     }
 
     /// @dev Reads parent_beacon_block_root from EIP-4788 by timestamp.

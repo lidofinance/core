@@ -609,17 +609,49 @@ export const generatePredepositData = async (
   });
 };
 
+export const getFirstValidatorGIndexForProof = async (
+  predepositGuarantee: PredepositGuarantee,
+  slot: bigint | number,
+) => {
+  let gloasSlot: bigint;
+  try {
+    gloasSlot = await predepositGuarantee.GLOAS_SLOT();
+  } catch {
+    const legacyVerifier = new ethers.Contract(
+      await predepositGuarantee.getAddress(),
+      ["function PIVOT_SLOT() view returns (uint64)"],
+      ethers.provider,
+    );
+    gloasSlot = await legacyVerifier.PIVOT_SLOT();
+  }
+
+  if (BigInt(slot) < gloasSlot) {
+    return predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS();
+  }
+
+  if (gloasSlot !== 0n) {
+    throw new Error(`Pre-Gloas proof slot ${slot} must be below Gloas slot ${gloasSlot}`);
+  }
+
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS PDG IS DEPLOYED WITH A REAL GLOAS SLOT.
+  // Fork tests use the deployed legacy verifier, where the zero slot selects
+  // a static post-fork validator gindex.
+  const legacyVerifier = new ethers.Contract(
+    await predepositGuarantee.getAddress(),
+    ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+    ethers.provider,
+  );
+  return legacyVerifier.GI_FIRST_VALIDATOR_CURR();
+};
+
 export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {
   const { predepositGuarantee } = ctx.contracts;
 
   // Step 3: Prove and deposit the validator
-  const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
-
-  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PREV());
+  const slot = 8192;
+  const mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(predepositGuarantee, slot));
   const { validatorIndex } = await mockCLtree.addValidator(validator.container);
-  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(
-    Number(pivot_slot) + 100,
-  );
+  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(slot);
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
   const pubkey = hexlify(validator.container.pubkey);

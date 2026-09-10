@@ -122,9 +122,7 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
       100, // maxConsolidationRequestsLimit
       1, // consolidationsPerFrame
       48, // frameDurationInSec
-      localMerkle.gIFirstValidator,
-      localMerkle.gIFirstValidator,
-      0,
+      (1n << 64n) - 1n,
     ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
