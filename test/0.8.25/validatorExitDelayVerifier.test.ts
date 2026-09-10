@@ -1,12 +1,17 @@
 import { expect } from "chai";
-import { ContractTransactionResponse } from "ethers";
+import { ContractTransactionResponse, hexlify } from "ethers";
 import { ethers } from "hardhat";
 
-import { StakingRouter_Mock, ValidatorExitDelayVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
+import {
+  SSZMerkleTree,
+  StakingRouter_Mock,
+  ValidatorExitDelayVerifier,
+  ValidatorsExitBusOracle_Mock,
+} from "typechain-types";
 import { LidoLocator } from "typechain-types";
 import { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0.8.25/contracts/ValidatorExitDelayVerifier__Harness";
 
-import { updateBeaconBlockRoot } from "lib";
+import { generateBeaconHeader, generateValidator, updateBeaconBlockRoot } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -740,6 +745,163 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         ),
       ).to.be.reverted;
     });
+  });
+});
+
+// End-to-end coverage of the post-Gloas (progressive-list) validator layout.
+// Unlike the fixtures above, these proofs are built dynamically so the verifier
+// must select the Gloas validator GIndex instead of the pre-Gloas fixed-list one.
+describe("verifyValidatorExitDelay (Gloas path)", () => {
+  const FIRST_SUPPORTED_SLOT = 11649024;
+  const CAPELLA_SLOT = 194048 * 32;
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
+  // Keep a supported pre-Gloas window [FIRST_SUPPORTED_SLOT, GLOAS_SLOT) so the
+  // negative test can present a post-Gloas proof on a pre-Gloas slot.
+  const GLOAS_SLOT = FIRST_SUPPORTED_SLOT + SLOTS_PER_HISTORICAL_ROOT;
+  const SLOTS_PER_EPOCH = 32;
+  const SECONDS_PER_SLOT = 12;
+  const GENESIS_TIME = 1606824000;
+  const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
+  const FAR_FUTURE_EPOCH = MAX_UINT64;
+
+  let harness: ValidatorExitDelayVerifier__Harness;
+  let vebo: ValidatorsExitBusOracle_Mock;
+  let stakingRouter: StakingRouter_Mock;
+
+  before(async () => {
+    vebo = await ethers.deployContract("ValidatorsExitBusOracle_Mock");
+    stakingRouter = await ethers.deployContract("StakingRouter_Mock");
+    const locator = await deployLidoLocator({
+      validatorsExitBusOracle: await vebo.getAddress(),
+      stakingRouter: await stakingRouter.getAddress(),
+    });
+
+    harness = await ethers.deployContract("ValidatorExitDelayVerifier__Harness", [
+      await locator.getAddress(),
+      FIRST_SUPPORTED_SLOT,
+      GLOAS_SLOT,
+      CAPELLA_SLOT,
+      SLOTS_PER_HISTORICAL_ROOT,
+      SLOTS_PER_EPOCH,
+      SECONDS_PER_SLOT,
+      GENESIS_TIME,
+      SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+    ]);
+  });
+
+  // Builds a single-validator state tree whose leaf sits at the verifier's
+  // post-Gloas validator GIndex, and a beacon header committing that state root.
+  const buildGloasValidatorProof = async (validatorIndex: bigint, stateSlot: number) => {
+    const { container } = generateValidator();
+    // The verifier always reconstructs the leaf with exitEpoch == FAR_FUTURE_EPOCH,
+    // so the committed leaf must use the same value for the roots to match.
+    const provenContainer = {
+      ...container,
+      activationEligibilityEpoch: 10n,
+      activationEpoch: 16n,
+      exitEpoch: FAR_FUTURE_EPOCH,
+      withdrawableEpoch: FAR_FUTURE_EPOCH,
+    };
+
+    const validatorGI = await harness.getValidatorGI(validatorIndex, stateSlot);
+
+    const stateTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [validatorGI]);
+    const leafIndex = await stateTree.leafCount();
+    await stateTree.addValidatorLeaf(provenContainer);
+
+    const validatorProof = await stateTree.getMerkleProof(leafIndex);
+    const stateRoot = await stateTree.getMerkleRoot();
+
+    const witness = {
+      exitRequestIndex: 0,
+      withdrawalCredentials: provenContainer.withdrawalCredentials,
+      effectiveBalance: provenContainer.effectiveBalance,
+      activationEligibilityEpoch: provenContainer.activationEligibilityEpoch,
+      activationEpoch: provenContainer.activationEpoch,
+      withdrawableEpoch: provenContainer.withdrawableEpoch,
+      slashed: provenContainer.slashed,
+      validatorProof: [...validatorProof],
+    };
+
+    const buildHeader = async (slot: number) => {
+      const base = generateBeaconHeader(stateRoot, slot);
+      const header = { ...base, slot, proposerIndex: String(base.proposerIndex) };
+      const headerRoot = await stateTree.beaconBlockHeaderHashTreeRoot(header);
+      return { header, headerRoot };
+    };
+
+    return { pubkey: hexlify(provenContainer.pubkey), witness, buildHeader };
+  };
+
+  const submitExitRequest = async (pubkey: string, valIndex: number, deliveryTimestamp: number) => {
+    const exitRequests: ExitRequest[] = [{ moduleId: 3, nodeOpId: 7, valIndex, pubkey }];
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    await vebo.setExitRequests(encodedExitRequestsHash, deliveryTimestamp, exitRequests);
+    return encodedExitRequests;
+  };
+
+  it("accepts a post-Gloas proof and reports the exit delay", async () => {
+    const validatorIndex = 1n;
+    const stateSlot = GLOAS_SLOT + 100; // strictly after the fork -> progressive-list GIndex
+
+    const { pubkey, witness, buildHeader } = await buildGloasValidatorProof(validatorIndex, stateSlot);
+    const { header, headerRoot } = await buildHeader(stateSlot);
+
+    const intervalInSlots = 1000;
+    const proofSlotTimestamp = GENESIS_TIME + stateSlot * SECONDS_PER_SLOT;
+    const veboExitRequestTimestamp = proofSlotTimestamp - intervalInSlots * SECONDS_PER_SLOT;
+
+    const encodedExitRequests = await submitExitRequest(pubkey, Number(validatorIndex), veboExitRequestTimestamp);
+    const rootsTimestamp = await updateBeaconBlockRoot(headerRoot);
+
+    const tx = await harness.verifyValidatorExitDelay(
+      toProvableBeaconBlockHeader(header, rootsTimestamp),
+      [witness],
+      encodedExitRequests,
+    );
+
+    const receipt = await tx.wait();
+    const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
+    expect(events.length).to.equal(1);
+    expect(events[0].args[0]).to.equal(3); // moduleId
+    expect(events[0].args[1]).to.equal(7); // nodeOpId
+    expect(events[0].args[2]).to.equal(proofSlotTimestamp);
+    expect(events[0].args[3]).to.equal(pubkey);
+    expect(events[0].args[4]).to.equal(intervalInSlots * SECONDS_PER_SLOT);
+  });
+
+  it("computes a different validator GIndex before and after the fork", async () => {
+    const validatorIndex = 1n;
+    const preGloasGI = await harness.getValidatorGI(validatorIndex, GLOAS_SLOT - 1);
+    const postGloasGI = await harness.getValidatorGI(validatorIndex, GLOAS_SLOT);
+    expect(preGloasGI).to.not.equal(postGloasGI);
+  });
+
+  it("rejects a post-Gloas proof presented on a pre-Gloas slot", async () => {
+    const validatorIndex = 1n;
+    const stateSlot = GLOAS_SLOT + 1;
+
+    const { pubkey, witness, buildHeader } = await buildGloasValidatorProof(validatorIndex, stateSlot);
+
+    // Same committed state, but a header on a supported pre-Gloas slot. The verifier
+    // selects the pre-Gloas validator GIndex, so the proof no longer matches.
+    const preGloasSlot = GLOAS_SLOT - 1;
+    const { header, headerRoot } = await buildHeader(preGloasSlot);
+
+    const intervalInSlots = 1000;
+    const proofSlotTimestamp = GENESIS_TIME + preGloasSlot * SECONDS_PER_SLOT;
+    const veboExitRequestTimestamp = proofSlotTimestamp - intervalInSlots * SECONDS_PER_SLOT;
+
+    const encodedExitRequests = await submitExitRequest(pubkey, Number(validatorIndex), veboExitRequestTimestamp);
+    const rootsTimestamp = await updateBeaconBlockRoot(headerRoot);
+
+    await expect(
+      harness.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(header, rootsTimestamp),
+        [witness],
+        encodedExitRequests,
+      ),
+    ).to.be.reverted;
   });
 });
 
