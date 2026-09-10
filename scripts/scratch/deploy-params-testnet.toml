@@ -155,17 +155,9 @@ symbol = "unstETH"                    # NFT collection symbol
 
 # Validator exit delay verifier configuration for managing validator exits
 [validatorExitDelayVerifier]
-# Generalized indices for validator state verification in Ethereum consensus
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstHistoricalSummaryPrev = "0x000000000000000000000000000000000000000000000000000000b600000018"
-gIFirstHistoricalSummaryCurr = "0x000000000000000000000000000000000000000000000000000000b600000018"
-gIFirstBlockRootInSummaryPrev = "0x000000000000000000000000000000000000000000000000000000000040000d"
-gIFirstBlockRootInSummaryCurr = "0x000000000000000000000000000000000000000000000000000000000040000d"
-# Additional deployment parameters for ValidatorExitDelayVerifier
-firstSupportedSlot = 11649024              # First supported slot for validator state verification
-pivotSlot = 11649024                       # Pivot slot for state verification
-capellaSlot = 6209536                      # Capella upgrade slot
+firstSupportedSlot = 0                     # Devnet: full history supported from genesis
+gloasSlot = 36000                           # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
+capellaSlot = 0                            # Devnet: Capella active from genesis
 slotsPerHistoricalRoot = 8192              # Number of slots per historical root
 shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (2^8 * 32 * 12)
 
@@ -179,9 +171,7 @@ frameDurationInSec = 240               # Duration of each processing frame in se
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 36               # Duration of each processing frame in seconds
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
-pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+gloasSlot = 36000                           # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
 
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
@@ -196,9 +186,7 @@ targetModuleId = 4                    # Target staking module ID: CMv2 is plugge
 
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]
-gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
-gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
-changeSlot = 0                        # Slot number when the change takes effect
+gloasSlot = 36000                          # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
 
 # Operator grid configuration for managing staking operators
 [operatorGrid]
@@ -218,10 +206,7 @@ minBlockDistance = 75                 # Minimum block distance between top-ups
 maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
 targetBalanceGwei = 2046750000000
 minTopUpGwei = 1000000000
-# Generalized indices for validator/balance/pending state verification
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+gloasSlot = 36000                           # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
 
 # StakingRouter configuration
 [stakingRouter]
