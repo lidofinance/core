@@ -19,7 +19,7 @@ abstract contract CLValidatorVerifier {
     // BeaconBlockHeader: state_root field gindex
     uint8 private constant STATE_ROOT_DEPTH = 3;
     uint256 private constant STATE_ROOT_POSITION = 3;
-    GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, STATE_ROOT_DEPTH);
+    GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, 0);
 
     // Position (from the end) of parent(slot, proposerIndex) node inside concatenated proof
     uint256 private constant SLOT_PROPOSER_PARENT_PROOF_OFFSET = 2;
