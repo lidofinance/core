@@ -10,7 +10,6 @@ const MAX_UINT64 = (1n << 64n) - 1n;
 
 const STATIC_VALIDATOR = {
   blockRoot: "0xbe928e3a9fa76b916df79d78a8b67237f9b133269bb421f37490b7624abad452",
-  gIFirstValidator: "0x0000000000000000000000000000000000000000000000000096000000000028",
   beaconRootData: {
     childBlockTimestamp: 1769723675n,
     slot: 13574970n,
@@ -150,7 +149,6 @@ const STATIC_VALIDATOR = {
 
 describe("CLTopUpProofVerifier", () => {
   let sszMerkleTree: SSZValidatorsMerkleTree;
-  let gIFirstValidator: string;
   let firstValidatorLeafIndex: bigint;
   let verifier: CLValidatorVerifier__Harness;
 
@@ -158,7 +156,6 @@ describe("CLTopUpProofVerifier", () => {
     // 1) Build a local SSZ tree once
     const localTree = await prepareLocalMerkleTree();
     sszMerkleTree = localTree.stateTree;
-    gIFirstValidator = localTree.gIFirstValidator;
     firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
 
     // populate merkle tree with validators
@@ -168,10 +165,7 @@ describe("CLTopUpProofVerifier", () => {
     }
 
     // 2) Keep the fixed-depth fixture on the pre-Gloas path.
-    verifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      gIFirstValidator, // GI_FIRST_VALIDATOR_PRE_GLOAS
-      MAX_UINT64, // GLOAS_SLOT
-    ]);
+    verifier = await ethers.deployContract("CLValidatorVerifier__Harness", [MAX_UINT64]);
   });
 
   it("verifies full Validator container at head under EIP-4788", async () => {
@@ -416,10 +410,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should verify static validator 12345 with real mainnet proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      MAX_UINT64,
-    ]);
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [MAX_UINT64]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
 
@@ -438,10 +429,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should verify static validator 67890 with real mainnet proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      MAX_UINT64,
-    ]);
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [MAX_UINT64]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
 
@@ -460,10 +448,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should reject static validator with wrong withdrawal credentials", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      MAX_UINT64,
-    ]);
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [MAX_UINT64]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
 
@@ -478,10 +463,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should reject static validator with fake proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      MAX_UINT64,
-    ]);
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [MAX_UINT64]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
 
@@ -509,9 +491,8 @@ describe("CLTopUpProofVerifier", () => {
 
   it("should change gIndex on Gloas slot", async () => {
     const gloasSlot = 1000;
-    const giPrev = "0x0000000000000000000000000000000000000000000000000096000000000028";
 
-    const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [giPrev, gloasSlot], {});
+    const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [gloasSlot], {});
     expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(
       "0x0000000000000000000000000000000000000000000000000096000000000128",
     );

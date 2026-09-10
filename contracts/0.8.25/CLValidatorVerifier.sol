@@ -28,16 +28,17 @@ abstract contract CLValidatorVerifier {
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
     // validators[0] gindex before Gloas
-    GIndex public immutable GI_FIRST_VALIDATOR_PRE_GLOAS;
+    GIndex public constant GI_FIRST_VALIDATOR_PRE_GLOAS = CLGIndices.FIRST_VALIDATOR_PRE_GLOAS;
     // validators field gindex starting from Gloas
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
+
+    /// First slot of the Gloas fork.
     uint64 public immutable GLOAS_SLOT;
 
     error InvalidSlot();
     error RootNotFound();
 
-    constructor(GIndex _gIFirstValidatorPreGloas, uint64 _gloasSlot) {
-        GI_FIRST_VALIDATOR_PRE_GLOAS = _gIFirstValidatorPreGloas;
+    constructor(uint64 _gloasSlot) {
         GLOAS_SLOT = _gloasSlot;
     }
 

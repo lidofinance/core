@@ -4,7 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
@@ -150,7 +149,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     constructor(
         bytes4 _genesisForkVersion,
         uint64 _gloasSlot
-    ) CLProofVerifier(CLGIndices.FIRST_VALIDATOR_PRE_GLOAS, _gloasSlot) {
+    ) CLProofVerifier(_gloasSlot) {
         DEPOSIT_DOMAIN = BLS12_381.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);

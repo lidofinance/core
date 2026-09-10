@@ -87,10 +87,10 @@ abstract contract CLProofVerifier {
 
     /// @notice GIndex of first validator in CL state tree
     /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
-    GIndex public immutable GI_FIRST_VALIDATOR_PRE_GLOAS;
-    /// @notice GIndex of the validators field in CL state tree starting from Gloas at GLOAS_SLOT
+    GIndex public constant GI_FIRST_VALIDATOR_PRE_GLOAS = CLGIndices.FIRST_VALIDATOR_PRE_GLOAS;
+    /// @notice GIndex of the validators field in CL state tree starting from Gloas.
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
-    /// @notice First slot of the Gloas fork, when the validator GIndex changes.
+    /// @notice First slot of the Gloas fork.
     uint64 public immutable GLOAS_SLOT;
 
     /**
@@ -126,11 +126,9 @@ abstract contract CLProofVerifier {
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
     /**
-     * @param _gIFirstValidatorPreGloas packed(general index | depth in Merkle tree, see GIndex.sol) GIndex of first validator in a pre-Gloas CL state tree
      * @param _gloasSlot first slot of the Gloas fork
      */
-    constructor(GIndex _gIFirstValidatorPreGloas, uint64 _gloasSlot) {
-        GI_FIRST_VALIDATOR_PRE_GLOAS = _gIFirstValidatorPreGloas;
+    constructor(uint64 _gloasSlot) {
         GLOAS_SLOT = _gloasSlot;
     }
 

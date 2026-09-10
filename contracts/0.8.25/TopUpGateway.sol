@@ -9,7 +9,6 @@ import {CLValidatorVerifier} from "./CLValidatorVerifier.sol";
 import {
     AccessControlEnumerableUpgradeable
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
-import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 
@@ -65,7 +64,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         address _lidoLocator,
         uint64 _gloasSlot,
         uint256 _slotsPerEpoch
-    ) CLValidatorVerifier(CLGIndices.FIRST_VALIDATOR_PRE_GLOAS, _gloasSlot) {
+    ) CLValidatorVerifier(_gloasSlot) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         LOCATOR = ILidoLocator(_lidoLocator);
         SLOTS_PER_EPOCH = _slotsPerEpoch;
