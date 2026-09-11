@@ -683,9 +683,35 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Reverts if signature is invalid", async () => {
       const blockNumber = 1;
+      expect(await guardian1.contract.isValidSignature(ZeroHash, "0x")).to.equal("0xffffffff");
+      expect(await guardian1.contract.isValidSignature(ZeroHash, "0x" + "00".repeat(65))).to.equal("0xffffffff");
       await expect(
         dsm.pauseDeposits(blockNumber, emptyGuardianSignature(guardian1.address)),
       ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
+    });
+
+    it("Reverts if an EOA signature uses the 64-byte compact format", async () => {
+      const blockNumber = await time.latestBlock();
+      const message = new DSMPauseMessage(guardian1.address, blockNumber);
+      const signature = guardian1.delegate.signingKey.sign(message.hash);
+
+      expect(await guardian1.contract.isValidSignature(message.hash, signature.serialized)).to.equal("0x1626ba7e");
+      expect(await guardian1.contract.isValidSignature(message.hash, signature.compactSerialized)).to.equal(
+        "0xffffffff",
+      );
+      await expect(
+        dsm.pauseDeposits(blockNumber, { guardian: guardian1.address, signature: signature.compactSerialized }),
+      ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
+    });
+
+    it("Pauses with a signature validated by an ERC-1271 delegate", async () => {
+      await guardian1.contract.setDelegate(guardian2.address);
+      const blockNumber = await time.latestBlock();
+      const sig = new DSMPauseMessage(guardian1.address, blockNumber).sign(guardian2.privateKey);
+
+      await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig))
+        .to.emit(dsm, "DepositsPaused")
+        .withArgs(guardian1.address);
     });
 
     it("Reverts if signature is not guardian", async () => {

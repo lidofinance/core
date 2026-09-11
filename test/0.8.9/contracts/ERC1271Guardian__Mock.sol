@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
-import {IERC1271} from "@openzeppelin/contracts-v4.4/interfaces/IERC1271.sol";
-import {ECDSA} from "@openzeppelin/contracts-v4.4/utils/cryptography/ECDSA.sol";
-import {IERC165} from "@openzeppelin/contracts-v4.4/utils/introspection/IERC165.sol";
+import {IERC1271} from "@openzeppelin/contracts-v5.2/interfaces/IERC1271.sol";
+import {SignatureChecker} from "@openzeppelin/contracts-v5.2/utils/cryptography/SignatureChecker.sol";
+import {IERC165} from "@openzeppelin/contracts-v5.2/utils/introspection/IERC165.sol";
 
 contract ERC1271Guardian__Mock is IERC165, IERC1271 {
     enum ResponseMode {
@@ -62,7 +62,7 @@ contract ERC1271Guardian__Mock is IERC165, IERC1271 {
             }
         }
         if (signatureResponseMode == ResponseMode.Invalid || delegate == address(0)) return EIP1271_INVALID;
-        return ECDSA.recover(hash, signature) == delegate ? EIP1271_MAGIC_VALUE : EIP1271_INVALID;
+        return SignatureChecker.isValidSignatureNow(delegate, hash, signature) ? EIP1271_MAGIC_VALUE : EIP1271_INVALID;
     }
 
     function execute(address target, bytes calldata data) external returns (bytes memory result) {
