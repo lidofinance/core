@@ -34,7 +34,8 @@ export {
   normalizeWithdrawalVaultBaseline,
 } from "./accounting";
 
-export { ensureDsmGuardians } from "./dsm";
+export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm";
+export { deployDelegationContract, getDelegationFactory } from "./edf";
 export {
   norEnsureDepositedOperatorKeys,
   norSdvtEnsureOperators,

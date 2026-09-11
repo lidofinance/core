@@ -153,6 +153,13 @@ const getAragonContracts = async (lido: LoadedContract<Lido>, config: ProtocolNe
  */
 const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, config: ProtocolNetworkConfig) => {
   const modules = await stakingRouter.getStakingModules();
+  // Keep every registered module for tests that check the whole protocol.
+  const all = await Promise.all(
+    modules.map(async ({ id, name, stakingModuleAddress }) => {
+      const contract = await loadContract("IStakingModule", stakingModuleAddress);
+      return { id, name, stakingModuleAddress, type: await contract.getType() };
+    }),
+  );
   const nor = modules[0];
   const sdvt = modules.find((m) => m.name === "SimpleDVT")!;
 
@@ -173,7 +180,7 @@ const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, c
 
   return {
     contracts: (await batch(promises)) as StakingModuleContracts,
-    modules: { nor, sdvt, csm, cmv2 } as StakingModules,
+    modules: { all, nor, sdvt, csm, cmv2 } as StakingModules,
   };
 };
 
