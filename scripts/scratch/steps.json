@@ -12,6 +12,7 @@
     "scratch/steps/0083-deploy-core",
     "scratch/steps/0085-deploy-vaults",
     "scratch/steps/0090-upgrade-locator",
+    "scratch/steps/0095-deploy-tooling",
     "scratch/steps/0100-deploy-circuit-breaker",
     "scratch/steps/0101-deploy-easytrack",
     "scratch/steps/0110-finalize-dao",
