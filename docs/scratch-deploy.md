@@ -72,10 +72,10 @@ needs:
 
 The repository contains bash scripts for deploying the DAO across various environments:
 
-- Local Node Deployment - `scripts/dao-local-deploy.sh` (the deploy phase supports Anvil, Hardhat Network, and other
-  local Ethereum nodes, but the final test phase forks the node in-process — a "fork of a fork" that is reliable on
-  Anvil only, see [external-node-test-compat.md](external-node-test-compat.md); with a `hardhat node` backend run the
-  suite via `yarn test:integration:fork:local` instead)
+- Local Node Deployment — `scripts/dao-local-deploy.sh` deploys, verifies, provisions,
+  and tests on the same external Anvil or Hardhat node. Tests mutate that node.
+- Sepolia Fork Deployment — `scripts/dao-sepolia-fork-deploy.sh` uses the same topology
+  with Sepolia genesis parameters and the deposit adapter.
 
 The protocol requires configuration of numerous parameters for a scratch deployment. These live in a TOML
 deploy-params file — by default `scripts/scratch/deploy-params-testnet.toml` (override with the
@@ -236,11 +236,8 @@ anvil -p 8555 --mnemonic "test test test test test test test test test test test
 yarn hardhat node
 ```
 
-> [!WARNING]
-> A `hardhat node` backend works for the deploy phase only. The script's final test phase (`yarn test:integration`,
-> MODE=forking) forks the node in-process, and that "fork of a fork" breaks against a hardhat node (pending-block
-> `"nonce": null` on `evm_revert`, see [external-node-test-compat.md](external-node-test-compat.md)). Either use Anvil,
-> or run the suite against the hardhat node directly with `yarn test:integration:fork:local`.
+Both wrappers test directly through `RUN_NETWORK=local`; they do not create an
+in-process fork. Point `RPC_URL` at the running node.
 
 ### Testnet Deployment
 
@@ -289,7 +286,7 @@ the expectations in `scripts/scratch/state-mate/scratch.yaml` (~2000 checks: wir
 proxy admins/implementations, roles/ACL topology, deploy parameters). state-mate is
 vendored as the `foundry/lib/state-mate` submodule.
 
-The committed `scratch.yaml` holds only the _wiring_ — addresses and deploy-dependent
+The committed `scratch.yaml` holds contract constants and expected wiring. Addresses and deploy-dependent
 values are referenced via YAML aliases whose anchors live in generated sibling files
 (state-mate's `.deployed`/`.inputs` feature). `prepare-state-mate-check.ts` derives
 them, plus the `abi/` directory, from the network state file and the compile artifacts,
@@ -311,6 +308,21 @@ When the deployment surface changes (a contract added/removed from the state fil
 generator fails listing the unmapped keys — extend its mapping tables and add a matching
 contract entry (state-mate requires every non-mutable function to be either checked or
 explicitly skipped with an empty value) in `scratch.yaml`.
+
+Before deployment transactions, `dao-deploy.sh` runs `yarn scratch:check-abi` against
+compiled core ABIs. It rejects missing getters and obsolete function entries, including
+obsolete entries marked `null`. Run `yarn compile && yarn scratch:check-abi` after changing
+contracts or the specification. `yarn scratch:check-abi --include-dg` also checks DG when
+its Forge artifacts are available; preparation checks both sections after DG deployment.
+
+Maintain expectations from their defining sources: contract constants and initializers
+for protocol versions, deployment parameters for limits and consensus versions, and
+role-grant steps for permissions. The generator derives module IDs/count and Burner/gateway
+role holders from the optional-module deployment records. It never reads on-chain
+getter results to manufacture expected values. Parameterized or time-dependent queries
+may be explicitly skipped with a documented reason; ABI coverage alone does not prove
+those functions behave correctly. A successful state check establishes the listed
+postconditions; functional acceptance still requires the integration suite.
 
 ### Verifying a Live-Testnet Scratch Deployment
 
@@ -370,9 +382,9 @@ Caveats:
   `supportsVariableDepositAmounts` in `lib/protocol/types.ts`.
 
 **Re-deploy and test from scratch (scratch mode)** — `yarn
-test:integration:fork:local` (`MODE=scratch`, network `local`) does **not**
+test:integration:scratch:local` (`MODE=scratch`, network `local`) does **not**
 verify an existing deployment: the test process performs a complete fresh
-scratch deploy against `LOCAL_RPC_URL` (step `0000` resets the state file
+scratch deploy against `RPC_URL` (step `0000` resets the state file
 from the deploy params, then every step runs — including a second forge DG
 deploy) and tests the instance it just deployed. This answers "does scratch
 deploy work against this chain", which is what scratch CI runs against a
@@ -383,33 +395,17 @@ blank node. Two warnings:
 - The chain accumulates a full extra protocol instance per run; only use
   disposable forks/nodes.
 
-**How `dao-local-deploy.sh` runs the suite — deploy on anvil, test on a
-fork of it.** The deploy script does _not_ drive the external anvil with the
-test suite (the old `test:integration:fork:local`, `MODE=scratch --network
-local` path). It deploys once to anvil (DG step `0160` needs a real RPC for
-`forge --broadcast`), then runs `yarn test:integration` (`MODE=forking`) so the
-suite runs on an **in-process hardhat node that forks that anvil**, with
-`PROVISION_ON_FORK=1`. Two reasons:
+**How the wrappers run the suite.** Both wrappers deploy and verify on `RPC_URL`,
+then run `MODE=forking RUN_NETWORK=local PROVISION_ON_FORK=1 yarn test:integration`.
+Here `MODE=forking` means discover the deployment from `NETWORK_STATE_FILE`;
+`RUN_NETWORK=local` connects directly to the external node. Provisioning makes the
+fresh deployment operational, and tests use snapshots/time travel on that node.
 
-- **Isolation.** The suite isolates tests with `evm_snapshot`/`evm_revert`
-  plus month-scale `evm_setNextBlockTimestamp` jumps. That isolation is only
-  reliable on the in-process node; driving the external anvil over a full
-  ~800-test run lets snapshot state degrade (cf. the ~6k-block caveat in
-  `test/integration/core/dsm-pause-deposits.integration.ts`), which cascades
-  into spurious failures and an eventual mid-suite deadlock (a submitted tx
-  that never mines, blocking until mocha's 20-min timeout). On the fork the
-  same suite is green and finishes in ~1 minute; anvil is never mutated by the
-  tests.
-- **Provisioning + `isScratch`.** A scratch deploy is deployed-but-not-
-  operational, so the fork self-provisions (oracle committee, hash-consensus
-  initial epoch, unpause, seed TVL) via `provision()` — the same setup a
-  `MODE=scratch` run does, here run on the fork instead of on anvil. Because the
-  protocol under test is still a scratch deployment (agent holds the powers,
-  no EasyTrack), `getProtocolContext` reports `ctx.isScratch = true` even though
-  it didn't redeploy, so tests that branch on `ctx.isScratch` (e.g.
-  `staking-module`, `circuit-breaker-pause`) take the scratch path. `MODE` and
-  `PROVISION_ON_FORK` are wired in `lib/protocol/context.ts`; the forking-mode
-  state-file reader is `getForkingNetworkConfig` in `lib/protocol/networks.ts`.
+For a new deployment inside the integration suite, use
+`yarn test:integration:scratch:local`. This sets `MODE=scratch`, preserves the
+caller’s `DG_DEPLOYMENT_ENABLED` and genesis parameters, and is the entry point used
+by the `just` node recipes. `test:integration:fork:local` discovers an existing
+deployment and does not deploy one.
 
 ### Publishing Sources to Etherscan
 
@@ -484,79 +480,25 @@ await stakingRouter.addStakingModule(
 await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { from: agent.address });
 ```
 
-## Compatibility matrix
+## Supported test topology
 
-Quick reference across the three independent choices: **chain spec** (blank / Sepolia
-fork), **DG** (on / off), and **test scenario** (A–D from
-[testing.md](./testing.md)). "Tests mutate the node" = scenario C (`--network local`,
-direct); "tests use their own fork" = scenario D (in-process EDR forks the node).
+The integration runner requires an external node and accepts only `RUN_NETWORK=local`.
+Anvil and Hardhat nodes can be blank or forked; DG deployment needs their HTTP RPC.
+The local runtime reads `RPC_URL`. `NETWORK` selects the deployment state namespace.
 
-### Scratch deploy
+| Entry point                                          | Deployment behavior                                  | DG selection             |
+| ---------------------------------------------------- | ---------------------------------------------------- | ------------------------ |
+| `test:integration:scratch:local`                     | Deploy and provision on the external node, then test | Preserves caller setting |
+| `test:integration:fork:local`                        | Discover existing state on the external node         | Uses existing deployment |
+| `dao-local-deploy.sh` / `dao-sepolia-fork-deploy.sh` | Deploy, verify, then provision/test existing state   | Preserves caller setting |
 
-All four `(blank / Sepolia fork) × (DG on / off)` combinations deploy successfully
-against both an external hardhat node and anvil. The in-process node (scenario A)
-cannot deploy DG: `forge` needs an HTTP RPC and the in-process node exposes none.
+Sepolia uses chain ID `11155111`, genesis time `1655733600`, and fork version
+`0x90000069`. Variable-amount deposit tests skip there because its deposit contract
+requires 32 ETH deposits. Use a blank node for those tests.
 
-| Node                                | Chain spec                                      |          DG on          |  DG off  |
-| ----------------------------------- | ----------------------------------------------- | :---------------------: | :------: |
-| External hardhat-node               | blank (`genesisForkVersion = 0x00000000`)       |          ✅ CI          |  ✅ CI   |
-| External hardhat-node               | Sepolia fork (`0x90000069`, chainId `11155111`) |          ✅ CI          |  ✅ CI   |
-| External anvil                      | blank                                           |        ✅ local         | ✅ local |
-| External anvil                      | Sepolia fork                                    |        ✅ local         | ✅ local |
-| In-process hardhat (`MODE=scratch`) | blank                                           | ❌ forge needs HTTP RPC |    ✅    |
-
-Sepolia-fork jobs use `ghcr.io/lidofinance/hardhat-node:2.28.0-sepolia` (chainId
-`11155111`); step `0010` takes the `SepoliaDepositAdapter` branch there and nowhere
-else.
-
-### Integration tests — scenario A: in-process scratch (`test:integration:scratch`)
-
-Self-contained; no external node. Always forces `DG_DEPLOYMENT_ENABLED=false`.
-
-| DG  | Result                                                               |
-| --- | -------------------------------------------------------------------- |
-| on  | ❌ — command forces DG off; `forge` cannot reach the in-process node |
-| off | ✅                                                                   |
-
-### Integration tests — scenario C: direct to external node (`test:integration:fork:local`)
-
-Tests connect to the external node with `--network local` and **mutate it directly**
-(snapshots, `evm_revert`, and the in-test re-deploy all happen on that same node).
-
-| Backend      | Chain spec   |  DG on   |  DG off  |
-| ------------ | ------------ | :------: | :------: |
-| hardhat-node | blank        |  ✅ CI   |  ✅ CI   |
-| hardhat-node | Sepolia fork | ✅ CI ⚠️ | ✅ CI ⚠️ |
-| anvil        | blank        |    ✅    |    ✅    |
-| anvil        | Sepolia fork |  ✅ ⚠️   |  ✅ ⚠️   |
-
-⚠️ **Sepolia fork**: ~14 tests self-skip (`supportsVariableDepositAmounts = false` on
-chainId `11155111`). Sepolia's deposit contract hardcodes 32 ETH in the
-`deposit_data_root` reconstruction; variable-amount deposits (PDG predeposit,
-stVault unguaranteed / side) are structurally impossible there — not a test bug.
-
-### Integration tests — scenario D: tests use their own in-process fork (`test:integration` against a local node)
-
-The in-process EDR node forks the external node; **the external node is never
-mutated**. `dao-local-deploy.sh` uses this pattern (deploy to anvil, then
-`yarn test:integration` with `PROVISION_ON_FORK=1`). **Anvil only** — a plain
-hardhat node returns `nonce: null` for the pending block, which EDR rejects at
-`evm_revert` time, collapsing snapshot isolation.
-
-| Backend      |               DG on               | DG off |
-| ------------ | :-------------------------------: | :----: |
-| anvil        |                ✅                 |   ✅   |
-| hardhat-node | ❌ `nonce: null` on pending block |   ❌   |
-
-### Structural limits at a glance
-
-| Constraint                                      | Root cause                                          | Fix / workaround                                                          |
-| ----------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
-| DG cannot deploy in-process (scenario A)        | `forge` needs an HTTP RPC                           | Use scenario C with an external node                                      |
-| Scenario D breaks on hardhat-node backend       | EDR rejects `nonce: null` from pending block        | Switch to anvil, or use scenario C                                        |
-| Sepolia variable-amount deposit tests skip      | Deposit contract hardcodes 32 ETH in root           | Structural — run blank node for full deposit coverage                     |
-| `ECONNRESET` after `forge` on hardhat-node      | Keep-alive socket closed during 30–60 s forge pause | `reEstablishRpcAfterForge()` in step 0160 (already applied)               |
-| chainId not inherited on a plain `hardhat node` | hardhat node defaults chainId to `31337`            | Set `HARDHAT_CHAIN_ID=11155111` in the forked node's config, or use anvil |
+In-process integration and a second fork of the external node are not supported by
+`run-test-integration.sh`. Historical compatibility observations are recorded in
+[external-node-test-compat.md](external-node-test-compat.md).
 
 ## Architecture & internals
 
@@ -628,12 +570,10 @@ consequences:
   fresh instance (a second forge DG deploy included). They validate "scratch
   deploy works on this chain", not a prior artifact. Never point
   `NETWORK_STATE_FILE` at a file you want to keep.
-- **The 0145/0150/0160 idempotency guards are not a resume mode.** They exist for
-  one dangerous partial failure: 0160 persists the forge output mid-step (before
-  the permission hand-off). If it dies after that, re-running _just 0160_ resumes
-  cleanly — `tryGetAddress(dg:adminExecutor)` skips the forge redeploy, per-sealable
-  `hasRole` checks skip already-done wiring, and the `hasPermission` / `owner ==
-Agent` checks skip an already-applied finalize.
+- **Recovery checks observe on-chain state.** Step 0150 skips admin/ownership
+  transfers only when the recipient already has the intended authority. Step 0160
+  reuses persisted DG addresses and checks sealable roles and ACL managers before
+  completing the separate template ownership transfer.
 
 ### Resuming a failed deploy (`RESUME=1`)
 
@@ -652,14 +592,45 @@ RESUME=1 ./scripts/dao-deploy.sh   # same env as the original run
 
 Caveats:
 
-- **The failed step restarts from its beginning.** That is safe: deploy steps
-  either redeploy their contracts (overwriting the state entries) or carry
-  their own idempotency guards (0145/0150/0160).
+- **The failed step restarts from its beginning.** The cursor alone does not prove
+  replay is safe. Steps 0150 and 0160 check the postconditions below; other failed
+  steps must be inspected for partially applied transactions before replay.
 - **The node must be the same session** the state file came from — addresses in
   the state are chain-bound. Resuming against a restarted blank anvil deploys
   on top of stale addresses and fails in confusing ways.
 - A stale `RESUME=1` without an existing state file degrades gracefully to a
   clean run.
+
+### Permission handoff recovery contract
+
+Following FPF A.15 (CC-A15-1/2), a planned step, its completion record, and the
+observed chain effects are separate. The recovery cursor chooses where to start;
+on-chain reads determine which transactions remain necessary.
+
+| Phase                          | Preconditions                                                                   | Verified postconditions                                                          | Recovery                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 0150 admin roles               | Deployer or Agent holds admin                                                   | Agent holds admin; deployer removed except DG sealables                          | Grant/renounce only if needed; fail if neither has admin               |
+| 0150 proxy/owner transfers     | Current authority is deployer or intended recipient                             | Agent owns/administers proxies and ownables; Voting administers withdrawal vault | Skip completed transfers; reject any third-party authority             |
+| 0160 sealable wiring           | Deployer admin available or DG roles already wired                              | ResealManager holds PAUSE/RESUME; deployer admin removed                         | Verify both roles before accepting a completed handoff                 |
+| 0160 finalization, DG or no-DG | All four finalization managers still Template, or all match the target topology | Agent execution and DAO/APM root managers match the selected mode                | Finalize once; mixed/unexpected manager state fails                    |
+| 0160 template ownership        | Owner is deployer or Agent; ACL finalization verified                           | Owner is Agent                                                                   | Transfer independently of finalization; safe after deleted deployState |
+
+DG config and output are retained under `.local/dg-deployments/<chainId>-<unique>/`.
+Each invocation has independent `deploy-config/` and `deploy-artifacts/` directories;
+identical chain IDs and timestamps cannot overwrite older output. `.local/` is
+Git-ignored. Compiler inputs, output and cache use stable paths in the DG submodule;
+source trees are not copied into each archive. Failed invocations remain available for diagnosis.
+Retained config, deployment artifacts and broadcast receipts can be removed manually
+when no longer needed for recovery; archives are not automatically pruned. If Forge completed
+but state persistence failed, recover its addresses from that directory before
+retrying; the completed-step cursor does not recover unrecorded deployments.
+
+The post-deploy checker checks the four consolidation/top-up contracts through
+`scratch.yaml`. Supplemental checks cover deployed libraries, CircuitBreaker,
+DelegationFactory, EasyTrack stub, Sepolia adapter, and optional staking modules,
+including nested proxies, implementations, factories and library addresses. Module
+registration and Agent admin are checked. Source refs, configuration, transaction
+hashes and run cursors are metadata; they are not evidence of deployed code.
 
 ### Preflight checks
 
@@ -702,27 +673,15 @@ works on live networks, not just forks with impersonation.
 
   Non-obvious mechanics:
 
-  - **Forge targets the hardhat network's URL** (`network.config.url`, falling
-    back to `RPC_URL`) so DG lands on the same chain even when a dotenv `RPC_URL`
-    points elsewhere (the CI layout). `--slow` serializes broadcasts against a
-    fork-backed anvil. Signing reuses hardhat's account (`--private-key`) or falls
-    back to `--unlocked`.
-  - **DG needs an external node — it cannot deploy against the in-process hardhat
-    node.** `forge` is a separate process that reaches the chain over HTTP RPC, but
-    the built-in `hardhat` network (used by `MODE=scratch` in-process) has no `url`
-    and exposes no socket. With no `url` and no `RPC_URL`, 0160 fails fast (_"the
-    selected hardhat network has no `url` … Run scratch deploy against an external
-    node"_); with `RPC_URL` set it would broadcast DG to a _different_ chain than
-    the in-process one, so it can't work coherently either. For this reason the
-    in-process scratch commands (`yarn test:integration:scratch` and its
-    `:trace`/`:fulltrace` variants) force `DG_DEPLOYMENT_ENABLED=false`;
-    scratch-**with**-DG is exercised against an external node via
-    `yarn test:integration:fork:local` (scenario C in [testing.md](./testing.md))
-    or the `dao-*-deploy.sh` helpers — which is also why scratch CI uses
-    `test:integration:fork:local`, not `test:integration:scratch`.
-  - **Artifact pick** snapshots the artifact dir before forge and takes the new
-    file after — no mtime/wall-clock reliance (fork block timestamps diverge).
-    Older artifacts are pruned (the submodule doesn't gitignore them).
+  - **Forge targets the Hardhat network’s URL** (`network.config.url`), so it
+    reaches the same node as the TypeScript steps. `--slow` serializes broadcasts.
+    Signing reuses the configured private key or unlocked deployer.
+  - **DG requires an external HTTP RPC.** Use
+    `yarn test:integration:scratch:local` or the deployment wrappers. The runner
+    uses `RUN_NETWORK=local`; an in-process Hardhat network cannot host Forge.
+  - **Artifacts are retained per invocation.** Config and runtime output
+    live in `.local/dg-deployments/<chainId>-<unique>/`. The new artifact is selected
+    within that invocation’s output directory; older deployments are untouched.
   - **Dev-address tripwire** fails the deploy on any non-local chain whose
     committee/proposer params still hold anvil's well-known dev accounts (public
     keys); override with `DG_ALLOW_DEV_COMMITTEES=1` for public-chain forks.
@@ -776,13 +735,13 @@ windows; scratch sets none).
 `:8555` service container. Because 0160 shells out to `forge` inside the submodule, CI needs the Foundry toolchain and a
 `submodules: recursive` checkout.
 
-Each job **deploys the protocol twice**, which is intentional but easy to misread as a
-bug (the `justfile` recipes deploy only once):
+The jobs with a separate `dao-deploy.sh` phase deploy twice (the blank DG job and
+`justfile` recipes deploy once through the integration driver):
 
 1. `./scripts/dao-deploy.sh` (steps `0000–0160`) runs the **production** driver
    (`migrate.ts`) — the only CI exercise of the path a real testnet/mainnet deploy
    takes. Its state file is then discarded; the `mine.ts` step just flushes its last txs.
-2. `yarn test:integration:fork:local` (`MODE=scratch` + `--network local`, scenario C in
+2. `yarn test:integration:scratch:local` (`MODE=scratch` + `--network local`, scenario C in
    [testing.md](./testing.md)) **re-deploys from `0000`** via the **test** driver
    (`applyDeploySteps`) and asserts against _that_ instance.
 

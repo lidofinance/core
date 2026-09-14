@@ -30,6 +30,12 @@ esac
 # Compile contracts
 yarn compile
 
+# Fail on core ABI/spec drift before sending any deployment transactions. DG ABIs
+# are built by step 0160 and checked during post-deploy preparation when enabled.
+if [[ "${STATE_MATE_CHECK:-on}" != "off" ]]; then
+  yarn scratch:check-abi
+fi
+
 # Generic migration steps file
 export STEPS_FILE=scratch/steps.json
 
@@ -48,7 +54,8 @@ if [[ "${STATE_MATE_CHECK:-on}" != "off" ]]; then
     hoodi | hoodi-fork) state_mate_rpc="${HOODI_RPC_URL:-${RPC_URL:-}}" ;;
     sepolia | sepolia-fork) state_mate_rpc="${SEPOLIA_RPC_URL:-${RPC_URL:-}}" ;;
     mainnet-fork) state_mate_rpc="${MAINNET_RPC_URL:-${RPC_URL:-}}" ;;
-    local | local-devnet) state_mate_rpc="${LOCAL_RPC_URL:-${RPC_URL:-}}" ;;
+    local) state_mate_rpc="${RPC_URL:-http://127.0.0.1:8545}" ;;
+    local-devnet) state_mate_rpc="${LOCAL_RPC_URL:-${RPC_URL:-}}" ;;
     *) state_mate_rpc="${RPC_URL:-}" ;;
   esac
   if [[ -z "$state_mate_rpc" ]]; then
@@ -59,6 +66,7 @@ if [[ "${STATE_MATE_CHECK:-on}" != "off" ]]; then
   export LOCAL_RPC_URL="$state_mate_rpc"
   [[ -d foundry/lib/state-mate/node_modules ]] || (cd foundry/lib/state-mate && yarn install --immutable)
   NETWORK_STATE_FILE="$state_file" yarn ts-node scripts/scratch/state-mate/prepare-state-mate-check.ts
+  NETWORK_STATE_FILE="$state_file" yarn ts-node scripts/scratch/state-mate/check-components.ts
   state_mate_args=()
   # The l2 section of scratch.yaml holds the dual-governance checks
   grep -q '"dg:dualGovernance"' "$state_file" || state_mate_args+=(--only l1)

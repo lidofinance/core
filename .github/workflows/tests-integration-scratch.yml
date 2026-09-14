@@ -1,10 +1,10 @@
 name: Integration Tests Scratch
 
-# Each job deploys the protocol TWICE, on purpose:
+# Jobs with a separate dao-deploy.sh phase deploy TWICE, on purpose:
 #   1. `dao-deploy.sh` runs the PRODUCTION deploy driver (scripts/utils/migrate.ts) —
 #      the path a real testnet/mainnet deploy takes. Its artifact is then discarded
 #      (the `mine.ts` step only flushes its last txs).
-#   2. `test:integration:fork:local` (MODE=scratch) RE-deploys from 0000 via the TEST
+#   2. `test:integration:scratch:local` (MODE=scratch) RE-deploys from 0000 via the TEST
 #      driver (lib/scratch.ts:applyDeploySteps) and asserts against THAT instance.
 # So step 1 smoke-tests the production driver; step 2 is the functionally-tested deploy.
 # The two drivers are near-duplicates over the same steps.json — the assertions cover
@@ -51,10 +51,11 @@ jobs:
         run: cp .env.example .env
 
       - name: Run scratch deployment
-        run: yarn test:integration:scratch
+        run: yarn test:integration:scratch:local
         env:
-          NETWORK: "local"
           RPC_URL: "http://localhost:8555"
+          NETWORK: "local"
+          DG_DEPLOYMENT_ENABLED: "true"
           INTEGRATION_WITH_CSM: "off"
 
   test_hardhat_integration_scratch_no_dg:
@@ -99,8 +100,9 @@ jobs:
         run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
 
       - name: Run integration tests
-        run: yarn test:integration:fork:local
+        run: yarn test:integration:scratch:local
         env:
+          RPC_URL: "http://localhost:8555"
           INTEGRATION_WITH_CSM: "off"
           DG_DEPLOYMENT_ENABLED: "false"
 
@@ -152,8 +154,9 @@ jobs:
         run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
 
       - name: Run integration tests
-        run: yarn test:integration:fork:local
+        run: yarn test:integration:scratch:local
         env:
+          RPC_URL: "http://localhost:8555"
           INTEGRATION_WITH_CSM: "off"
           # the in-test re-deploy must see the same Sepolia chain spec
           GENESIS_TIME: 1655733600
@@ -204,8 +207,9 @@ jobs:
         run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
 
       - name: Run integration tests
-        run: yarn test:integration:fork:local
+        run: yarn test:integration:scratch:local
         env:
+          RPC_URL: "http://localhost:8555"
           INTEGRATION_WITH_CSM: "off"
           GENESIS_TIME: 1655733600
           GENESIS_FORK_VERSION: "0x90000069"

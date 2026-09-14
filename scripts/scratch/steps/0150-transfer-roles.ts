@@ -1,4 +1,5 @@
 import { ethers } from "hardhat";
+import { ensureAuthorityTransfer, ensureRoleTransfer } from "scripts/scratch/recovery";
 
 import { DEFAULT_ADMIN_ROLE } from "lib/constants";
 import { loadContract } from "lib/contract";
@@ -44,10 +45,15 @@ export async function main() {
 
   for (const contract of ozAdminTransfers) {
     const contractInstance = await loadContract(contract.name, contract.address);
-    await makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
-    if (!dgEnabled || !contract.deferDgRenounce) {
-      await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
-    }
+    await ensureRoleTransfer(
+      contract.name,
+      (account) => contractInstance.getFunction("hasRole")(DEFAULT_ADMIN_ROLE, account),
+      deployer,
+      agent,
+      () => makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer }),
+      () => makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer }),
+      dgEnabled && contract.deferDgRenounce,
+    );
   }
 
   // Change admin for OssifiableProxy contracts
@@ -63,6 +69,9 @@ export async function main() {
     state.operatorGrid.proxy.address,
     state.lazyOracle.proxy.address,
     state.burner.proxy.address,
+    state.consolidationBus.proxy.address,
+    state.consolidationMigrator.proxy.address,
+    state.topUpGateway.proxy.address,
   ];
 
   const sepoliaDepositAdapterAddress = state[Sk.sepoliaDepositAdapter]?.proxy?.address;
@@ -72,18 +81,36 @@ export async function main() {
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {
     const proxy = await loadContract("OssifiableProxy", proxyAddress);
-    await makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer });
+    await ensureAuthorityTransfer(
+      `OssifiableProxy ${proxyAddress}`,
+      () => proxy.getFunction("proxy__getAdmin")(),
+      deployer,
+      agent,
+      () => makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer }),
+    );
   }
 
   if (sepoliaDepositAdapterAddress) {
     const sepoliaDepositAdapter = await loadContract("SepoliaDepositAdapter", sepoliaDepositAdapterAddress);
-    await makeTx(sepoliaDepositAdapter, "transferOwnership", [agent], { from: deployer });
+    await ensureAuthorityTransfer(
+      "sepoliaDepositAdapter",
+      () => sepoliaDepositAdapter.getFunction("owner")(),
+      deployer,
+      agent,
+      () => makeTx(sepoliaDepositAdapter, "transferOwnership", [agent], { from: deployer }),
+    );
   }
 
   // Change DepositSecurityModule admin if not using a predefined address
   if (state[Sk.depositSecurityModule].deployParameters.usePredefinedAddressInstead === null) {
     const depositSecurityModule = await loadContract("DepositSecurityModule", state.depositSecurityModule.address);
-    await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });
+    await ensureAuthorityTransfer(
+      "depositSecurityModule",
+      () => depositSecurityModule.getFunction("getOwner")(),
+      deployer,
+      agent,
+      () => makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer }),
+    );
   }
 
   // LidoTemplate ownership moves to Agent in step 0160 — its finalize
@@ -91,5 +118,11 @@ export async function main() {
 
   // Transfer admin for WithdrawalsManagerProxy from deployer to voting
   const withdrawalsManagerProxy = await loadContract("WithdrawalsManagerProxy", state.withdrawalVault.proxy.address);
-  await makeTx(withdrawalsManagerProxy, "proxy_changeAdmin", [voting], { from: deployer });
+  await ensureAuthorityTransfer(
+    "withdrawalsManagerProxy",
+    () => withdrawalsManagerProxy.getFunction("proxy_getAdmin")(),
+    deployer,
+    voting,
+    () => makeTx(withdrawalsManagerProxy, "proxy_changeAdmin", [voting], { from: deployer }),
+  );
 }

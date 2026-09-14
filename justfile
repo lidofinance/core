@@ -157,15 +157,8 @@ _deploy-and-test env dg:
       rpc_probe "$rpc" 5 || { echo "Node at $rpc is not responding." >&2; exit 1; }
     fi
 
-    # ---- deploy + test directly on the node (scenario C: MODE=scratch + --network local) ----
-    # `test:integration:fork:local` runs every deploy step against the node — incl.
-    # DG, since the `local` network has a url so 0160's `forge --broadcast` can target
-    # it — and then tests the node DIRECTLY (evm_snapshot/revert on that one node).
-    #
-    # We deliberately do NOT use MODE=forking (EDR forking the node). When the node is
-    # itself a fork of a remote (anvil --fork-url, AnvilForksTray, …), EDR's fork-init
-    # WEDGES it mid-run. Driving it directly avoids the second fork entirely. This is
-    # exactly what the scratch CI does — see docs/testing.md scenario C.
+    # Deploy and provision on the selected external node, then test that deployment.
+    # The scratch entry point preserves DG_DEPLOYMENT_ENABLED from this recipe.
     export LOCAL_RPC_URL="$rpc"   # hardhat `local` network url (deploy + test target)
     export RPC_URL="$rpc"         # fallback url + forge broadcast target for DG
     export NETWORK_STATE_FILE="deployed-local.json"
@@ -183,7 +176,7 @@ _deploy-and-test env dg:
     # Route deploy+test through the _run wrapper (quiet terminal + full log + heartbeat,
     # like dao-*-deploy.sh). FULL_OUTPUT=1 bypasses it; LOG_FILE overrides the path.
     dg_word=no-dg; [[ "$dg_enabled" == true ]] && dg_word=dg
-    just _run "${LOG_FILE:-logs/just-${env}-${dg_word}.log}" yarn test:integration:fork:local
+    just _run "${LOG_FILE:-logs/just-${env}-${dg_word}.log}" yarn test:integration:scratch:local
 
 # Run a command with full output to <logfile> via run-logged.sh (quiet terminal +
 # heartbeat), like dao-*-deploy.sh. FULL_OUTPUT=1 streams the raw output instead.

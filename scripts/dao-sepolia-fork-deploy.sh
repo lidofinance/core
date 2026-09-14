@@ -54,33 +54,14 @@ bash scripts/dao-deploy.sh
 # Need this to get sure the last transactions are mined
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
-# Run the integration suite against an IN-PROCESS hardhat node that FORKS the
-# anvil we just deployed to (MODE=forking: the `hardhat` network forks
-# $RPC_URL at latest; the deployment is read from $NETWORK_STATE_FILE). We do
-# NOT drive anvil directly (`--network local`): the suite isolates tests with
-# evm_snapshot/evm_revert plus month-scale time jumps, and that isolation is only
-# reliable on the in-process node. Driving the external anvil over a long run
-# lets snapshot state degrade (cf. the ~6k-block caveat in
-# test/integration/core/dsm-pause-deposits.integration.ts), surfacing as
-# cascading failures and an eventual mid-suite deadlock.
-#
-# dao-deploy.sh exports SKIP_GAS_REPORT only inside its own (child) shell, so
-# set it here too — otherwise the test phase prints the full gas table.
-export SKIP_GAS_REPORT=${SKIP_GAS_REPORT-true}  # re-enable with SKIP_GAS_REPORT=""
+# Discover the deployment just created and provision/test it on the same external
+# node. The runner supports RUN_NETWORK=local and snapshots that node directly.
+# Long suites depend on external-node snapshot/revert support. The DSM pause test
+# limits mining because Hardhat snapshot restoration can fail after ~6k blocks;
+# see test/integration/core/dsm-pause-deposits.integration.ts.
+export SKIP_GAS_REPORT=${SKIP_GAS_REPORT-true}
 export INTEGRATION_WITH_CSM="off"
-# PROVISION_ON_FORK: the anvil deploy is deployed-but-not-operational, so the
-# in-process fork provisions itself (oracle committee, hash-consensus initial
-# epoch, unpause, seed TVL) — the same setup a MODE=scratch run does in-process.
 export PROVISION_ON_FORK=1
-# The in-process hardhat network does NOT inherit the forked chain's chainId
-# (defaults to 31337) — set it explicitly so the Sepolia-only code paths
-# (SepoliaDepositAdapter funding, variable-deposit-amount test skips) key off
-# 11155111 exactly as they do against the anvil fork itself.
-export HARDHAT_CHAIN_ID=11155111
-# RUN_NETWORK picks the hardhat runtime (`--network`); NETWORK stays `local` to name
-# the deploy artifacts. Must be set explicitly: scripts/utils/migration-env.sh defaults
-# RUN_NETWORK to $NETWORK, which for NETWORK=local would drive the external anvil
-# directly — the topology the note above rules out. Copying deployed-local.json ->
-# deployed-hardhat.json for the in-process node is handled there.
-export RUN_NETWORK=hardhat
-yarn test:integration   # MODE=forking: in-process fork of $RPC_URL, deployment from $NETWORK_STATE_FILE
+export MODE=forking
+export RUN_NETWORK=local
+yarn test:integration

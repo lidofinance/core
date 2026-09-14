@@ -14,6 +14,9 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { checkScratchAbis, findArtifacts } from "./check-abi";
+import { SUPPLEMENTAL_COMPONENTS } from "./components";
+
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 // Mirrors lib/env-flags.ts isProtocolActivationEnabled. Inlined (not imported) because this
@@ -49,6 +52,9 @@ const PROXY_PAIRS: Record<string, string> = {
   "aragon-evm-script-registry": "aragonEvmScriptRegistry",
   "aragon-kernel": "aragonKernel",
   "burner": "burner",
+  "consolidationBus": "consolidationBus",
+  "consolidationMigrator": "consolidationMigrator",
+  "topUpGateway": "topUpGateway",
   "lazyOracle": "lazyOracle",
   "lidoLocator": "lidoLocator",
   "operatorGrid": "operatorGrid",
@@ -76,6 +82,7 @@ const SINGLES: Record<string, string> = {
   "aragon-repo-base": "aragonRepoBase",
   "aragonID": "aragonID",
   "callsScript": "callsScript",
+  "consolidationGateway": "consolidationGateway",
   "daoFactory": "daoFactory",
   "dashboardImpl": "dashboardImplAddress",
   "depositSecurityModule": "depositSecurityModule",
@@ -124,30 +131,31 @@ const DG_TIEBREAKER_SUB_COMMITTEES_COUNT = 3; // referenced as tiebreakerSubComm
 // on Sepolia (chainId 11155111) step 0010 deploys SepoliaDepositAdapter
 // (stored under "sepoliaDepositAdapter") instead of a plain DepositContract,
 // and the effective deposit contract address lives in chainSpec.depositContract.
-const EXPLICITLY_HANDLED_KEYS = ["depositContract", "sepoliaDepositAdapter"];
+const EXPLICITLY_HANDLED_KEYS = ["depositContract", "dg:tiebreakerSubCommittees"];
 
-// State file keys that intentionally have no address anchors (params, tx hashes, metadata)
+// Explicit metadata exclusions: these describe deployment inputs or execution,
+// rather than identifying additional deployed contracts. Contract-bearing entries
+// belong in a mapping or SUPPLEMENTAL_COMPONENTS, never this set.
 const IGNORED_KEYS = new Set([
-  "aragonEnsLabelName",
-  "chainId",
-  "chainSpec",
-  "createAppReposTx",
-  "daoAragonId",
-  "daoInitialSettings",
-  "deployer",
-  "ensNode",
+  "aragonEnsLabelName", // ENS configuration
+  "chainId", // network identity (also checked against the RPC)
+  "chainSpec", // consensus inputs; effective deposit address handled explicitly
+  "createAppReposTx", // transaction receipt/hash record
+  "daoAragonId", // DAO naming input
+  "daoInitialSettings", // initial token/voting inputs
+  "deployer", // signer, not a deployed contract
+  "ensNode", // ENS namehash
   "gateSeal", // not deployed from scratch: address/factoryAddress are null
   "lidoApmEnsName",
   "lidoApmEnsRegDurationSec",
-  "lidoTemplateCreateStdAppReposTx",
-  "lidoTemplateNewDaoTx",
-  "networkId",
+  "lidoTemplateCreateStdAppReposTx", // transaction record
+  "lidoTemplateNewDaoTx", // transaction record
+  "networkId", // network identity
   "nodeOperatorsRegistry", // deploy parameters only; the app itself is app:node-operators-registry
   "scratchDeployCompletedSteps", // resume-mode cursor maintained by the step runner
-  "scratchDeployGasUsed",
+  "scratchDeployGasUsed", // accounting record
   "simpleDvt", // deploy parameters only; the app itself is app:simple-dvt
-  "vestingParams",
-  "dg:tiebreakerSubCommittees", // handled explicitly (variable-size array)
+  "vestingParams", // token vesting inputs
 ]);
 
 interface StateFile {
@@ -155,6 +163,7 @@ interface StateFile {
 }
 
 function quote(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(quote).join(", ")}]`;
   if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
   return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
@@ -226,7 +235,7 @@ function buildDeployedYaml(state: StateFile): { yaml: string; dgDeployed: boolea
   return { yaml, dgDeployed };
 }
 
-function buildInputsYaml(state: StateFile): string {
+export function buildInputsYaml(state: StateFile): string {
   const chainSpec = get(state, "chainSpec");
   const settings = get(state, "daoInitialSettings");
   const voting = (settings as { voting: Record<string, unknown> }).voting;
@@ -281,6 +290,88 @@ function buildInputsYaml(state: StateFile): string {
     ["lidoIsStopped", !isProtocolActivationEnabled()],
     ["lidoIsStakingPaused", !isProtocolActivationEnabled()],
   ];
+  // Input-derived expectations stay independent of on-chain getter results.
+  // Step 0140 registers NOR, SDVT, then each present optional module in that order.
+  const optionalModules = ["sm:CSM", "sm:CM"].filter(
+    (key) => (state[key] as { proxy?: { address?: string } } | undefined)?.proxy?.address,
+  );
+  const moduleCount = 2 + optionalModules.length;
+  // Step 0140 grants each module's Accounting a Burner role and its Ejector a gateway role.
+  const optionalRoleHolders = (field: "Accounting" | "Ejector") =>
+    optionalModules.map((key) => {
+      const address = (state[key] as { deployArtifact?: Record<string, string> }).deployArtifact?.[field];
+      if (!address || !/^0x[0-9a-f]{40}$/i.test(address) || /^0x0{40}$/i.test(address)) {
+        throw new Error(`missing ${key}.deployArtifact.${field} address`);
+      }
+      return address;
+    });
+  config.push(["burner_requestBurnMyStethRoleMembers", [...new Set(optionalRoleHolders("Accounting"))]]);
+  config.push([
+    "triggerableWithdrawalsGateway_requestRoleMembers",
+    [
+      ...new Set([
+        addressOf(get(state, "validatorsExitBusOracle"), "proxy", "validatorsExitBusOracle"),
+        ...optionalRoleHolders("Ejector"),
+      ]),
+    ],
+  ]);
+  config.push(["stakingModulesCount", moduleCount]);
+  config.push(["stakingModuleIds", Array.from({ length: moduleCount }, (_, i) => i + 1)]);
+  const requiredParam = (key: string, field: string) => {
+    const value = deployParams(key === "lido" ? "app:lido" : key)[field];
+    if (value === undefined || value === null) throw new Error(`missing deploy parameter "${key}.${field}"`);
+    return value;
+  };
+  const sanityFields = [
+    "exitedEthAmountPerDayLimit",
+    "appearedEthAmountPerDayLimit",
+    "annualBalanceIncreaseBPLimit",
+    "simulatedShareRateDeviationBPLimit",
+    "maxBalanceExitRequestedPerReportInEth",
+    "maxEffectiveBalanceWeightWCType01",
+    "maxEffectiveBalanceWeightWCType02",
+    "maxItemsPerExtraDataTransaction",
+    "maxNodeOperatorsPerExtraDataItem",
+    "requestTimestampMargin",
+    "maxPositiveTokenRebase",
+    "maxCLBalanceDecreaseBP",
+    "clBalanceOraclesErrorUpperBPLimit",
+    "consolidationEthAmountPerDayLimit",
+    "exitedValidatorEthAmountLimit",
+    "externalPendingBalanceCapEth",
+  ];
+  config.push([
+    "oracleReportSanityChecker_limits",
+    sanityFields.map((field) => requiredParam("oracleReportSanityChecker", field)),
+  ]);
+  const exitLimit = requiredParam("triggerableWithdrawalsGateway", "maxExitRequestsLimit");
+  config.push([
+    "triggerableWithdrawalsGateway_exitRequestLimit",
+    [
+      exitLimit,
+      requiredParam("triggerableWithdrawalsGateway", "exitsPerFrame"),
+      requiredParam("triggerableWithdrawalsGateway", "frameDurationInSec"),
+      exitLimit,
+      exitLimit,
+    ],
+  ]);
+  for (const [key, fields] of Object.entries({
+    lido: ["depositsReserveTarget"],
+    stakingRouter: ["maxEBType1", "maxEBType2", "maxTopUpPerBlockGwei"],
+    accountingOracle: ["consensusVersion"],
+    validatorsExitBusOracle: ["consensusVersion"],
+    oracleReportSanityChecker: [
+      "maxCLBalanceDecreaseBP",
+      "maxPositiveTokenRebase",
+      "maxEffectiveBalanceWeightWCType01",
+      "maxEffectiveBalanceWeightWCType02",
+    ],
+    consolidationBus: ["initialBatchSize", "initialMaxGroupsInBatch", "initialExecutionDelay"],
+    consolidationMigrator: ["sourceModuleId", "targetModuleId"],
+    topUpGateway: ["maxValidatorsPerTopUp", "minBlockDistance", "maxRootAge", "targetBalanceGwei", "minTopUpGwei"],
+  })) {
+    for (const field of fields) config.push([`${key}_${field}`, requiredParam(key, field)]);
+  }
   const externals: [string, unknown][] = [
     ["chainId", state["chainId"]],
     ["deployer", state["deployer"]],
@@ -300,6 +391,7 @@ function checkAllStateKeysCovered(state: StateFile) {
     ...Object.keys(SINGLES),
     ...Object.keys(DG_SINGLES),
     ...EXPLICITLY_HANDLED_KEYS,
+    ...SUPPLEMENTAL_COMPONENTS,
     ...IGNORED_KEYS,
   ]);
   const unknown = Object.keys(state).filter((key) => !known.has(key));
@@ -325,30 +417,6 @@ function collectConfigContractNames(): { l1: Set<string>; l2: Set<string> } {
   }
   if (l1.size === 0) die(`no contract names found in ${MAIN_CONFIG}`);
   return { l1, l2 };
-}
-
-function findArtifacts(root: string): Map<string, string[]> {
-  const found = new Map<string, string[]>();
-  const walk = (directory: string) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const fullPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "build-info") continue;
-        walk(fullPath);
-      } else if (entry.name.endsWith(".json") && !entry.name.endsWith(".dbg.json")) {
-        // Artifact basename is the contract name; the parent dir is the source file,
-        // which may differ (e.g. MiniMeToken.sol/MiniMeTokenFactory.json)
-        if (path.basename(directory).endsWith(".sol")) {
-          const name = path.basename(entry.name, ".json");
-          const existing = found.get(name);
-          if (existing) existing.push(fullPath);
-          else found.set(name, [fullPath]);
-        }
-      }
-    }
-  };
-  walk(root);
-  return found;
 }
 
 function exportAbis(dgDeployed: boolean) {
@@ -397,6 +465,7 @@ function main() {
   fs.writeFileSync(path.join(CONFIG_DIR, "scratch.deployed.yaml"), deployedYaml);
   fs.writeFileSync(path.join(CONFIG_DIR, "scratch.inputs.yaml"), buildInputsYaml(state));
   exportAbis(dgDeployed);
+  checkScratchAbis(dgDeployed);
 
   console.log(
     `prepare-state-mate-check: generated scratch.deployed.yaml and scratch.inputs.yaml from ` +
@@ -404,4 +473,4 @@ function main() {
   );
 }
 
-main();
+if (require.main === module) main();

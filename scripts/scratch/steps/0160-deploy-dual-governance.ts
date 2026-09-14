@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ethers, network } from "hardhat";
+import { createDGDeploymentDirectory, pickDGDeploymentArtifact } from "scripts/scratch/dg-artifacts";
 import { assertNoDevCommitteesOnPublicChain, DG_SUBMODULE_DIR, resolveDgForgeRpcUrl } from "scripts/scratch/dg-checks";
+import { ensureAuthorityTransfer, ensureFinalized, sameAddress } from "scripts/scratch/recovery";
 import { readScratchParameters, ScratchParameters } from "scripts/utils/scratch";
 
 import * as toml from "@iarna/toml";
@@ -24,8 +26,7 @@ const PAUSE_ROLE = streccak("PAUSE_ROLE");
 const RESUME_ROLE = streccak("RESUME_ROLE");
 
 const DG_SUBMODULE = DG_SUBMODULE_DIR;
-const DG_DEPLOY_CONFIG_DIR = path.join(DG_SUBMODULE, "deploy-config");
-const DG_DEPLOY_ARTIFACTS_DIR = path.join(DG_SUBMODULE, "deploy-artifacts");
+const DG_ARCHIVE_ROOT = path.resolve(__dirname, "../../../.local/dg-deployments");
 const DG_DEPLOY_CONFIG_FILE = "deploy-config-scratch.toml";
 
 // snake_case key in the DG deploy artifact → Sk under which we store its address.
@@ -83,12 +84,7 @@ export async function main() {
   // holds, finalize on already-wiped deployState).
   await transferSealableRolesForDG(deployer, state, resealManagerAddress);
 
-  const acl = await loadContract<ACL>("ACL", getAddress(Sk.aragonAcl, state));
-  if (!(await acl["hasPermission(address,address,bytes32)"](adminExecutorAddress, agentAddress, RUN_SCRIPT_ROLE))) {
-    await makeTx(lidoTemplate, "finalizePermissionsAfterDGDeployment", [adminExecutorAddress], { from: deployer });
-  } else {
-    log("AdminExecutor already has RUN_SCRIPT_ROLE on Agent — finalize already applied, skipping");
-  }
+  await finalizePermissions(deployer, agentAddress, lidoTemplate, state, adminExecutorAddress);
 
   await setTemplateOwnerToAgent(deployer, agentAddress, lidoTemplate);
 
@@ -103,14 +99,52 @@ async function finalizeWithoutDG(
 ): Promise<void> {
   log("DG deployment disabled — finalizing without Dual Governance");
   await renounceSealableAdminDeferredFor0160(deployer, state);
-  // The owner==Agent short-circuit lives in setTemplateOwnerToAgent; once the
-  // template is owned by Agent, finalize has necessarily already run (it is
-  // onlyOwner and precedes setOwner), so skipping both together is correct.
-  const [currentOwner] = await lidoTemplate.getConfig();
-  if (currentOwner.toLowerCase() !== agentAddress.toLowerCase()) {
-    await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
-  }
+  await finalizePermissions(deployer, agentAddress, lidoTemplate, state);
   await setTemplateOwnerToAgent(deployer, agentAddress, lidoTemplate);
+}
+
+// Finalize deletes deployState atomically. Its ACL effects, not template ownership,
+// prove it ran; ownership is a separate recoverable transaction.
+async function finalizePermissions(
+  deployer: string,
+  agent: string,
+  template: LoadedContract<LidoTemplate>,
+  state: ReturnType<typeof readNetworkState>,
+  executor?: string,
+): Promise<void> {
+  const acl = await loadContract<ACL>("ACL", getAddress(Sk.aragonAcl, state));
+  const apm = await loadContract("APMRegistry", getAddress(Sk.lidoApm, state));
+  const kernel = await loadContract("Kernel", await apm.getFunction("kernel")());
+  const apmAcl = await loadContract<ACL>("ACL", await kernel.getFunction("acl")());
+  const voting = getAddress(Sk.appVoting, state);
+  const manager = executor ? agent : voting;
+  const templateAddress = await template.getAddress();
+  const createRole = await acl.CREATE_PERMISSIONS_ROLE();
+  const executeRole = streccak("EXECUTE_ROLE");
+  await ensureFinalized(
+    () =>
+      Promise.all([
+        acl.getPermissionManager(agent, RUN_SCRIPT_ROLE),
+        acl.getPermissionManager(agent, executeRole),
+        acl.getPermissionManager(getAddress(Sk.aragonAcl, state), createRole),
+        apmAcl.getPermissionManager(apmAcl.target, createRole),
+      ]),
+    templateAddress,
+    [manager, manager, manager, agent],
+    async () => {
+      const [owner] = await template.getConfig();
+      if (!sameAddress(owner, deployer)) throw new Error(`Cannot finalize: unexpected template owner ${owner}`);
+      return executor
+        ? makeTx(template, "finalizePermissionsAfterDGDeployment", [executor], { from: deployer })
+        : makeTx(template, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
+    },
+  );
+  for (const role of [RUN_SCRIPT_ROLE, executeRole]) {
+    const has = (account: string) => acl["hasPermission(address,address,bytes32)"](account, agent, role);
+    if (!(await has(executor ?? voting)) || (executor && (await has(voting)))) {
+      throw new Error("Agent execution permission postcondition failed");
+    }
+  }
 }
 
 // WQ + VEBO are the protocol's two sealable withdrawal blockers. Several finalize
@@ -137,6 +171,9 @@ async function renounceSealableAdminDeferredFor0160(
   state: ReturnType<typeof readNetworkState>,
 ): Promise<void> {
   for (const [label, c] of await loadSealables(state)) {
+    if (!(await c.hasRole(DEFAULT_ADMIN_ROLE, getAddress(Sk.appAgent, state)))) {
+      throw new Error(`${label}: Agent admin handoff from 0150 is incomplete`);
+    }
     if (await c.hasRole(DEFAULT_ADMIN_ROLE, deployer)) {
       log.warning(
         `${label}: deployer still holds DEFAULT_ADMIN_ROLE (deferred by 0150 while DG was enabled); renouncing. ` +
@@ -154,12 +191,13 @@ async function setTemplateOwnerToAgent(
   agentAddress: string,
   lidoTemplate: LoadedContract<LidoTemplate>,
 ): Promise<void> {
-  const [currentOwner] = await lidoTemplate.getConfig();
-  if (currentOwner.toLowerCase() === agentAddress.toLowerCase()) {
-    log(`LidoTemplate owner is already Agent (${cy(agentAddress)}), skipping setOwner`);
-    return;
-  }
-  await makeTx(lidoTemplate, "setOwner", [agentAddress], { from: deployer });
+  await ensureAuthorityTransfer(
+    "LidoTemplate owner",
+    async () => (await lidoTemplate.getConfig())[0],
+    deployer,
+    agentAddress,
+    () => makeTx(lidoTemplate, "setOwner", [agentAddress], { from: deployer }),
+  );
 }
 
 async function transferSealableRolesForDG(
@@ -168,8 +206,16 @@ async function transferSealableRolesForDG(
   resealManagerAddress: string,
 ): Promise<void> {
   for (const [label, c] of await loadSealables(state)) {
+    if (!(await c.hasRole(DEFAULT_ADMIN_ROLE, getAddress(Sk.appAgent, state)))) {
+      throw new Error(`${label}: Agent admin handoff from 0150 is incomplete`);
+    }
     if (!(await c.hasRole(DEFAULT_ADMIN_ROLE, deployer))) {
-      log(`${cy(label)}: deployer no longer holds DEFAULT_ADMIN_ROLE, sealable roles already wired, skipping`);
+      if (
+        !(await c.hasRole(PAUSE_ROLE, resealManagerAddress)) ||
+        !(await c.hasRole(RESUME_ROLE, resealManagerAddress))
+      ) {
+        throw new Error(`${label}: deployer admin absent but ResealManager permissions are incomplete`);
+      }
       continue;
     }
     log(`Wiring DG permissions on ${cy(label)} (${cy(await c.getAddress())})`);
@@ -191,15 +237,14 @@ async function runForgeAndPersist(
   assertNoDevCommitteesOnPublicChain(dgParams, chainId);
   const tomlContent = await renderDGConfigToml(dgParams, state, chainId);
 
-  fs.mkdirSync(DG_DEPLOY_CONFIG_DIR, { recursive: true });
-  fs.mkdirSync(DG_DEPLOY_ARTIFACTS_DIR, { recursive: true });
-  const configPath = path.join(DG_DEPLOY_CONFIG_DIR, DG_DEPLOY_CONFIG_FILE);
+  const deploymentDirectory = createDGDeploymentDirectory(DG_SUBMODULE, DG_ARCHIVE_ROOT, chainId);
+  const artifactsDirectory = path.join(deploymentDirectory, "deploy-artifacts");
+  const configPath = path.join(deploymentDirectory, "deploy-config", DG_DEPLOY_CONFIG_FILE);
   fs.writeFileSync(configPath, tomlContent);
   log(`DG deploy config written: ${cy(configPath)}`);
 
-  const before = listArtifactNames(chainId);
-  runForgeDeploy(deployer, rpcUrl);
-  const artifact = pickArtifactProducedBy(before, chainId);
+  runForgeDeploy(deployer, rpcUrl, deploymentDirectory);
+  const artifact = pickDGDeploymentArtifact(chainId, artifactsDirectory);
   log(`DG deploy artifact: ${cy(artifact)}`);
 
   const parsed = toml.parse(fs.readFileSync(artifact, "utf8")) as Record<string, unknown>;
@@ -228,11 +273,6 @@ async function runForgeAndPersist(
   state[Sk.resealManager] = { address: resealManager };
 
   persistNetworkState(state);
-
-  // The DG submodule's .gitignore covers deploy-config/* but not deploy-artifacts/.
-  // Without cleanup, every local scratch deploy leaves untracked .toml files
-  // that pollute `git status` of the parent repo.
-  pruneArtifactsExcept(artifact, chainId);
 
   return {
     adminExecutorAddress: getAddress(Sk.dgAdminExecutor, state),
@@ -354,7 +394,7 @@ async function reEstablishRpcAfterForge(): Promise<void> {
   }
 }
 
-function runForgeDeploy(deployer: string, rpcUrl: string) {
+function runForgeDeploy(deployer: string, rpcUrl: string, deploymentDirectory: string) {
   // forge needs its own --private-key on a live RPC (no unlocked accounts).
   // Reuse whatever hardhat loaded for this network so the JS- and forge-side
   // signers stay in sync; fall through to --unlocked otherwise.
@@ -364,7 +404,9 @@ function runForgeDeploy(deployer: string, rpcUrl: string) {
 
   const args = [
     "script",
-    "scripts/deploy/DeployConfigurable.s.sol:DeployConfigurable",
+    `${path.join(DG_SUBMODULE, "scripts/deploy/DeployConfigurable.s.sol")}:DeployConfigurable`,
+    "--root",
+    deploymentDirectory,
     "--rpc-url",
     rpcUrl,
     "--broadcast",
@@ -379,11 +421,11 @@ function runForgeDeploy(deployer: string, rpcUrl: string) {
 
   const argsForLog = privateKey ? args.map((a) => (a === privateKey ? "<redacted>" : a)) : args;
   log(
-    `Running: ${cy(`forge ${argsForLog.join(" ")}`)} (cwd: ${cy(DG_SUBMODULE)}, ` +
+    `Running: ${cy(`forge ${argsForLog.join(" ")}`)} (cwd: ${cy(deploymentDirectory)}, ` +
       `signing: ${privateKey ? "--private-key from accounts.json" : "--unlocked"})`,
   );
   const result = spawnSync("forge", args, {
-    cwd: DG_SUBMODULE,
+    cwd: deploymentDirectory,
     stdio: "inherit",
     env: { ...process.env, DEPLOY_CONFIG_FILE_NAME: DG_DEPLOY_CONFIG_FILE } as unknown as NodeJS.ProcessEnv,
   });
@@ -393,46 +435,5 @@ function runForgeDeploy(deployer: string, rpcUrl: string) {
   }
   if (result.status !== 0) {
     throw new Error(`forge script DeployConfigurable exited with status ${result.status}`);
-  }
-}
-
-// Filename format from DG's DeployConfigurable.s.sol:
-//   deploy-artifact-{chainId}-{block.timestamp}.toml
-// We snapshot the artifact set before invoking forge and pick the new file
-// after — no reliance on wall-clock mtime, robust to fork chains whose
-// block.timestamp diverges from real time.
-function listArtifactNames(chainId: number): Set<string> {
-  if (!fs.existsSync(DG_DEPLOY_ARTIFACTS_DIR)) return new Set();
-  const prefix = `deploy-artifact-${chainId}-`;
-  return new Set(fs.readdirSync(DG_DEPLOY_ARTIFACTS_DIR).filter((f) => f.startsWith(prefix) && f.endsWith(".toml")));
-}
-
-function pickArtifactProducedBy(before: Set<string>, chainId: number): string {
-  const after = listArtifactNames(chainId);
-  const created = [...after].filter((f) => !before.has(f));
-  if (created.length === 0) {
-    throw new Error(`forge produced no new deploy-artifact-${chainId}-*.toml in ${DG_DEPLOY_ARTIFACTS_DIR}`);
-  }
-  if (created.length > 1) {
-    // Should not happen in scratch — a single forge invocation writes one artifact.
-    log.warning(`Multiple new artifacts found, picking highest-timestamp: ${created.join(", ")}`);
-  }
-  // Filename suffix is `{block.timestamp}.toml`; numeric sort is monotonic.
-  created.sort((a, b) => artifactTs(b) - artifactTs(a));
-  return path.join(DG_DEPLOY_ARTIFACTS_DIR, created[0]);
-}
-
-function artifactTs(name: string): number {
-  const m = name.match(/-(\d+)\.toml$/);
-  return m ? Number(m[1]) : 0;
-}
-
-function pruneArtifactsExcept(keepPath: string, chainId: number): void {
-  const keep = path.basename(keepPath);
-  const prefix = `deploy-artifact-${chainId}-`;
-  for (const name of fs.readdirSync(DG_DEPLOY_ARTIFACTS_DIR)) {
-    if (name === keep) continue;
-    if (!name.startsWith(prefix) || !name.endsWith(".toml")) continue;
-    fs.unlinkSync(path.join(DG_DEPLOY_ARTIFACTS_DIR, name));
   }
 }

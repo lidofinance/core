@@ -48,7 +48,7 @@ deployed-*-upgrade.json
 .DS_Store
 /logs
 
-# Dev dirs
+# Dev dirs (includes retained .local/dg-deployments configs and artifacts)
 .local/
 .tmp/
 .dev/

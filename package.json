@@ -34,6 +34,7 @@
     "test:integration:upgrade:local": "RUN_NETWORK=local yarn test:integration:upgrade",
     "test:integration:upgrade-template": "TEMPLATE_TEST=true yarn test:integration:upgrade",
     "test:integration:scratch": "DG_DEPLOYMENT_ENABLED=false MODE=scratch yarn test:integration",
+    "test:integration:scratch:local": "MODE=scratch NETWORK=local RUN_NETWORK=local yarn test:integration",
     "test:integration:fork:local": "MODE=forking NETWORK=local yarn test:integration",
     "test:node:docker:fork": "MODE=forking bash scripts/run-fork-node-docker.sh",
     "test:node:docker:scratch": "MODE=scratch bash scripts/run-fork-node-docker.sh",
@@ -45,6 +46,7 @@
     "test:fork:pdg-validator": "MODE=forking hardhat test test/integration/vaults/scenario/pdg-specific-validator.integration.ts",
     "validate:configs": "yarn hardhat validate-configs",
     "typecheck": "tsc --noEmit",
+    "scratch:check-abi": "ts-node scripts/scratch/state-mate/check-abi.ts",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
     "upgrade:fork-node": "yarn test:node:local:fork",
@@ -126,7 +128,8 @@
     "tsconfig-paths": "4.2.0",
     "typechain": "8.3.2",
     "typescript": "5.8.3",
-    "typescript-eslint": "8.34.0"
+    "typescript-eslint": "8.34.0",
+    "yaml": "^2.8.0"
   },
   "dependencies": {
     "@aragon/apps-agent": "2.1.0",

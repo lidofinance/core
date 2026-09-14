@@ -1,3 +1,9 @@
+> Historical diagnostics: the current integration runner supports only direct
+> external-node testing (`RUN_NETWORK=local`). Use
+> `test:integration:scratch:local` to deploy/test, or `test:integration:fork:local`
+> to test existing state. The in-process fork commands discussed below are not
+> supported runner entry points. See [testing.md](testing.md).
+
 # External-node test compatibility (anvil vs hardhat node)
 
 The integration suite can run against an **external** node (scenario C/D in
@@ -15,7 +21,7 @@ suite so it passes on either.
 Concretely: for a hardhat-node backend, use
 
 ```shell
-yarn test:integration:fork:local      # MODE=scratch + --network local  (scenario C)
+yarn test:integration:scratch:local   # MODE=scratch + --network local  (scenario C)
 ```
 
 not

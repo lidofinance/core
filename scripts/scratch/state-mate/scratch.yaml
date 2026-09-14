@@ -13,6 +13,7 @@ misc:
   - &ZERO_ADDRESS "0x0000000000000000000000000000000000000000"
   - &ZERO_BYTES32 "0x0000000000000000000000000000000000000000000000000000000000000000"
   - &MAX_UINT256 "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+  - &MAX_UINT64 "18446744073709551615"
   - &ONE_ETH_WEI 1000000000000000000
   - &TOTAL_BASIS_POINTS 10000
   - &FEE_PRECISION_POINTS 100000000000000000000
@@ -57,13 +58,14 @@ roles:
   - &DEFAULT_ADMIN_ROLE "0x0000000000000000000000000000000000000000000000000000000000000000"
 
   # Lido
+  - &BUFFER_RESERVE_MANAGER_ROLE "0x33969636f1fbf3d7d062d4de4a08e7bd3c46606ec28b3a4398d2665be559b921"
   - &STAKING_CONTROL_ROLE "0xa42eee1333c0758ba72be38e728b6dadb32ea767de5b4ddbaea1dae85b1b051f"
   - &STAKING_PAUSE_ROLE "0x84ea57490227bc2be925c684e2a367071d69890b629590198f4125a018eb1de8"
   - &LIDO_RESUME_ROLE "0x2fc10cc8ae19568712f7a176fb4978616a610650813c9d05326c34abb62749c7"
   - &LIDO_PAUSE_ROLE "0x139c2898040ef16910dc9f44dc697df79363da767d8bc92f2e310312b816e46d"
-  - &UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE "0xe6dc5d79630c61871e99d341ad72c5a052bed2fc8c79e5a4480a7cd31117576c"
 
   # StakingRouter
+  - &STAKING_MODULE_SHARE_MANAGE_ROLE "0x43bf0e13900cfaa1b03ed5681dc143266597e29a1d6f9cbd84114f0ac21cd208"
   - &MANAGE_WITHDRAWAL_CREDENTIALS_ROLE "0xe7c742a54cd11fc9749a47ab34bdcd7327820908e8d0d48b4a5c7f17b0294098"
   - &REPORT_EXITED_VALIDATORS_ROLE "0xc23292b191d95d2a7dd94fc6436eb44338fda9e1307d9394fd27c28157c1b33c"
   - &REPORT_REWARDS_MINTED_ROLE "0x779e5c23cb7a5bcb9bfe1e9a5165a00057f12bcdfd13e374540fdf1a1cd91137"
@@ -98,15 +100,19 @@ roles:
   - &MANAGE_REPORT_PROCESSOR_ROLE "0xc5219a8d2d0107a57aad00b22081326d173df87bad251126f070df2659770c3e"
 
   # OracleReportSanityChecker
+  - &APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE "0xc5ea81526de646a700e5b42417791b16f2e0b4ad2dc0c6c606700ec6889ca834"
+  - &CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE "0x66104568a23709e40729cd6c0b4b24e296898510ab1a757d8d76d8b7bb8ddcab"
+  - &EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE "0xfcbf51216e6462f6c733b5cc8e06873750fa849bd5f736187d1f87fa39466abd"
+  - &EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE "0xc8c135a577dae74b34fe5d1e5fc878bfd6afd7e69688368e0a15ccebebcdc485"
+  - &EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE "0x7710420036d4fef9dd74d870d75fb15c05b30fb7fe469577c0dd8b93e373d4f4"
+  - &MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE "0x4943a281310045e6adfe0c785297f2d8dda39aa308297aa8d59b1cd427298e51"
+  - &MAX_CL_BALANCE_DECREASE_MANAGER_ROLE "0x8f6844ca724706bfaf6fda925e1311e63ff0d58e56ea4522f293c021b4ce68db"
+  - &MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE "0x1b78c738ff3c558bb63ca310fd1e07e0c5449b475605dafc8f3f97475281ef9d"
   - &ALL_LIMITS_MANAGER_ROLE "0x5bf88568a012dfc9fe67407ad6775052bddc4ac89902dea1f4373ef5d9f1e35b"
   - &ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE "0x12c02753cd3d584dc4bb965eb0c88392c4c4d7c00433fdb7490d33c61ea57622"
-  - &APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE "0x14ca7b84baa11a976283347b0159b8ddf2dcf5fd5cf613cc567a3423cf510119"
-  - &EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE "0x60b9982471bc0620c7b74959f48a86c55c92c11876fddc5b0b54d1ec47153e5d"
-  - &INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE "0xebfa317a5d279811b024586b17a50f48924bce86f6293b233927322d7209b507"
   - &MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE "0x13445b811594f3a8800b82296d63f371c695d2f86c1069c899ded3d73f523d2e"
   - &MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE "0xb3f2d16385bde8a7121e101a021aff43bbe4d4137a587832caf1f583b9d34395"
   - &MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE "0x78de2bab4a3a0c88f50b6bb7c2290e0eb46bc61d575eae694d8bffbc2ca98c92"
-  - &MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE "0x9925400e72399e0a89e9b346878fc47ac0031526d0e060e33ff372d7a5d11ba8"
   - &REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE "0x2f8719116fbba3aba2a39759e34dcd29ea3516f7568c8321695aaea208280cd3"
   - &SECOND_OPINION_MANAGER_ROLE "0xaa0e0f619f5a9368ee035bae759cfe7da8958f44bd71456a05198effc68ea647"
   - &SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE "0x7b21c0949109e9e143f66d6aa1f8a065b3f4ab47ee9f84f6837fd0490eace4d5"
@@ -150,6 +156,8 @@ l1:
         proxy__getImplementation: *lidoLocatorImplAddress
         proxy__getIsOssified: false
       checks:
+        consolidationGateway: *consolidationGateway
+        topUpGateway: *topUpGateway
         accounting: *accounting
         accountingOracle: *accountingOracle
         burner: *burner
@@ -205,6 +213,12 @@ l1:
         appId: *LIDO_APP_ID
         kernel: *aragonKernel
       checks:
+        BUFFER_RESERVE_MANAGER_ROLE: *BUFFER_RESERVE_MANAGER_ROLE
+        getDepositsReserveTarget: *lido_depositsReserveTarget
+        # Aggregate balances depend on bootstrap funding; exercise in integration tests.
+        getBalanceStats: null
+        getDepositsReserve: 0 # target increases only become reserve on an oracle report
+        getWithdrawalsReserve: 0
         getPooledEthBySharesRoundUp: null
         totalSupply: null
         getSharesByPooledEth: null
@@ -239,7 +253,7 @@ l1:
         # deploy; expected values are generated per-deploy by prepare-state-mate-check.ts.
         isStopped: *lidoIsStopped
         isStakingPaused: *lidoIsStakingPaused
-        getContractVersion: 3
+        getContractVersion: 4
         getMaxExternalRatioBP: 0
         getLidoLocator: *lidoLocator
         getEIP712StETH: *eip712StETH
@@ -260,7 +274,6 @@ l1:
         STAKING_PAUSE_ROLE: *STAKING_PAUSE_ROLE
         RESUME_ROLE: *LIDO_RESUME_ROLE
         PAUSE_ROLE: *LIDO_PAUSE_ROLE
-        UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE: *UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE
       implementationChecks:
         hasInitialized: false
         isPetrified: true
@@ -314,9 +327,24 @@ l1:
         proxy__getImplementation: *stakingRouterImplAddress
         proxy__getIsOssified: false
       checks:
+        LIDO_LOCATOR: *lidoLocator
+        INITIAL_DEPOSIT_SIZE: *stakingRouter_maxEBType1
+        MAX_EFFECTIVE_BALANCE_WC_TYPE_01: *stakingRouter_maxEBType1
+        MAX_EFFECTIVE_BALANCE_WC_TYPE_02: *stakingRouter_maxEBType2
+        STAKING_MODULE_SHARE_MANAGE_ROLE: *STAKING_MODULE_SHARE_MANAGE_ROLE
+        getMaxTopUpPerBlockGwei: *stakingRouter_maxTopUpPerBlockGwei
+        getTotalModulesValidatorsBalance: 0
+        # Parameterized accounting/allocation queries require functional tests.
+        getDepositAllocations: null
+        getModuleValidatorsBalance: null
+        getRoleMembers: null
+        getStakingModuleStateAccounting: null
+        getStakingModuleStateConfig: null
+        getStakingModuleStateDeposits: null
+        getStakingModuleWithdrawalCredentials: null
+        validateReportValidatorBalancesByStakingModule: null
         getAllNodeOperatorDigests: null
         getAllStakingModuleDigests: null
-        getDepositsAllocation: null
         getNodeOperatorDigests: null
         getNodeOperatorSummary: null
         getRoleAdmin: null
@@ -342,11 +370,11 @@ l1:
         getTotalFeeE4Precision: null
         hasStakingModule: null
         supportsInterface: null
-        getContractVersion: 3
-        getLido: *lido
+        getContractVersion: 4
+        LIDO: *lido
         DEPOSIT_CONTRACT: *depositContract
-        getStakingModulesCount: 2
-        getStakingModuleIds: [1, 2]
+        getStakingModulesCount: *stakingModulesCount
+        getStakingModuleIds: *stakingModuleIds
         getWithdrawalCredentials: *lidoWithdrawalCredentials
         FEE_PRECISION_POINTS: *FEE_PRECISION_POINTS
         TOTAL_BASIS_POINTS: *TOTAL_BASIS_POINTS
@@ -369,14 +397,16 @@ l1:
         *DEFAULT_ADMIN_ROLE : [*aragonAgent]
         *MANAGE_WITHDRAWAL_CREDENTIALS_ROLE : []
         *REPORT_EXITED_VALIDATORS_ROLE : [*accountingOracle]
-        *REPORT_REWARDS_MINTED_ROLE : [*lido, *accounting]
+        *REPORT_REWARDS_MINTED_ROLE : [*accounting]
         *STAKING_MODULE_MANAGE_ROLE : [*aragonAgent]
+        *STAKING_MODULE_SHARE_MANAGE_ROLE : []
         *STAKING_MODULE_UNVETTING_ROLE : [*depositSecurityModule]
         *UNSAFE_SET_EXITED_VALIDATORS_ROLE : []
         *REPORT_VALIDATOR_EXITING_STATUS_ROLE : [*validatorExitDelayVerifier]
         *REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE : [*triggerableWithdrawalsGateway]
       implementationChecks:
-        getContractVersion: *MAX_UINT256
+        # StakingRouter v4 uses OZ Initializable (uint64), unlike legacy Versioned.
+        getContractVersion: *MAX_UINT64
         getStakingModulesCount: 0
         getWithdrawalCredentials: *ZERO_BYTES32
         DEPOSIT_CONTRACT: *depositContract
@@ -467,6 +497,9 @@ l1:
         proxy_getAdmin: *aragonVoting
         proxy_getIsOssified: false
       checks:
+        CONSOLIDATION_GATEWAY: *consolidationGateway
+        CONSOLIDATION_REQUEST: "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
+        getConsolidationRequestFee: null # execution-layer queue fee varies with chain state
         WITHDRAWAL_REQUEST: null
         getWithdrawalRequestFee: null
         LIDO: *lido
@@ -524,19 +557,156 @@ l1:
         REQUEST_BURN_SHARES_ROLE: *REQUEST_BURN_SHARES_ROLE
       ozAcl:
         *DEFAULT_ADMIN_ROLE : [*aragonAgent]
-        *REQUEST_BURN_MY_STETH_ROLE : []
+        *REQUEST_BURN_MY_STETH_ROLE : *burner_requestBurnMyStethRoleMembers
         *REQUEST_BURN_SHARES_ROLE : [*nodeOperatorsRegistry, *simpleDvt, *accounting]
       implementationChecks:
         LIDO: *lido
         LOCATOR: *lidoLocator
         getContractVersion: *MAX_UINT256
 
+    consolidationBus:
+      name: ConsolidationBus
+      address: *consolidationBus
+      proxyName: OssifiableProxy
+      implementation: *consolidationBusImplAddress
+      proxyChecks:
+        proxy__getAdmin: *aragonAgent
+        proxy__getImplementation: *consolidationBusImplAddress
+        proxy__getIsOssified: false
+      checks:
+        DEFAULT_ADMIN_ROLE: null
+        MANAGE_ROLE: null
+        PUBLISH_ROLE: null
+        REMOVE_ROLE: null
+        batchSize: *consolidationBus_initialBatchSize
+        executionDelay: *consolidationBus_initialExecutionDelay
+        getBatchInfo: null
+        getConsolidationGateway: *consolidationGateway
+        getRoleAdmin: null
+        getRoleMember: null
+        getRoleMemberCount: null
+        getRoleMembers: null
+        hasRole:
+          - args: [*DEFAULT_ADMIN_ROLE, *aragonAgent]
+            result: true
+          - args: [*DEFAULT_ADMIN_ROLE, *deployer]
+            result: false
+        maxGroupsInBatch: *consolidationBus_initialMaxGroupsInBatch
+        supportsInterface: null
+
+    consolidationMigrator:
+      name: ConsolidationMigrator
+      address: *consolidationMigrator
+      proxyName: OssifiableProxy
+      implementation: *consolidationMigratorImplAddress
+      proxyChecks:
+        proxy__getAdmin: *aragonAgent
+        proxy__getImplementation: *consolidationMigratorImplAddress
+        proxy__getIsOssified: false
+      checks:
+        ALLOW_PAIR_ROLE: null
+        DEFAULT_ADMIN_ROLE: null
+        DISALLOW_PAIR_ROLE: null
+        PUBKEY_LENGTH: null
+        getAllowedTargets: null
+        getConsolidationBus: *consolidationBus
+        getRoleAdmin: null
+        getRoleMember: null
+        getRoleMemberCount: null
+        getRoleMembers: null
+        getStakingRouter: *stakingRouter
+        getSubmitter: null
+        hasRole:
+          - args: [*DEFAULT_ADMIN_ROLE, *aragonAgent]
+            result: true
+          - args: [*DEFAULT_ADMIN_ROLE, *deployer]
+            result: false
+        isPairAllowed: null
+        sourceModuleId: *consolidationMigrator_sourceModuleId
+        supportsInterface: null
+        targetModuleId: *consolidationMigrator_targetModuleId
+
+    consolidationGateway:
+      name: ConsolidationGateway
+      address: *consolidationGateway
+      checks:
+        ADD_CONSOLIDATION_REQUEST_ROLE: null
+        BEACON_ROOTS: null
+        CONSOLIDATION_LIMIT_POSITION: null
+        DEFAULT_ADMIN_ROLE: null
+        EXIT_LIMIT_MANAGER_ROLE: null
+        GI_FIRST_VALIDATOR_CURR: null
+        GI_FIRST_VALIDATOR_PREV: null
+        GI_PUBKEY_WC_PARENT: null
+        GI_STATE_ROOT: null
+        PAUSE_INFINITELY: null
+        PAUSE_ROLE: null
+        PIVOT_SLOT: null
+        RESUME_ROLE: null
+        getConsolidationRequestLimitFullInfo: null
+        getResumeSinceTimestamp: null
+        getRoleAdmin: null
+        getRoleMember: null
+        getRoleMemberCount: null
+        getRoleMembers: null
+        hasRole:
+          - args: [*DEFAULT_ADMIN_ROLE, *aragonAgent]
+            result: true
+          - args: [*DEFAULT_ADMIN_ROLE, *deployer]
+            result: false
+        isPaused: null
+        supportsInterface: null
+
+    topUpGateway:
+      name: TopUpGateway
+      address: *topUpGateway
+      proxyName: OssifiableProxy
+      implementation: *topUpGatewayImplAddress
+      proxyChecks:
+        proxy__getAdmin: *aragonAgent
+        proxy__getImplementation: *topUpGatewayImplAddress
+        proxy__getIsOssified: false
+      checks:
+        BEACON_ROOTS: null
+        DEFAULT_ADMIN_ROLE: null
+        GI_FIRST_VALIDATOR_CURR: null
+        GI_FIRST_VALIDATOR_PREV: null
+        GI_STATE_ROOT: null
+        MANAGE_LIMITS_ROLE: null
+        PAUSE_INFINITELY: null
+        PAUSE_ROLE: null
+        PIVOT_SLOT: null
+        RESUME_ROLE: null
+        SLOTS_PER_EPOCH: *slotsPerEpoch
+        TOP_UP_ROLE: null
+        getLastTopUpTimestamp: null
+        getMaxRootAge: *topUpGateway_maxRootAge
+        getMaxValidatorsPerTopUp: *topUpGateway_maxValidatorsPerTopUp
+        getMinBlockDistance: *topUpGateway_minBlockDistance
+        getMinTopUpGwei: *topUpGateway_minTopUpGwei
+        getResumeSinceTimestamp: null
+        getRoleAdmin: null
+        getRoleMember: null
+        getRoleMemberCount: null
+        getRoleMembers: null
+        getTargetBalanceGwei: *topUpGateway_targetBalanceGwei
+        hasRole:
+          - args: [*DEFAULT_ADMIN_ROLE, *aragonAgent]
+            result: true
+          - args: [*DEFAULT_ADMIN_ROLE, *deployer]
+            result: false
+        isBlockDistancePassed: null
+        isPaused: null
+        supportsInterface: null
+
     tokenRebaseNotifier:
       name: TokenRateNotifier
       address: *tokenRebaseNotifier
       checks:
+        # ITokenRatePusher / ITokenRatePusherWithArgs interface selectors.
+        REQUIRED_INTERFACE_NO_ARGS: "0xa16ba44d"
+        REQUIRED_INTERFACE_WITH_ARGS: "0xbd18bfd6"
         INDEX_NOT_FOUND: null
-        REQUIRED_INTERFACE: null
         observers: null
         owner: *aragonAgent
         TOKEN_RATE_PROVIDER: *accounting
@@ -563,7 +733,7 @@ l1:
         isPaused: false
         getResumeSinceTimestamp: 0
         # [maxExitRequestsLimit, exitsPerFrame, frameDurationInSec, prevExitRequestsLimit, currentExitRequestsLimit]
-        getExitRequestLimitFullInfo: [13000, 1, 48, null, null]
+        getExitRequestLimitFullInfo: *triggerableWithdrawalsGateway_exitRequestLimit
         DEFAULT_ADMIN_ROLE: *ZERO_BYTES32
         ADD_FULL_WITHDRAWAL_REQUEST_ROLE: *ADD_FULL_WITHDRAWAL_REQUEST_ROLE
         TW_EXIT_LIMIT_MANAGER_ROLE: *TW_EXIT_LIMIT_MANAGER_ROLE
@@ -572,7 +742,7 @@ l1:
         PAUSE_INFINITELY: *MAX_UINT256
       ozAcl:
         *DEFAULT_ADMIN_ROLE : [*aragonAgent]
-        *ADD_FULL_WITHDRAWAL_REQUEST_ROLE : [*validatorsExitBusOracle]
+        *ADD_FULL_WITHDRAWAL_REQUEST_ROLE : *triggerableWithdrawalsGateway_requestRoleMembers
         *TW_EXIT_LIMIT_MANAGER_ROLE : []
         *PAUSE_ROLE : []
         *RESUME_ROLE : []
@@ -605,13 +775,11 @@ l1:
         ATTEST_MESSAGE_PREFIX: null
         PAUSE_MESSAGE_PREFIX: null
         UNVET_MESSAGE_PREFIX: null
-        canDeposit: null
         getGuardianIndex: null
         getLastDepositBlock: null
         isGuardian: null
         isMinDepositDistancePassed: null
-        VERSION: 3
-        LIDO: *lido
+        VERSION: 5
         STAKING_ROUTER: *stakingRouter
         DEPOSIT_CONTRACT: *depositContract
         getOwner: *aragonAgent
@@ -943,6 +1111,7 @@ l1:
         proxy__getImplementation: *accountingOracleImplAddress
         proxy__getIsOssified: false
       checks:
+        getCurrentFrame: null # timestamp-dependent frame
         EXTRA_DATA_FORMAT_EMPTY: null
         EXTRA_DATA_FORMAT_LIST: null
         EXTRA_DATA_TYPE_EXITED_VALIDATORS: null
@@ -959,8 +1128,8 @@ l1:
         GENESIS_TIME: *genesisTime
         SECONDS_PER_SLOT: *secondsPerSlot
         getConsensusContract: *hashConsensusForAccountingOracle
-        getConsensusVersion: 5
-        getContractVersion: 4
+        getConsensusVersion: *accountingOracle_consensusVersion
+        getContractVersion: 5
         DEFAULT_ADMIN_ROLE: *ZERO_BYTES32
         MANAGE_CONSENSUS_CONTRACT_ROLE: *MANAGE_CONSENSUS_CONTRACT_ROLE
         MANAGE_CONSENSUS_VERSION_ROLE: *MANAGE_CONSENSUS_VERSION_ROLE
@@ -1026,6 +1195,9 @@ l1:
         proxy__getImplementation: *validatorsExitBusOracleImplAddress
         proxy__getIsOssified: false
       checks:
+        DATA_FORMAT_LIST_WITH_KEY_INDEX: 2
+        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01: *oracleReportSanityChecker_maxEffectiveBalanceWeightWCType01
+        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02: *oracleReportSanityChecker_maxEffectiveBalanceWeightWCType02
         DATA_FORMAT_LIST: null
         EXIT_TYPE: null
         SUBMIT_REPORT_HASH_ROLE: null
@@ -1045,8 +1217,8 @@ l1:
         GENESIS_TIME: *genesisTime
         SECONDS_PER_SLOT: *secondsPerSlot
         getConsensusContract: *hashConsensusForValidatorsExitBusOracle
-        getConsensusVersion: 4
-        getContractVersion: 2
+        getConsensusVersion: *validatorsExitBusOracle_consensusVersion
+        getContractVersion: 3
         getTotalRequestsProcessed: 0
         isPaused: null # resumed by step 0145 only when DG is deployed; asserted in l2 (validatorsExitBusOracleDgRoles)
         PAUSE_INFINITELY: *MAX_UINT256
@@ -1114,8 +1286,23 @@ l1:
       name: OracleReportSanityChecker
       address: *oracleReportSanityChecker
       checks:
+        APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE: *APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE
+        CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE: *CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE
+        EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE: *EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE
+        EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE: *EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE
+        EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE: *EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE
+        MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE: *MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE
+        MAX_CL_BALANCE_DECREASE_MANAGER_ROLE: *MAX_CL_BALANCE_DECREASE_MANAGER_ROLE
+        MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE: *MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE
+        getMaxCLBalanceDecreaseBP: *oracleReportSanityChecker_maxCLBalanceDecreaseBP
+        getMaxEffectiveBalanceWeightWCType01: *oracleReportSanityChecker_maxEffectiveBalanceWeightWCType01
+        getMaxEffectiveBalanceWeightWCType02: *oracleReportSanityChecker_maxEffectiveBalanceWeightWCType02
+        isPostMigrationFirstReportDone: false
+        lastReportTimestamp: 0
+        lastVaultBalanceAfterTransfer: 0
+        checkExitedValidatorsCount: null # report-dependent validation
+        checkModuleAndCLBalancesChangeRates: null # report-dependent validation
         checkExitBusOracleReport: null
-        checkExitedValidatorsRatePerDay: null
         checkExtraDataItemsCountPerTransaction: null
         checkNodeOperatorsPerExtraDataItemCount: null
         checkSimulatedShareRate: null
@@ -1129,37 +1316,34 @@ l1:
         smoothenTokenRebase: null
         supportsInterface: null
         getLidoLocator: *lidoLocator
-        getMaxPositiveTokenRebase: 5000000
+        getMaxPositiveTokenRebase: *oracleReportSanityChecker_maxPositiveTokenRebase
         secondOpinionOracle: *ZERO_ADDRESS
-        # [exitedValidatorsPerDayLimit, appearedValidatorsPerDayLimit, annualBalanceIncreaseBPLimit,
-        #  simulatedShareRateDeviationBPLimit, maxValidatorExitRequestsPerReport, maxItemsPerExtraDataTransaction,
-        #  maxNodeOperatorsPerExtraDataItem, requestTimestampMargin, maxPositiveTokenRebase,
-        #  initialSlashingAmountPWei, inactivityPenaltiesAmountPWei, clBalanceOraclesErrorUpperBPLimit]
-        getOracleReportLimits: [1500, 1500, 1000, 250, 2000, 8, 24, 128, 5000000, 1000, 101, 50]
+        # Current LimitsList field order; values come from the selected deployment inputs.
+        getOracleReportLimits: *oracleReportSanityChecker_limits
         DEFAULT_ADMIN_ROLE: *ZERO_BYTES32
         ALL_LIMITS_MANAGER_ROLE: *ALL_LIMITS_MANAGER_ROLE
         ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE: *ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE
-        APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE: *APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE
-        EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE: *EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE
-        INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE: *INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
         MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE: *MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE
         MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE: *MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE
         MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE: *MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE
-        MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE: *MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE
         REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE: *REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE
         SECOND_OPINION_MANAGER_ROLE: *SECOND_OPINION_MANAGER_ROLE
         SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE: *SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE
       ozAcl:
+        *APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE : []
+        *CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE : []
+        *EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE : []
+        *EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE : []
+        *EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE : []
+        *MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE : []
+        *MAX_CL_BALANCE_DECREASE_MANAGER_ROLE : []
+        *MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE : []
         *DEFAULT_ADMIN_ROLE : [*aragonAgent]
         *ALL_LIMITS_MANAGER_ROLE : []
         *ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE : []
-        *APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE : []
-        *EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE : []
-        *INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE : []
         *MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE : []
         *MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE : []
         *MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE : []
-        *MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE : []
         *REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE : []
         *SECOND_OPINION_MANAGER_ROLE : []
         *SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE : []
@@ -1374,13 +1558,22 @@ l1:
         getPermissionParamsLength: null
         evalParams: null
         getEVMScriptExecutor: null
-        hasPermission: null
+        hasPermission:
+          # LidoTemplate assigns the current buffer-management permission to the Agent.
+          - signature: hasPermission(address,address,bytes32)
+            args: [*aragonAgent, *lido, *BUFFER_RESERVE_MANAGER_ROLE]
+            result: true
+          - signature: hasPermission(address,address,bytes32)
+            args: [*deployer, *lido, *BUFFER_RESERVE_MANAGER_ROLE]
+            result: false
         allowRecoverability: null
         getInitializationBlock: null
         getPermissionParam: null
         canPerform: null
         getEVMScriptRegistry: null
-        getPermissionManager: null
+        getPermissionManager:
+          - args: [*lido, *BUFFER_RESERVE_MANAGER_ROLE]
+            result: *aragonAgent
         EMPTY_PARAM_HASH: null
         BURN_ENTITY: null
         hasInitialized: true
@@ -2132,6 +2325,9 @@ l2:
       name: ValidatorsExitBusOracle
       address: *validatorsExitBusOracle
       checks:
+        DATA_FORMAT_LIST_WITH_KEY_INDEX: 2
+        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01: *oracleReportSanityChecker_maxEffectiveBalanceWeightWCType01
+        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02: *oracleReportSanityChecker_maxEffectiveBalanceWeightWCType02
         DATA_FORMAT_LIST: null
         DEFAULT_ADMIN_ROLE: null
         EXIT_REQUEST_LIMIT_MANAGER_ROLE: null
