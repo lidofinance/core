@@ -26,14 +26,9 @@ export function isNonForkingHardhatNetwork() {
 }
 
 export async function parseDeploymentJson(name: string) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - file is missing out of the box, that's why we need to catch the error
-    return await import(`../../deployed-${name}.json`);
-  } catch (e) {
-    log.error(e as Error);
-    throw new Error("Failed to parse deployed-local.json. Did you run scratch deploy?");
-  }
+  return readNetworkState({
+    networkStateFile: process.env.NETWORK_STATE_FILE || `deployed-${name}.json`,
+  });
 }
 
 export class ProtocolNetworkConfig {
