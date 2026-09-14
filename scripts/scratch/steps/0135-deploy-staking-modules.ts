@@ -7,5 +7,5 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  await deployStakingModules(state);
+  await deployStakingModules(state, { scratch: true });
 }
