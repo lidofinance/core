@@ -32,7 +32,9 @@ abstract contract CLValidatorVerifier {
     // validators field gindex starting from Gloas
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
 
-    /// First slot of the Gloas fork.
+    /// @notice First slot of the Gloas fork.
+    /// @dev Sentinel values: `type(uint64).max` means the Gloas fork slot is not known yet, so every
+    ///      proof takes the pre-Gloas path; `0` means Gloas is active from genesis.
     uint64 public immutable GLOAS_SLOT;
 
     error InvalidSlot();

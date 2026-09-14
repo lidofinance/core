@@ -104,6 +104,8 @@ contract ValidatorExitDelayVerifier {
     uint64 public immutable FIRST_SUPPORTED_SLOT;
 
     /// @notice The first slot of the Gloas fork.
+    /// @dev Sentinel values: `type(uint64).max` means the Gloas fork slot is not known yet, so every
+    ///      proof takes the pre-Gloas path; `0` means Gloas is active from genesis.
     uint64 public immutable GLOAS_SLOT;
 
     /// @notice The slot where Capella fork started (when historical summaries became available).

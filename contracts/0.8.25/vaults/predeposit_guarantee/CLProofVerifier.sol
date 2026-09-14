@@ -91,6 +91,8 @@ abstract contract CLProofVerifier {
     /// @notice GIndex of the validators field in CL state tree starting from Gloas.
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
     /// @notice First slot of the Gloas fork.
+    /// @dev Sentinel values: `type(uint64).max` means the Gloas fork slot is not known yet, so every
+    ///      proof takes the pre-Gloas path; `0` means Gloas is active from genesis.
     uint64 public immutable GLOAS_SLOT;
 
     /**
