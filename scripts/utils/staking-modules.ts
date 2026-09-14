@@ -1,4 +1,3 @@
-import { execFileSync } from "child_process";
 import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
@@ -15,6 +14,8 @@ import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
 
 import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
+
+import { runExternal as run } from "./subprocess";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 const STAKING_MODULES_REPO_BRANCH = "develop";
@@ -157,14 +158,6 @@ function getRpcHostPort(rpcUrl: string) {
     ANVIL_IP_ADDR: url.hostname,
     ANVIL_PORT: url.port || (url.protocol === "https:" ? "443" : "80"),
   };
-}
-
-function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv) {
-  execFileSync(command, args, {
-    cwd,
-    env,
-    stdio: "inherit",
-  });
 }
 
 export function readArtifact(artifactPath: string): ExternalDeployArtifact {

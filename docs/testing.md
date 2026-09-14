@@ -40,3 +40,25 @@ RPC; see [scratch deployment](scratch-deploy.md) for setup and recovery details.
 To select integration files, pass their paths to `yarn test:integration`.
 Coverage commands and direct `hardhat test` commands have their own runtime setup;
 they do not go through the integration runner.
+
+### Node runtime
+
+Use Node 22.15+ on the 22.x line (`nvm use`, matching `.nvmrc`) or Node 24.x.
+Run Hardhat through `yarn hardhat` or the package scripts. The shared launcher
+sets `--no-experimental-strip-types --no-experimental-require-module` for
+Hardhat 2's ts-node loader and its test workers, preserving other `NODE_OPTIONS`.
+Node 26 is outside the supported runtime range.
+
+`just scratch` runs the blank external Anvil recipe without Dual Governance;
+`just all` runs the six external-node variants once each.
+
+`yarn validate:configs` checks upgrade/scratch consistency only where comparison
+coverage exists. EDF comparison mappings are not implemented: selecting an EDF
+upgrade config fails explicitly, including with `--silent`, rather than reporting
+success for zero checked parameters.
+
+For workflows that intentionally omit EDF consistency checks, use
+`yarn validate:configs --allow-uncovered`. This validates both input schemas and
+reports `SKIPPED` with zero comparisons, including in silent mode. It is not a
+successful consistency check and must not be used as a pre-release consistency
+gate. Invalid inputs and missing paths in supported comparisons still fail.

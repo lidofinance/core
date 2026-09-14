@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -7,6 +6,7 @@ import { createDGDeploymentDirectory, pickDGDeploymentArtifact } from "scripts/s
 import { assertNoDevCommitteesOnPublicChain, DG_SUBMODULE_DIR, resolveDgForgeRpcUrl } from "scripts/scratch/dg-checks";
 import { ensureAuthorityTransfer, ensureFinalized, sameAddress } from "scripts/scratch/recovery";
 import { readScratchParameters, ScratchParameters } from "scripts/utils/scratch";
+import { runExternal } from "scripts/utils/subprocess";
 
 import * as toml from "@iarna/toml";
 
@@ -419,21 +419,13 @@ function runForgeDeploy(deployer: string, rpcUrl: string, deploymentDirectory: s
     "--slow",
   ];
 
-  const argsForLog = privateKey ? args.map((a) => (a === privateKey ? "<redacted>" : a)) : args;
+  const argsForLog = args.map((a) => (a === privateKey || a === rpcUrl ? "<redacted>" : a));
   log(
     `Running: ${cy(`forge ${argsForLog.join(" ")}`)} (cwd: ${cy(deploymentDirectory)}, ` +
       `signing: ${privateKey ? "--private-key from accounts.json" : "--unlocked"})`,
   );
-  const result = spawnSync("forge", args, {
-    cwd: deploymentDirectory,
-    stdio: "inherit",
-    env: { ...process.env, DEPLOY_CONFIG_FILE_NAME: DG_DEPLOY_CONFIG_FILE } as unknown as NodeJS.ProcessEnv,
-  });
-
-  if (result.error) {
-    throw new Error(`Failed to spawn forge: ${result.error.message}`);
-  }
-  if (result.status !== 0) {
-    throw new Error(`forge script DeployConfigurable exited with status ${result.status}`);
-  }
+  runExternal("forge", args, deploymentDirectory, {
+    ...process.env,
+    DEPLOY_CONFIG_FILE_NAME: DG_DEPLOY_CONFIG_FILE,
+  } as unknown as NodeJS.ProcessEnv);
 }

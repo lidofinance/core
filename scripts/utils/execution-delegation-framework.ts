@@ -8,6 +8,8 @@ import path from "path";
 import { cy, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
+import { runExternal as run } from "./subprocess";
+
 export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
 // Pinned commit of lidofinance/execution-delegation-framework `main` (2026-08-10).
 // The deploy clones exactly this ref, and the upgrade parameters must name it too
@@ -51,14 +53,6 @@ function getRpcHostPort(rpcUrl: string) {
     ANVIL_IP_ADDR: url.hostname,
     ANVIL_PORT: url.port || (url.protocol === "https:" ? "443" : "80"),
   };
-}
-
-function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv) {
-  execFileSync(command, args, {
-    cwd,
-    env,
-    stdio: "inherit",
-  });
 }
 
 function runAndRead(command: string, args: string[], cwd: string): string {

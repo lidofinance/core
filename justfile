@@ -1,6 +1,6 @@
 # Scratch deployment + integration tests across environments.
 #
-# Each "node" recipe runs `test:integration:fork:local` (MODE=scratch + --network
+# Each "node" recipe runs `test:integration:scratch:local` (MODE=scratch + --network
 # local) against a durable RPC node: it deploys every step onto the node AND tests
 # the node directly (evm_snapshot/revert on that one node — scenario C in
 # docs/testing.md). It does NOT have EDR fork the node (MODE=forking): when the node
@@ -14,10 +14,8 @@
 # A node target is MUTATED by the deploy (a full scratch protocol lands on it), which
 # suits disposable forks (e.g. AnvilForksTray, or `anvil --fork-url <archive>`).
 #
-# Dual Governance: a "*-dg" recipe deploys DG (forge --broadcast against the target);
-# a "*-no-dg" recipe sets DG_DEPLOYMENT_ENABLED=false. The in-process `scratch`
-# recipe cannot deploy DG at all (no external RPC for forge), so it is DG-off only
-# — use `scratch-node-dg` for a from-scratch deploy *with* DG on a blank node.
+# Dual Governance: a "*-dg" recipe deploys DG; "*-no-dg" disables it.
+# `scratch` aliases the blank external-node recipe without DG.
 # See docs/scratch-deploy.md and docs/testing.md.
 #
 # Prereqs: foundry (anvil + forge) on PATH; the DG submodule initialised
@@ -49,11 +47,8 @@ deployer := "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"  # anvil account #0 (de
 default:
     @just --list
 
-# ── in-process scratch (no external node) ────────────────────────────────────
-
-# In-process deploy + test (fastest). DG-off only — in-process can't deploy DG.
-scratch:
-    @just _run "{{ env_var_or_default('LOG_FILE', 'logs/just-scratch.log') }}" yarn test:integration:scratch
+# Backwards-compatible entry point using a disposable external anvil node.
+scratch: scratch-node-no-dg
 
 # ── blank external anvil ─────────────────────────────────────────────────────
 
@@ -88,7 +83,7 @@ sepolia-fork-no-dg:
     @just _deploy-and-test sepolia false
 
 # Run the whole matrix sequentially (long; fork recipes need the RPC env vars).
-all: scratch scratch-node-no-dg scratch-node-dg mainnet-fork-no-dg mainnet-fork-dg sepolia-fork-no-dg sepolia-fork-dg
+all: scratch-node-no-dg scratch-node-dg mainnet-fork-no-dg mainnet-fork-dg sepolia-fork-no-dg sepolia-fork-dg
 
 # ── engine ───────────────────────────────────────────────────────────────────
 # env ∈ {blank, mainnet, sepolia};  dg ∈ {true, false}

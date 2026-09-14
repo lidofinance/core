@@ -822,3 +822,10 @@ PREDICTION_DURATION_IN_SLOTS = 50400  # 7 days
 # twice min governance response time - 3 days voting duration
 FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT = 1350  # 6 days
 ```
+
+### Explorer verification opt-in
+
+CircuitBreaker deployment does not enable explorer verification merely because
+`ETHERSCAN_API_KEY` is set. Set `VERIFY_ON_EXPLORER=true` (or `1`) together with the API key
+to request it explicitly. An opted-in verification failure fails the deployment
+step. This option does not disable the mandatory on-chain state checks.
