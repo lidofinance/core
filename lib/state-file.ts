@@ -130,6 +130,7 @@ export enum Sk {
   vaultsAdapter = "vaultsAdapter",
   // Harnesses
   alertingHarness = "alertingHarness",
+  vaultViewer = "vaultViewer",
   // protocol upgrade
   upgradeConfig = "upgradeConfig",
   upgradeTemplate = "upgradeTemplate",
@@ -221,6 +222,9 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.upgradeVoteScript:
     case Sk.gateSealFactory:
       return state[contractKey].address;
+    case Sk.alertingHarness:
+    case Sk.vaultViewer:
+      return state[contractKey].implementation.address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
   }
