@@ -1184,10 +1184,27 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(3);
         expect(await dsm.getGuardianQuorum()).to.equal(2);
 
-        await expect(deposit([unrelatedGuardian1, unrelatedGuardian2])).to.be.revertedWithCustomError(
-          dsm,
-          "InvalidSignature",
+        const mixedGuardians = [guardian1, unrelatedGuardian1, unrelatedGuardian2].sort((a, b) =>
+          a.address.toLowerCase().localeCompare(b.address.toLowerCase()),
         );
+        await expect(deposit(mixedGuardians)).to.be.revertedWithCustomError(dsm, "InvalidSignature");
+      });
+
+      it("Reverts if a signature bound to one guardian is submitted for another guardian", async () => {
+        await dsm.addGuardians([guardian1, guardian2, guardian3], 2);
+        await guardian2.contract.setDelegate(guardian1.delegate.address);
+
+        const signingArgs = await getDepositArgs();
+        const sig1 = new DSMAttestMessage(guardian1.address, ...signingArgs).sign(guardian1.privateKey);
+
+        await expect(
+          dsm.depositBufferedEther(...signingArgs, [sig1, { ...sig1, guardian: guardian2.address }]),
+        ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
+
+        const sig2 = new DSMAttestMessage(guardian2.address, ...signingArgs).sign(guardian1.privateKey);
+        await expect(dsm.depositBufferedEther(...signingArgs, [sig1, sig2]))
+          .to.emit(stakingRouter, "StakingModuleDeposited")
+          .withArgs(STAKING_MODULE_ID, "0x");
       });
 
       it("Allow deposit if deposit with guardian's sigs (0,1,2)", async () => {
