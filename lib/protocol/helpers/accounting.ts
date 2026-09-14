@@ -1088,7 +1088,7 @@ const reachConsensus = async (
       submitter = member;
     }
 
-    await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
+    await (await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion)).wait();
   }
 
   const { consensusReport } = await hashConsensus.getConsensusState();
