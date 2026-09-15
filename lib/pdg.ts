@@ -245,9 +245,7 @@ export const prepareLocalMerkleTree = async (
   const firstValidatorLeafIndex = (await sszMerkleTree.leafCount()) - 1n;
   const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(firstValidatorLeafIndex);
 
-  // compare GIndex.index()
-  if (BigInt(gIFirstValidator) >> 8n !== BigInt(gIndex) >> 8n)
-    throw new Error("Invariant: sszMerkleTree implementation is broken");
+  if (BigInt(gIFirstValidator) !== BigInt(gIndex)) throw new Error("Invariant: sszMerkleTree implementation is broken");
 
   const addValidator = async (validator: SSZBLSHelpers.ValidatorStruct) => {
     await sszMerkleTree.addValidatorLeaf(validator);

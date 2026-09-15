@@ -56,6 +56,7 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable NEW_STAKING_ROUTER_IMPL;
     address internal immutable NEW_WITHDRAWAL_VAULT_IMPL;
     address internal immutable NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
+    address internal immutable NEW_PREDEPOSIT_GUARANTEE_IMPL;
     address internal immutable NEW_ORACLE_REPORT_SANITY_CHECKER;
     address internal immutable NEW_DEPOSIT_SECURITY_MODULE;
     address internal immutable CONSOLIDATION_BUS_IMPL;
@@ -72,6 +73,9 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable WITHDRAWAL_VAULT;
     address internal immutable ACCOUNTING;
     address internal immutable TRIGGERABLE_WITHDRAWALS_GATEWAY;
+    address internal immutable PREDEPOSIT_GUARANTEE;
+    address internal immutable OLD_VALIDATOR_EXIT_DELAY_VERIFIER;
+    address internal immutable NEW_VALIDATOR_EXIT_DELAY_VERIFIER;
 
     //
     // -------- New contracts --------
@@ -203,6 +207,7 @@ contract UpgradeConfig is IUpgradeConfig {
         NEW_ACCOUNTING_IMPL = coreUpgradeParams.newAccountingImpl;
         NEW_WITHDRAWAL_VAULT_IMPL = coreUpgradeParams.newWithdrawalVaultImpl;
         NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL = coreUpgradeParams.newValidatorsExitBusOracleImpl;
+        NEW_PREDEPOSIT_GUARANTEE_IMPL = coreUpgradeParams.newPredepositGuaranteeImpl;
         CONSOLIDATION_BUS_IMPL = coreUpgradeParams.consolidationBusImpl;
         CONSOLIDATION_MIGRATOR_IMPL = coreUpgradeParams.consolidationMigratorImpl;
         TOP_UP_GATEWAY_IMPL = coreUpgradeParams.topUpGatewayImpl;
@@ -248,6 +253,8 @@ contract UpgradeConfig is IUpgradeConfig {
         LOCATOR = params.locator;
         ILidoLocator oldLocator = ILidoLocator(params.locator);
         OLD_DEPOSIT_SECURITY_MODULE = oldLocator.depositSecurityModule();
+        PREDEPOSIT_GUARANTEE = oldLocator.predepositGuarantee();
+        OLD_VALIDATOR_EXIT_DELAY_VERIFIER = oldLocator.validatorExitDelayVerifier();
 
         ILidoLocator locator = ILidoLocator(coreUpgradeParams.newLocatorImpl);
         LIDO = locator.lido();
@@ -264,6 +271,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CONSOLIDATION_GATEWAY = locator.consolidationGateway();
         NEW_ORACLE_REPORT_SANITY_CHECKER = locator.oracleReportSanityChecker();
         NEW_DEPOSIT_SECURITY_MODULE = locator.depositSecurityModule();
+        NEW_VALIDATOR_EXIT_DELAY_VERIFIER = locator.validatorExitDelayVerifier();
 
         /// CSMv3
         CSMUpgradeParams memory csmUpgradeParams = params.csmUpgrade;
@@ -378,6 +386,7 @@ contract UpgradeConfig is IUpgradeConfig {
             newStakingRouterImpl: NEW_STAKING_ROUTER_IMPL,
             newWithdrawalVaultImpl: NEW_WITHDRAWAL_VAULT_IMPL,
             newValidatorsExitBusOracleImpl: NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL,
+            newPredepositGuaranteeImpl: NEW_PREDEPOSIT_GUARANTEE_IMPL,
             newOracleReportSanityChecker: NEW_ORACLE_REPORT_SANITY_CHECKER,
             newDepositSecurityModule: NEW_DEPOSIT_SECURITY_MODULE,
             consolidationBusImpl: CONSOLIDATION_BUS_IMPL,
@@ -392,6 +401,9 @@ contract UpgradeConfig is IUpgradeConfig {
             consolidationBus: CONSOLIDATION_BUS,
             consolidationMigrator: CONSOLIDATION_MIGRATOR,
             topUpGateway: TOP_UP_GATEWAY,
+            predepositGuarantee: PREDEPOSIT_GUARANTEE,
+            oldValidatorExitDelayVerifier: OLD_VALIDATOR_EXIT_DELAY_VERIFIER,
+            newValidatorExitDelayVerifier: NEW_VALIDATOR_EXIT_DELAY_VERIFIER,
             // params
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
             consolidationCommittee: CONSOLIDATION_COMMITTEE,

@@ -26,7 +26,7 @@ import {
   toLittleEndian64,
   ValidatorStage,
 } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { getFirstValidatorGIndexForProof, getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -91,8 +91,8 @@ describe("Scenario: PDG specific validator prove and top up on mainnet fork", fu
     withdrawalCredentials = await stakingVault.withdrawalCredentials();
 
     // Initialize mock CL tree for proof generation
-    slot = await predepositGuarantee.PIVOT_SLOT();
-    mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
+    slot = 8192n;
+    mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(predepositGuarantee, slot));
   });
 
   async function upgradePDG() {

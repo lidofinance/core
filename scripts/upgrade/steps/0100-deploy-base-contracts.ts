@@ -15,11 +15,13 @@ import {
   LidoLocator,
   LidoLocator__factory,
   OracleReportSanityChecker__factory,
+  PredepositGuarantee__factory,
   StakingRouter__factory,
   TopUpGateway,
   TopUpGateway__factory,
   UpgradeTemporaryAdmin,
   UpgradeTemporaryAdmin__factory,
+  ValidatorExitDelayVerifier__factory,
   ValidatorsExitBusOracle__factory,
   WithdrawalVault__factory,
 } from "typechain-types";
@@ -122,6 +124,8 @@ export async function main() {
     DepositSecurityModule: ConstructorArgs<DepositSecurityModule__factory>;
     OracleReportSanityChecker: ConstructorArgs<OracleReportSanityChecker__factory>;
     ConsolidationGateway: ConstructorArgs<ConsolidationGateway__factory>;
+    PredepositGuarantee: ConstructorArgs<PredepositGuarantee__factory>;
+    ValidatorExitDelayVerifier: ConstructorArgs<ValidatorExitDelayVerifier__factory>;
   } = {
     Lido: [],
     Accounting: [locatorAddress, lidoAddress],
@@ -134,13 +138,7 @@ export async function main() {
       parameters.stakingRouter.maxEBType1,
       parameters.stakingRouter.maxEBType2,
     ],
-    TopUpGateway: [
-      locatorAddress,
-      parameters.topUpGateway.gIFirstValidatorPrev,
-      parameters.topUpGateway.gIFirstValidatorCurr,
-      parameters.topUpGateway.pivotSlot,
-      chainSpec.slotsPerEpoch,
-    ],
+    TopUpGateway: [locatorAddress, parameters.topUpGateway.gloasSlot, chainSpec.slotsPerEpoch],
     DepositSecurityModule: [
       depositContractAddress,
       stakingRouterAddress,
@@ -154,9 +152,19 @@ export async function main() {
       parameters.consolidationGateway.maxConsolidationRequestsLimit,
       parameters.consolidationGateway.consolidationsPerFrame,
       parameters.consolidationGateway.frameDurationInSec,
-      parameters.consolidationGateway.gIFirstValidatorPrev,
-      parameters.consolidationGateway.gIFirstValidatorCurr,
-      parameters.consolidationGateway.pivotSlot,
+      parameters.consolidationGateway.gloasSlot,
+    ],
+    PredepositGuarantee: [parameters.predepositGuarantee.genesisForkVersion, parameters.predepositGuarantee.gloasSlot],
+    ValidatorExitDelayVerifier: [
+      locatorAddress,
+      parameters.validatorExitDelayVerifier.firstSupportedSlot,
+      parameters.validatorExitDelayVerifier.gloasSlot,
+      parameters.validatorExitDelayVerifier.capellaSlot,
+      parameters.validatorExitDelayVerifier.slotsPerHistoricalRoot,
+      chainSpec.slotsPerEpoch,
+      chainSpec.secondsPerSlot,
+      chainSpec.genesisTime,
+      parameters.validatorExitDelayVerifier.shardCommitteePeriodInSeconds,
     ],
   };
 
@@ -180,6 +188,8 @@ export async function main() {
   await logArgs("DepositSecurityModule", constructorArgs.DepositSecurityModule);
   await logArgs("OracleReportSanityChecker", constructorArgs.OracleReportSanityChecker);
   await logArgs("ConsolidationGateway", constructorArgs.ConsolidationGateway);
+  await logArgs("PredepositGuarantee", constructorArgs.PredepositGuarantee);
+  await logArgs("ValidatorExitDelayVerifier", constructorArgs.ValidatorExitDelayVerifier);
   await logConfirmReview();
 
   //
@@ -273,6 +283,21 @@ export async function main() {
     "ConsolidationGateway",
     deployer,
     constructorArgs.ConsolidationGateway,
+  );
+
+  // The PDG proxy preserves protocol state; only its fork-aware implementation changes.
+  await deployImplementation(
+    Sk.predepositGuarantee,
+    "PredepositGuarantee",
+    deployer,
+    constructorArgs.PredepositGuarantee,
+  );
+
+  const validatorExitDelayVerifier = await deployWithoutProxy(
+    Sk.validatorExitDelayVerifier,
+    "ValidatorExitDelayVerifier",
+    deployer,
+    constructorArgs.ValidatorExitDelayVerifier,
   );
 
   //
@@ -376,11 +401,11 @@ export async function main() {
     withdrawalQueue: await locator.withdrawalQueue(),
     withdrawalVault: await locator.withdrawalVault(),
     oracleDaemonConfig: await locator.oracleDaemonConfig(),
-    validatorExitDelayVerifier: await locator.validatorExitDelayVerifier(),
+    validatorExitDelayVerifier: validatorExitDelayVerifier.address,
     triggerableWithdrawalsGateway: triggerableWithdrawalsGatewayAddress,
     consolidationGateway: consolidationGateway.address,
     accounting: accountingAddress,
-    predepositGuarantee: await locator.predepositGuarantee(),
+    predepositGuarantee: getAddress(Sk.predepositGuarantee, state),
     wstETH: await locator.wstETH(),
     vaultHub: await locator.vaultHub(),
     vaultFactory: await locator.vaultFactory(),
