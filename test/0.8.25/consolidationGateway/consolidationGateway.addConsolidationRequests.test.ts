@@ -39,7 +39,7 @@ const grantConsolidationRequestRole = async (
 };
 
 const grantLimitManagerRole = async (consolidationGateway: ConsolidationGateway, account: HardhatEthersSigner) => {
-  const role = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
+  const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
   await consolidationGateway.grantRole(role, account);
 };
 

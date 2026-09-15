@@ -99,7 +99,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
 
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
-    bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
+    /// @notice role that allows to set the consolidation request rate limit
+    bytes32 public constant CONSOLIDATION_LIMIT_MANAGER_ROLE = keccak256("CONSOLIDATION_LIMIT_MANAGER_ROLE");
 
     bytes32 public constant CONSOLIDATION_LIMIT_POSITION =
         keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
@@ -229,7 +230,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 maxConsolidationRequestsLimit,
         uint256 consolidationsPerFrame,
         uint256 frameDurationInSec
-    ) external onlyRole(EXIT_LIMIT_MANAGER_ROLE) {
+    ) external onlyRole(CONSOLIDATION_LIMIT_MANAGER_ROLE) {
         _setConsolidationRequestLimit(maxConsolidationRequestsLimit, consolidationsPerFrame, frameDurationInSec);
     }
 
