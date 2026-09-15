@@ -219,7 +219,17 @@ async function enableExternalModule(
 
       const currentPauser = ethers.getAddress(await circuitBreaker.getPauser(pausable.address));
       if (currentPauser !== circuitBreakerPauser) {
-        await makeTx(circuitBreaker, "registerPauser", [pausable.address, circuitBreakerPauser], { from: agent });
+        // Registration refreshes the pauser's heartbeat using block.timestamp. An
+        // estimate at the preceding registration's timestamp sees an unchanged
+        // expiry; mining at a later timestamp costs another 2,800 gas. Give this
+        // call 20% headroom explicitly: the Hardhat signer sends estimates as-is.
+        const estimatedGas = await circuitBreaker.registerPauser.estimateGas(pausable.address, circuitBreakerPauser, {
+          from: agent,
+        });
+        await makeTx(circuitBreaker, "registerPauser", [pausable.address, circuitBreakerPauser], {
+          from: agent,
+          gasLimit: (estimatedGas * 120n + 99n) / 100n,
+        });
       }
     }
   }

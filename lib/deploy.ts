@@ -17,6 +17,7 @@ const PROXY_CONTRACT_NAME = "OssifiableProxy";
 type TxParams = {
   from: string;
   value?: bigint | string;
+  gasLimit?: bigint;
 };
 
 type DeployTxParams = {
