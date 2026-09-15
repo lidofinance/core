@@ -184,7 +184,11 @@ gIFirstValidatorCurr = "0x000000000000000000000000000000000000000000000000009600
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
 [consolidationBus]
-initialBatchSize = 350                # Max number of requests in a batch
+# Each batch executes in one transaction. Keep below the 16M test budget
+# (Ethereum EIP-7825 cap: 2^24 gas). With empty native EIP-7251 queue storage,
+# 100 requests / 10 groups use ~11.23M gas; 350 requests use ~37.86M gas.
+# Larger migrations must submit and execute multiple batches.
+initialBatchSize = 100                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 0             # Delay before pending batch execution
 

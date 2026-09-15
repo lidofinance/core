@@ -1,3 +1,5 @@
+import { ethers } from "hardhat";
+
 import { impersonate } from "lib";
 
 import { ensurePredeployedBytecode } from "./predeploy";
@@ -28,9 +30,19 @@ export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
     value: 0,
     data: root,
   });
+  await transaction.wait();
 
   const blockDetails = await transaction.getBlock();
   if (!blockDetails) throw new Error("Failed to retrieve block details.");
+
+  // Anvil can mine consecutive blocks at the same timestamp. Its EIP-4788
+  // system call then overwrites this synthetic root with the next block's root.
+  // Move past the committed timestamp before returning a witness to the caller.
+  const clientVersion: string = await ethers.provider.send("web3_clientVersion", []);
+  if (clientVersion.toLowerCase().includes("anvil")) {
+    await ethers.provider.send("evm_setNextBlockTimestamp", [blockDetails.timestamp + 1]);
+    await ethers.provider.send("evm_mine", []);
+  }
 
   return blockDetails.timestamp;
 };

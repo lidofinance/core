@@ -9,7 +9,9 @@ import {
   PredepositGuarantee,
 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
-import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
+import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether } from "lib";
+
+import { updateBeaconBlockRoot } from "./eips/eip4788";
 
 export type Validator = { container: SSZBLSHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 
@@ -205,19 +207,7 @@ export const generateBeaconHeader = (stateRoot: string, slot?: number) => {
   };
 };
 
-export const setBeaconBlockRoot = async (root: string) => {
-  const systemSigner = await impersonate("0xfffffffffffffffffffffffffffffffffffffffe", 999999999999999999999999999n);
-  const BEACON_ROOTS = "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02";
-  const block = await systemSigner
-    .sendTransaction({
-      to: BEACON_ROOTS,
-      value: 0,
-      data: root,
-    })
-    .then((tx) => tx.getBlock());
-  if (!block) throw new Error("invariant");
-  return block.timestamp;
-};
+export { updateBeaconBlockRoot as setBeaconBlockRoot } from "./eips/eip4788";
 
 export interface LocalMerkleTree {
   sszMerkleTree: SSZMerkleTree;
@@ -237,9 +227,10 @@ export const prepareLocalMerkleTree = async (
   gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028",
 ): Promise<LocalMerkleTree> => {
   const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [gIndex], {});
+  await sszMerkleTree.waitForDeployment();
   const firstValidator = generateValidator();
 
-  await sszMerkleTree.addValidatorLeaf(firstValidator.container);
+  await (await sszMerkleTree.addValidatorLeaf(firstValidator.container)).wait();
   const validators: SSZBLSHelpers.ValidatorStruct[] = [firstValidator.container];
 
   const firstValidatorLeafIndex = (await sszMerkleTree.leafCount()) - 1n;
@@ -250,7 +241,7 @@ export const prepareLocalMerkleTree = async (
     throw new Error("Invariant: sszMerkleTree implementation is broken");
 
   const addValidator = async (validator: SSZBLSHelpers.ValidatorStruct) => {
-    await sszMerkleTree.addValidatorLeaf(validator);
+    await (await sszMerkleTree.addValidatorLeaf(validator)).wait();
     validators.push(validator);
 
     return {
@@ -266,7 +257,7 @@ export const prepareLocalMerkleTree = async (
     const beaconBlockHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot(), slot);
     const beaconBlockHeaderHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(beaconBlockHeader);
     return {
-      childBlockTimestamp: await setBeaconBlockRoot(beaconBlockHeaderHash),
+      childBlockTimestamp: await updateBeaconBlockRoot(beaconBlockHeaderHash),
       beaconBlockHeader,
     };
   };
