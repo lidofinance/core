@@ -9,6 +9,7 @@ import { Dashboard, StakingVault } from "typechain-types";
 import {
   changeTier,
   createVaultWithDashboard,
+  ensureCurrentAccountingReport,
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
@@ -179,6 +180,8 @@ describe("Integration: VaultHub", () => {
   describe("Special cases", () => {
     it("Vault can't disconnect if it initiated disconnect this frame of the oracle", async () => {
       const { vaultHub, lido } = ctx.contracts;
+
+      await ensureCurrentAccountingReport(ctx);
 
       const funding = ether("1.5");
       const shares = await lido.getSharesByPooledEth(funding);
