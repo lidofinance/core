@@ -9,12 +9,14 @@ const DEFAULT_GI_VALIDATOR_0 = "0x0000000000000000000000000000000000000000000000
 export const prepareLocalMerkleTree = async (giValidator0: string = DEFAULT_GI_VALIDATOR_0) => {
   const stateTree: SSZValidatorsMerkleTree = await ethers.deployContract("SSZValidatorsMerkleTree", [giValidator0], {});
 
+  await stateTree.waitForDeployment();
+
   // leafCount before adding = offset to validators field (22*2^40 for mainnet GI)
   const firstValidatorLeafIndex = await stateTree.leafCount();
 
   // generate first validator to initialize the tree
   const firstValidator = generateValidator();
-  await stateTree.addValidatorsLeaf(firstValidator.container);
+  await (await stateTree.addValidatorsLeaf(firstValidator.container)).wait();
 
   // GI of validator[0] is known from the spec
   const gIFirstValidator = giValidator0;

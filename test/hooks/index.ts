@@ -5,6 +5,8 @@ import { mine } from "@nomicfoundation/hardhat-network-helpers";
 import "./assertion/equalStETH";
 import "./assertion/revertedWithOZAccessControlError";
 
+let restoreProvider: (() => void) | undefined;
+
 // Increase number of stack frames shown in error messages
 Error.stackTraceLimit = Infinity;
 
@@ -18,6 +20,12 @@ export const mochaRootHooks: Mocha.RootHookObject = {
    */
   async beforeAll() {
     const hre = await import("hardhat");
+
+    if ("url" in hre.network.config) {
+      // The suite barrel imports Hardhat, so defer it until config initialization is complete.
+      const { waitForMinedTransactions } = await import("test/suite");
+      restoreProvider = waitForMinedTransactions(hre.network.provider);
+    }
 
     console.log(`#️⃣  Tests started on block number ${await hre.ethers.provider.getBlockNumber()}`);
 
@@ -35,5 +43,9 @@ export const mochaRootHooks: Mocha.RootHookObject = {
    */
   beforeEach(done: Mocha.Done) {
     done();
+  },
+  afterAll() {
+    restoreProvider?.();
+    restoreProvider = undefined;
   },
 };

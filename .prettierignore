@@ -7,3 +7,8 @@
 eslint.config.mjs
 
 package-lock.json
+
+# state-mate post-deploy check: aliases in scratch.yaml resolve only together with
+# the generated sibling files; *.deployed/*.inputs/abi are generated artifacts
+/scripts/scratch/state-mate/*.yaml
+/scripts/scratch/state-mate/abi

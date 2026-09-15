@@ -99,6 +99,8 @@ declare namespace NodeJS {
 
     /* scratch & upgrade deploy environment variables */
     NETWORK_STATE_FILE?: string;
+    /* explicit explorer verification opt-in */
+    VERIFY_ON_EXPLORER?: string;
     /* migration steps file */
     STEPS_FILE?: string;
     ALLOW_SKIP_STEPS?: "true" | "false" | "1" | "0";

@@ -34,7 +34,8 @@ export {
   normalizeWithdrawalVaultBaseline,
 } from "./accounting";
 
-export { ensureDsmGuardians } from "./dsm";
+export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm";
+export { deployDelegationContract, getDelegationFactory } from "./edf";
 export {
   norEnsureDepositedOperatorKeys,
   norSdvtEnsureOperators,
@@ -64,6 +65,7 @@ export {
 } from "./cmv2";
 export type { CMv2OperatorKeys } from "./cmv2";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";
+export { ensureSepoliaDepositAdapterFunded } from "./sepolia-deposit-adapter";
 export {
   buildTopUpData,
   depositEventAmountWei,
