@@ -83,8 +83,11 @@ export async function main() {
       `--rpc-url ${rpcUrl}`,
       `--private-key ${privateKey}`,
       "--broadcast",
-      // Override forge gas estimation until the CI Foundry version supports Amsterdam gas accounting (EIP-8037).
-      "--gas-limit 16000000",
+      // Override forge gas estimation until the CI Foundry version supports Amsterdam gas accounting (EIP-7825/8037).
+      // NOTE: `--gas-limit` is IGNORED by `forge script` for the broadcast tx, and 16M == the EIP-7825 execution
+      // cap, so `state_reservoir = gas_limit - 16M = 0` and the CircuitBreaker CREATE OOGs on code deposit. The
+      // only lever for broadcast-tx gas is `--gas-estimate-multiplier`: x50 => tx.gas ~54M, reservoir ~38M covers it.
+      "--gas-estimate-multiplier 5000",
     ];
 
     if (process.env.ETHERSCAN_API_KEY) {
