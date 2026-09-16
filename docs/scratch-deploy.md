@@ -188,6 +188,58 @@ through `impersonate(agent)`, i.e. `hardhat_impersonateAccount`. Unlike the DG
 step, that part does not work on a live network — there it would take an
 Agent-executed vote or DG proposal.
 
+### SI helpers (si-lidity)
+
+Step `0170`, after Dual Governance, deploys **VaultViewer** and
+**WstETHReferralStaker** from [si-lidity](https://github.com/lidofinance/si-lidity)
+using that repository's Hardhat/Ignition tooling. It runs independently of DG.
+Neither helper is added to LidoLocator: VaultViewer consumes the existing locator
+address; the staker consumes the deployed wstETH address.
+
+Enabled by default. Set `SI_LIDITY_DEPLOYMENT_ENABLED=false` (`0`/`off`/`no` also
+work) to skip. Like DG, this requires an external HTTP RPC; the in-process coverage
+package scripts disable it. The host also needs `git`, `corepack`,
+and network access to GitHub, the package registry and Solidity compiler downloads.
+
+A fresh deployment clones the current **`main` branch**, initializes upstream's
+core submodule, and installs with upstream's Yarn version and lockfile. There is
+no configured commit pin. The resolved revision is recorded as provenance. The
+scratch adapter supplies the network and constructor inputs while keeping the
+upstream compiler settings and dependencies separate from core's toolchain.
+The adapter also removes upstream logging's global `BigInt.toJSON` hook inside
+that child process so Ignition can serialize and resume its journal correctly.
+
+Output addresses are stored under `vaultViewer.address` and
+`wstETHReferralStaker.address` in the network state file. The `siLidityDeployment`
+entry records the repository-relative checkout directory, revision and constructor inputs. The checkout,
+parameters, compiled ABIs, Ignition journal and transaction records remain in
+`.local/si-lidity-deployments/<chainId>-<unique>/`. Signing reuses the selected
+Hardhat network's selected deployer only; signing credentials are passed through
+the deployment child's environment, not written to config files. Installation
+receives only runtime environment settings, without deployment or explorer secrets.
+This is environment minimization, not a sandbox: executing upstream tooling still
+trusts that repository with the selected signer and local filesystem access.
+
+Upstream's Hardhat 3 preview does not implement Ignition explorer verification.
+Preflight rejects `VERIFY_ON_EXPLORER=true` while SI helpers are enabled. Disable
+SI helpers for that run and deploy them separately with verification disabled;
+source verification requires separate tooling. Runtime checks below are not
+explorer source verification.
+
+`RESUME=1` reuses the retained checkout and Ignition journal, including when deployment
+succeeded but address import failed. It does **not** fetch a newer `main` during a
+retry. Keep that directory while recovery is needed. Each fresh scratch deployment
+gets its own directory, even on the same chain ID. Constructor bindings, code presence,
+and basic viewer calls are checked by the deployment step and the supplemental
+state-mate checker. The integration suite additionally creates a vault, decodes its
+data using the external ABI, and exercises referral staking.
+
+A retained directory that has been removed must be restored before retrying;
+recreating an empty directory would discard the journal's transaction history.
+Paths in new metadata are relative to the core repository. Address entries need
+no local artifact path. The ABI-dependent integration test skips when the external
+artifact is unavailable; binding and staking tests still run.
+
 ### Dual Governance configuration
 
 The `[dualGovernance]` section of the deploy-params toml mirrors the structure
@@ -735,10 +787,14 @@ windows; scratch sets none).
 `:8555` service container. Because 0160 shells out to `forge` inside the submodule, CI needs the Foundry toolchain and a
 `submodules: recursive` checkout.
 
+The blank-node DG job also enables si-lidity and uses `git` from the runner and
+`corepack` from Common setup, with GitHub/registry/compiler network access. The
+other scratch jobs disable SI helpers to isolate core tests from upstream `main`.
+
 The jobs with a separate `dao-deploy.sh` phase deploy twice (the blank DG job and
 `justfile` recipes deploy once through the integration driver):
 
-1. `./scripts/dao-deploy.sh` (steps `0000–0160`) runs the **production** driver
+1. `./scripts/dao-deploy.sh` (steps `0000–0170`) runs the **production** driver
    (`migrate.ts`) — the only CI exercise of the path a real testnet/mainnet deploy
    takes. Its state file is then discarded; the `mine.ts` step just flushes its last txs.
 2. `yarn test:integration:scratch:local` (`MODE=scratch` + `--network local`, scenario C in
@@ -774,21 +830,23 @@ Two scope gaps to keep in mind:
 
 ### Files of interest
 
-| File                                                         | Role                                                                                            |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `scripts/dao-deploy.sh`                                      | Entry point; wipes state file, compiles, runs `migrate.ts`                                      |
-| `scripts/utils/migrate.ts`                                   | Iterates `steps.json`, imports each step, calls `main()`                                        |
-| `lib/scratch.ts`                                             | `applyDeploySteps`, `deployScratchProtocol` (step runner)                                       |
-| `lib/env-flags.ts`                                           | `isDGDeploymentEnabled`, `isCSMDeploymentEnabled`, `isCMv2DeploymentEnabled`, `isResumeEnabled` |
-| `scripts/scratch/deploy-params-testnet.toml`                 | All deploy parameters (`[dualGovernance]` at the bottom)                                        |
-| `scripts/scratch/steps/0145-unpause-sealables.ts`            | DG prerequisite: resume WQ + VEBO pre-role-transfer                                             |
-| `scripts/scratch/steps/0150-transfer-roles.ts`               | Admin hand-off to Agent; defers WQ/VEBO renounce for DG                                         |
-| `scripts/scratch/steps/0160-deploy-dual-governance.ts`       | Forge bridge + ResealManager wiring + template finalize                                         |
-| `contracts/0.4.24/template/LidoTemplate.sol`                 | `finalizePermissions{After,Without}DGDeployment`, `setOwner`                                    |
-| `scripts/utils/upgrade.ts`                                   | Shared `executeDGProposal` helper                                                               |
-| `lib/state-file.ts`                                          | `Sk` enum, `getAddress`, `tryGetAddress`, state reset/persist                                   |
-| `lib/config-schemas.ts`                                      | Zod schema for `[dualGovernance]`                                                               |
-| `test/integration/dual-governance/dg-scratch.integration.ts` | Post-launch topology assertions + e2e proposal                                                  |
+| File                                                         | Role                                                                                                                           |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `scripts/dao-deploy.sh`                                      | Entry point; wipes state file, compiles, runs `migrate.ts`                                                                     |
+| `scripts/utils/migrate.ts`                                   | Iterates `steps.json`, imports each step, calls `main()`                                                                       |
+| `lib/scratch.ts`                                             | `applyDeploySteps`, `deployScratchProtocol` (step runner)                                                                      |
+| `lib/env-flags.ts`                                           | `isDGDeploymentEnabled`, `isCSMDeploymentEnabled`, `isCMv2DeploymentEnabled`, `isSiLidityDeploymentEnabled`, `isResumeEnabled` |
+| `scripts/scratch/deploy-params-testnet.toml`                 | All deploy parameters (`[dualGovernance]` at the bottom)                                                                       |
+| `scripts/scratch/steps/0145-unpause-sealables.ts`            | DG prerequisite: resume WQ + VEBO pre-role-transfer                                                                            |
+| `scripts/scratch/steps/0150-transfer-roles.ts`               | Admin hand-off to Agent; defers WQ/VEBO renounce for DG                                                                        |
+| `scripts/scratch/steps/0160-deploy-dual-governance.ts`       | Forge bridge + ResealManager wiring + template finalize                                                                        |
+| `scripts/scratch/steps/0170-deploy-si-lidity.ts`             | External SI helper deployment and journal recovery                                                                             |
+| `scripts/scratch/si-lidity/`                                 | Upstream tooling adapters and runtime checks                                                                                   |
+| `contracts/0.4.24/template/LidoTemplate.sol`                 | `finalizePermissions{After,Without}DGDeployment`, `setOwner`                                                                   |
+| `scripts/utils/upgrade.ts`                                   | Shared `executeDGProposal` helper                                                                                              |
+| `lib/state-file.ts`                                          | `Sk` enum, `getAddress`, `tryGetAddress`, state reset/persist                                                                  |
+| `lib/config-schemas.ts`                                      | Zod schema for `[dualGovernance]`                                                                                              |
+| `test/integration/dual-governance/dg-scratch.integration.ts` | Post-launch topology assertions + e2e proposal                                                                                 |
 
 ## Protocol Parameters
 

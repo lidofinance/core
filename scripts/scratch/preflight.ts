@@ -2,15 +2,23 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { readScratchParameters, ScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
 
-import { isCMv2DeploymentEnabled, isCSMDeploymentEnabled, isDGDeploymentEnabled, isResumeEnabled } from "lib/env-flags";
+import {
+  isCMv2DeploymentEnabled,
+  isCSMDeploymentEnabled,
+  isDGDeploymentEnabled,
+  isResumeEnabled,
+  isSiLidityDeploymentEnabled,
+} from "lib/env-flags";
 import { log } from "lib/log";
 import { SEPOLIA_CHAIN_ID } from "lib/protocol/sepolia";
 import { networkStateFileExists, readNetworkState } from "lib/state-file";
 
 import { assertNoDevCommitteesOnPublicChain, DG_SUBMODULE_DIR, resolveDgForgeRpcUrl } from "./dg-checks";
+import { resolveSiLidityRpcUrl } from "./si-lidity/checks";
+import { assertSiLidityVerificationSupported } from "./si-lidity/tooling";
 
 const SEPOLIA_GENESIS_FORK_VERSION = "0x90000069";
 
@@ -164,6 +172,20 @@ export async function runScratchDeployPreflight(): Promise<void> {
         assertNoDevCommitteesOnPublicChain(params.dualGovernance, chainId);
       } catch (e) {
         errors.push((e as Error).message);
+      }
+    }
+  }
+
+  if (isSiLidityDeploymentEnabled()) {
+    try {
+      resolveSiLidityRpcUrl(network.config as { url?: string });
+      assertSiLidityVerificationSupported();
+    } catch (error) {
+      errors.push((error as Error).message);
+    }
+    for (const command of ["git", "corepack"]) {
+      if (spawnSync(command, ["--version"], { stdio: "ignore" }).status !== 0) {
+        errors.push(`si-lidity requires ${command} on PATH (or set SI_LIDITY_DEPLOYMENT_ENABLED=false)`);
       }
     }
   }

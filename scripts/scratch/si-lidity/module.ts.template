@@ -1,0 +1,7 @@
+import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
+
+export default buildModule("ScratchHelpers", (m) => {
+  const vaultViewer = m.contract("VaultViewer", [m.getParameter("lidoLocator")]);
+  const wstETHReferralStaker = m.contract("WstETHReferralStaker", [m.getParameter("wstETH")]);
+  return { vaultViewer, wstETHReferralStaker };
+});

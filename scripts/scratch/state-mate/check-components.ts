@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { Contract, getAddress, JsonRpcProvider, keccak256, ZeroHash } from "ethers";
 
+import { checkSiLidityDeployment } from "../si-lidity/checks";
+
 import { findArtifacts } from "./check-abi";
 import { collectSupplementalComponents } from "./components";
 
@@ -44,6 +46,23 @@ async function main() {
           throw new Error(`${component.label}: unexpected proxy implementation`);
         }
       }
+    }
+    if (state.vaultViewer || state.wstETHReferralStaker) {
+      await checkSiLidityDeployment(
+        provider,
+        {
+          vaultViewer: state.vaultViewer?.address,
+          wstETHReferralStaker: state.wstETHReferralStaker?.address,
+        },
+        {
+          lidoLocator: state.lidoLocator.proxy.address,
+          vaultHub: state.vaultHub.proxy.address,
+          lazyOracle: state.lazyOracle.proxy.address,
+          stETH: state["app:lido"].proxy.address,
+          wstETH: state.wstETH.address,
+        },
+        block,
+      );
     }
     const agent = state["app:aragon-agent"].proxy.address;
     if (state.sepoliaDepositAdapter) {

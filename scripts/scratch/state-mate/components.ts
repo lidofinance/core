@@ -5,6 +5,8 @@ export const SUPPLEMENTAL_COMPONENTS = [
   "beaconChainDepositor",
   "srLib",
   "circuitBreaker",
+  "vaultViewer",
+  "wstETHReferralStaker",
   "delegationFactory",
   "easyTrackEVMScriptExecutor",
   "sepoliaDepositAdapter",

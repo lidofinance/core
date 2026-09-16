@@ -12,6 +12,10 @@ name: Integration Tests Scratch
 
 on: [push]
 
+# Exercise the moving upstream branch once; keep the other protocol jobs independent.
+env:
+  SI_LIDITY_DEPLOYMENT_ENABLED: "false"
+
 jobs:
   test_hardhat_integration_scratch_with_dg:
     name: Hardhat / Scratch with DG
@@ -23,6 +27,7 @@ jobs:
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
       DG_ALLOW_DEV_COMMITTEES: true
+      SI_LIDITY_DEPLOYMENT_ENABLED: "true"
 
     services:
       hardhat-node:
@@ -118,6 +123,7 @@ jobs:
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
       DG_ALLOW_DEV_COMMITTEES: true
+      SI_LIDITY_DEPLOYMENT_ENABLED: "true"
 
     services:
       hardhat-node:

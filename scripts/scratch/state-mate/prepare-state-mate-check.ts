@@ -154,6 +154,7 @@ const IGNORED_KEYS = new Set([
   "nodeOperatorsRegistry", // deploy parameters only; the app itself is app:node-operators-registry
   "scratchDeployCompletedSteps", // resume-mode cursor maintained by the step runner
   "scratchDeployGasUsed", // accounting record
+  "siLidityDeployment", // external checkout, journal and constructor inputs
   "simpleDvt", // deploy parameters only; the app itself is app:simple-dvt
   "vestingParams", // token vesting inputs
 ]);

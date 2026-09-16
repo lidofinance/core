@@ -57,3 +57,8 @@ export function isCMv2DeploymentEnabled(): boolean {
 export function isProtocolActivationEnabled(): boolean {
   return isTruthyEnv("PROTOCOL_ACTIVATION_ENABLED");
 }
+
+// Independent of DG; both SI helpers are enabled by default.
+export function isSiLidityDeploymentEnabled(): boolean {
+  return isOptOutEnv("SI_LIDITY_DEPLOYMENT_ENABLED");
+}

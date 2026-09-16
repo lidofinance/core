@@ -120,6 +120,10 @@ export enum Sk {
   lazyOracle = "lazyOracle",
   topUpGateway = "topUpGateway",
   v3TemporaryAdmin = "v3TemporaryAdmin",
+  // SI helpers (external deployment; not locator entries)
+  vaultViewer = "vaultViewer",
+  wstETHReferralStaker = "wstETHReferralStaker",
+  siLidityDeployment = "siLidityDeployment",
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
@@ -207,6 +211,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.miniMeTokenFactory:
     case Sk.oracleDaemonConfig:
     case Sk.oracleReportSanityChecker:
+    case Sk.vaultViewer:
+    case Sk.wstETHReferralStaker:
     case Sk.wstETH:
     case Sk.depositContract:
     case Sk.tokenRebaseNotifier:
