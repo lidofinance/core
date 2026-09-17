@@ -9,7 +9,7 @@ import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 
-import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
+import {ICLProofVerifier} from "contracts/common/interfaces/ICLProofVerifier.sol";
 
 /**
  * @title CLProofVerifier
@@ -22,7 +22,7 @@ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
  * stored in BeaconRoots system contract (see EIP-4788).
  *
  */
-abstract contract CLProofVerifier {
+abstract contract CLProofVerifier is ICLProofVerifier {
     /**
      * @notice CLProofVerifier accepts concatenated Merkle proofs to verify existence of correct pubkey+WC validator on CL
      * Proof consists of:
@@ -147,7 +147,7 @@ abstract contract CLProofVerifier {
      * @dev reverts with `InvalidProof` when provided input cannot be proven to Beacon block root
      */
     function _validatePubKeyWCProof(
-        IPredepositGuarantee.ValidatorWitness calldata _witness,
+        ValidatorWitness calldata _witness,
         bytes32 _withdrawalCredentials
     ) internal view {
         // verifies user provided slot against user provided proof
@@ -179,7 +179,7 @@ abstract contract CLProofVerifier {
      * @dev checks slot and proposerIndex against proof[:-2] which later is verified against Beacon block root
      * This is a trivial case of multi Merkle proofs where a short proof branch proves slot
      */
-    function _verifySlot(IPredepositGuarantee.ValidatorWitness calldata _witness) internal view {
+    function _verifySlot(ValidatorWitness calldata _witness) internal view {
         bytes32 parentSlotProposer = BLS12_381.sha256Pair(
             SSZ.toLittleEndian(_witness.slot),
             SSZ.toLittleEndian(_witness.proposerIndex)
