@@ -14,11 +14,16 @@
     "scratch/steps/0090-upgrade-locator",
     "scratch/steps/0100-deploy-circuit-breaker",
     "scratch/steps/0101-deploy-easytrack",
+    "scratch/steps/0102-deploy-execution-delegation-framework",
     "scratch/steps/0110-finalize-dao",
     "scratch/steps/0120-post-locator-initializers",
     "scratch/steps/0130-grant-roles",
     "scratch/steps/0135-deploy-staking-modules",
     "scratch/steps/0140-plug-staking-modules",
-    "scratch/steps/0150-transfer-roles"
+    "scratch/steps/0145-unpause-sealables",
+    "scratch/steps/0150-transfer-roles",
+    "scratch/steps/0155-activate-protocol",
+    "scratch/steps/0160-deploy-dual-governance",
+    "scratch/steps/0170-deploy-si-lidity"
   ]
 }

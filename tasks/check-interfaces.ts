@@ -49,6 +49,23 @@ const PAIRS_TO_SKIP: {
     ],
   },
   {
+    interfaceFqn: "contracts/upgrade/V3Template.sol:ITokenRateNotifier",
+    contractFqn: "contracts/0.8.9/TokenRateNotifier.sol:TokenRateNotifier",
+    reason:
+      "Cosmetic parameter name mismatches (do not alter bytecode/selectors) - fixing requires TokenRateNotifier redeploy",
+    skipInterfaceSignatures: ["function observers(uint256 index) returns (address)"],
+  },
+  {
+    interfaceFqn: "contracts/upgrade/V3TemporaryAdmin.sol:ITokenRateNotifier",
+    contractFqn: "contracts/0.8.9/TokenRateNotifier.sol:TokenRateNotifier",
+    reason:
+      "Cosmetic parameter name mismatches (do not alter bytecode/selectors) - fixing requires TokenRateNotifier redeploy",
+    skipInterfaceSignatures: [
+      "function addObserver(address observer) returns ()",
+      "function observers(uint256 index) returns (address)",
+    ],
+  },
+  {
     interfaceFqn: "contracts/0.4.24/Lido.sol:IAccountingOracle",
     contractFqn: "contracts/0.8.9/oracle/AccountingOracle.sol:AccountingOracle",
     reason: "Optimization to avoid memory struct allocation on each deposit.",

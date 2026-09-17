@@ -1,4 +1,3 @@
-import { execFileSync } from "child_process";
 import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
@@ -16,8 +15,56 @@ import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
 import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
+import { runExternal as run } from "./subprocess";
+
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 const STAKING_MODULES_REPO_BRANCH = "develop";
+
+/**
+ * Raise the external repository's Forge deployment budget while retaining isolation.
+ *
+ * Historical evidence (community-staking-module):
+ * - 114ecfe71ed4db66d166312aebc17ef94fbe80ac (2025-01-27, PR #388) added
+ *   [profile.deploy-impl], raising the inherited 30M block gas limit to 60M after
+ *   forge-std 1.7.6 -> 1.9.5. Its comment calls the high deployment gas estimate
+ *   an "unknown problem"; that commit also changed Foundry itself to v0.3.0.
+ * - b97bb7d879da887bd0a2eef2d4ccc28e6db21da0 (2025-02-13, PR #392) renamed
+ *   the profile to [profile.deploy] and applied it to regular deployments too.
+ * - At a87b304d8888b25c56a5863ea0189b1a78665033 (2026-09-11), the limit was
+ *   still 60M and upstream CI selected Foundry v1.5.1 through .foundryref.
+ *   Core instead uses forge from PATH and clones the current develop tip;
+ *   .foundryref does not select the binary for this deployment. The external
+ *   script records git rev-parse HEAD as the artifact's git-ref, which does not
+ *   describe this local configuration patch.
+ *
+ * Observed in the 2026-09-14 runs: Foundry 1.8.1 failed in Curated's script
+ * near 59.9M gas, while 1.7.1 succeeded on a blank node at the same repo SHA.
+ * A standalone reproducer tied the version contrast to 1.8's default isolation:
+ * 59,236,432 gas without isolation versus 60,418,568 with it. Raising only
+ * Anvil's limit did not override this Forge profile. A full scratch run at 61M
+ * still exhausted gas in CuratedGate.revokeRole near 60,953,708 gas. At 65M,
+ * all scratch deployment steps completed on fresh Anvil/Forge 1.8.1 with CSM
+ * and Curated enabled, both with and without DG, and isolation retained
+ * (no integration or state-mate checks in those runs).
+ *
+ * TODO: Review and update this limit for the Amsterdam Ethereum hardfork,
+ * checking upstream config, Foundry isolation/accounting, and full deployments.
+ */
+function patchStakingModulesFoundryConfig(repoDir: string): void {
+  const configPath = path.join(repoDir, "foundry.toml");
+  const config = fs.readFileSync(configPath, "utf8");
+  const deployProfile = /^(\[profile\.deploy\][^\r\n]*\r?\n)([\s\S]*?)(?=^\s*\[|(?![\s\S]))/m;
+  const gasLimit = /^(\s*block_gas_limit\s*=\s*)[\d_]+(?=\s*(?:#.*)?$)/m;
+  const profile = config.match(deployProfile);
+  if (!profile || !gasLimit.test(profile[2])) {
+    throw new Error(`Expected [profile.deploy].block_gas_limit in ${configPath}; review the upstream config`);
+  }
+  const patched = config.replace(deployProfile, (_, header: string, body: string) => {
+    return header + body.replace(gasLimit, (_line, prefix: string) => `${prefix}65_000_000`);
+  });
+  fs.writeFileSync(configPath, patched);
+  log("Patched external staking modules [profile.deploy].block_gas_limit to 65_000_000.");
+}
 
 type ExternalDeployArtifact = Record<string, unknown> & {
   CSModule?: string;
@@ -159,14 +206,6 @@ function getRpcHostPort(rpcUrl: string) {
   };
 }
 
-function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv) {
-  execFileSync(command, args, {
-    cwd,
-    env,
-    stdio: "inherit",
-  });
-}
-
 export function readArtifact(artifactPath: string): ExternalDeployArtifact {
   if (!fs.existsSync(artifactPath)) {
     throw new Error(`External staking module deploy artifact not found at ${artifactPath}`);
@@ -305,22 +344,38 @@ export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDe
   writeSubstateToToml(CM_TOML_SECTION, CM_TOML_MAP, contracts);
 }
 
+// Which of the two external modules to deploy. Both default to true, so the upgrade flow
+// (scripts/upgrade/steps/0135) is unaffected; the scratch step passes the env toggles.
+export type RequestedStakingModules = { csm?: boolean; curated?: boolean };
+
 /**
  * Clones the external community-staking-module repo and deploys the Community Staking Module (CSM)
  * and Curated Module v2 (CMv2), saving their addresses into the deployment state file.
  *
  * Shared between the scratch deploy step and the protocol upgrade step.
  */
-export async function deployStakingModules(state: DeploymentState): Promise<void> {
+export async function deployStakingModules(
+  state: DeploymentState,
+  requested: RequestedStakingModules = {},
+): Promise<void> {
+  const csmRequested = requested.csm ?? true;
+  const curatedRequested = requested.curated ?? true;
+
   // A module counts as deployed only once BOTH its proxy address and its deploy artifact are recorded.
   // During an upgrade the proxies are pre-written into the state file before the new implementations are
   // deployed, so the proxy address alone must not suppress the deploy.
   const csmDeployed = !!(state[Sk.sm_CSM]?.proxy?.address && state[Sk.sm_CSM]?.deployArtifact);
   const curatedDeployed = !!(state[Sk.sm_CM]?.proxy?.address && state[Sk.sm_CM]?.deployArtifact);
 
-  if (csmDeployed && curatedDeployed) {
-    log(`Using the deployed CSM address: ${cy(state[Sk.sm_CSM].proxy.address)}`);
-    log(`Using the deployed CMv2 address: ${cy(state[Sk.sm_CM].proxy.address)}`);
+  if (csmDeployed) log(`Using the deployed CSM address: ${cy(state[Sk.sm_CSM].proxy.address)}`);
+  if (curatedDeployed) log(`Using the deployed CMv2 address: ${cy(state[Sk.sm_CM].proxy.address)}`);
+  if (!csmRequested && !csmDeployed) log("CSM deployment is disabled: skipping it.");
+  if (!curatedRequested && !curatedDeployed) log("CMv2 deployment is disabled: skipping it.");
+
+  const deployCsm = csmRequested && !csmDeployed;
+  const deployCurated = curatedRequested && !curatedDeployed;
+
+  if (!deployCsm && !deployCurated) {
     log.emptyLine();
     return;
   }
@@ -359,6 +414,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       process.cwd(),
       process.env,
     );
+    patchStakingModulesFoundryConfig(tmpDir);
     run("just", ["deps"], tmpDir, process.env);
 
     const { isScratch, chain } = getEnvParams();
@@ -385,7 +441,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       EVM_SCRIPT_EXECUTOR_ADDRESS: state[Sk.appVoting].proxy.address,
     } as unknown as NodeJS.ProcessEnv;
 
-    if (!csmDeployed) {
+    if (deployCsm) {
       log("Deploying Community Staking Module from external repo...");
       let artifactsFile: string;
       const cmdOptions: string[] = [];
@@ -406,7 +462,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       log.emptyLine();
     }
 
-    if (!curatedDeployed) {
+    if (deployCurated) {
       log("Deploying Curated Module v2 from external repo...");
       /// @dev using deploy-curated for both scratch and upgrade, since Curated doesn't exist yet
       ///      and there's nothing to update. Reserved for future use

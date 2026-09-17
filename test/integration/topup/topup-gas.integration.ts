@@ -58,6 +58,8 @@ describe("Integration: TopUpGateway full-path gas measurement (real CMv2)", () =
     if (!cmv2SuiteEnabled(ctx, "the top-up gas suite")) {
       return this.skip();
     }
+    // Sepolia's deposit contract only accepts roots for 32 ETH deposits.
+    if (!ctx.supportsVariableDepositAmounts) return this.skip();
 
     const { topUpGateway } = ctx.contracts;
 

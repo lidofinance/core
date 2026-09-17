@@ -9,7 +9,7 @@ import { NodeOperatorsRegistry, ValidatorsExitBusOracle, WithdrawalVault } from 
 import { de0x, ether, numberToHex } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, resetState } from "test/suite";
 
 interface ExitRequest {
   moduleId: number;
@@ -30,9 +30,15 @@ const hashExitRequest = (request: { dataFormat: number; data: string }) => {
   );
 };
 
-describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
+describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", function () {
   let ctx: ProtocolContext;
-  let snapshot: string;
+
+  // Deployment is shared and memoized across suites; retain it when restoring
+  // this suite's role grants, limits, and other fixture mutations.
+  before(async () => {
+    ctx = await getProtocolContext();
+  });
+  resetState(this);
 
   let veb: ValidatorsExitBusOracle;
   let wv: WithdrawalVault;
@@ -60,7 +66,6 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
   const exitRequestsHash: string = hashExitRequest(exitRequest);
 
   before(async () => {
-    ctx = await getProtocolContext();
     veb = ctx.contracts.validatorsExitBusOracle;
     wv = ctx.contracts.withdrawalVault;
     nor = ctx.contracts.nor;
@@ -87,9 +92,7 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
     }
   });
 
-  before(async () => (snapshot = await Snapshot.take()));
   beforeEach(bailOnFailure);
-  after(async () => await Snapshot.restore(snapshot));
 
   it("should revert when non-authorized entity tries to submit hash", async () => {
     const SUBMIT_REPORT_HASH_ROLE = await veb.SUBMIT_REPORT_HASH_ROLE();

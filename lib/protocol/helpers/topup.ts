@@ -93,7 +93,7 @@ export const prepareTopUpWitnesses = async (
   }));
 
   for (const container of containers) {
-    await stateTree.addValidatorsLeaf(container);
+    await (await stateTree.addValidatorsLeaf(container)).wait();
     validatorIndices.push((await stateTree.leafCount()) - 1n - firstValidatorLeafIndex);
   }
 

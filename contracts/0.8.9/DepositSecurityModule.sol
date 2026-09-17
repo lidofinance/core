@@ -4,7 +4,9 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
-import {ECDSA} from "../common/lib/ECDSA.sol";
+import {IERC1271} from "@openzeppelin/contracts-v4.4/interfaces/IERC1271.sol";
+import {SignatureChecker} from "@openzeppelin/contracts-v4.4/utils/cryptography/SignatureChecker.sol";
+import {ERC165Checker} from "@openzeppelin/contracts-v4.4/utils/introspection/ERC165Checker.sol";
 
 interface IDepositContract {
     function get_deposit_root() external view returns (bytes32 rootHash);
@@ -27,12 +29,9 @@ interface IStakingRouter {
  * @dev The contract represents a security module for handling deposits.
  */
 contract DepositSecurityModule {
-    /**
-     * @dev Short ECDSA signature as defined in https://eips.ethereum.org/EIPS/eip-2098.
-     */
-    struct Signature {
-        bytes32 r;
-        bytes32 vs;
+    struct GuardianSignature {
+        address guardian;
+        bytes signature;
     }
 
     event OwnerChanged(address newValue);
@@ -50,6 +49,7 @@ contract DepositSecurityModule {
     error NotAnOwner(address caller);
     error InvalidSignature();
     error SignaturesNotSorted();
+    error GuardianDoesNotSupportERC1271();
     error DepositNoQuorum();
     error DepositRootChanged();
     error DepositTooFrequent();
@@ -64,8 +64,8 @@ contract DepositSecurityModule {
     error ZeroParameter(string parameter);
 
     /// @notice Represents the code version to help distinguish contract interfaces.
-    uint256 public constant VERSION = 4;
-    
+    uint256 public constant VERSION = 5;
+
     /// @dev Byte length of one packed node operator id (uint64) in `nodeOperatorIds`.
     ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
     uint256 internal constant NODE_OPERATOR_ID_LENGTH = 8;
@@ -317,6 +317,9 @@ contract DepositSecurityModule {
     function _addGuardian(address _newGuardian) internal {
         if (_newGuardian == address(0)) revert ZeroAddress("_newGuardian");
         if (_isGuardian(_newGuardian)) revert DuplicateAddress(_newGuardian);
+        if (!ERC165Checker.supportsInterface(_newGuardian, type(IERC1271).interfaceId)) {
+            revert GuardianDoesNotSupportERC1271();
+        }
         guardians.push(_newGuardian);
         guardianIndicesOneBased[_newGuardian] = guardians.length;
         emit GuardianAdded(_newGuardian);
@@ -363,9 +366,9 @@ contract DepositSecurityModule {
      * The signature, if present, must be produced for the keccak256 hash of the following
      * message (each component taking 32 bytes):
      *
-     * | PAUSE_MESSAGE_PREFIX | blockNumber |
+     * | PAUSE_MESSAGE_PREFIX | guardian | blockNumber |
      */
-    function pauseDeposits(uint256 blockNumber, Signature memory sig) external {
+    function pauseDeposits(uint256 blockNumber, GuardianSignature calldata sig) external {
         /// @dev In case of an emergency function `pauseDeposits` is supposed to be called
         /// by all guardians. Thus only the first call will do the actual change. But
         /// the other calls would be OK operations from the point of view of protocol’s logic.
@@ -373,13 +376,10 @@ contract DepositSecurityModule {
         if (isDepositsPaused) return;
 
         address guardianAddr = msg.sender;
-        int256 guardianIndex = _getGuardianIndex(msg.sender);
-
-        if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber));
-            guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
-            guardianIndex = _getGuardianIndex(guardianAddr);
-            if (guardianIndex == -1) revert InvalidSignature();
+        if (!_isGuardian(msg.sender)) {
+            guardianAddr = sig.guardian;
+            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, guardianAddr, blockNumber));
+            if (!_isValidGuardianSignature(guardianAddr, msgHash, sig.signature)) revert InvalidSignature();
         }
 
         if (block.number - blockNumber > pauseIntentValidityPeriodBlocks) revert PauseIntentExpired();
@@ -455,7 +455,7 @@ contract DepositSecurityModule {
      * Signatures must be sorted in ascending order by address of the guardian. Each signature must
      * be produced for the keccak256 hash of the following message (each component taking 32 bytes):
      *
-     * | ATTEST_MESSAGE_PREFIX | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
+     * | ATTEST_MESSAGE_PREFIX | guardian | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
      */
     function depositBufferedEther(
         uint256 blockNumber,
@@ -463,7 +463,7 @@ contract DepositSecurityModule {
         bytes32 depositRoot,
         uint256 stakingModuleId,
         uint256 nonce,
-        Signature[] calldata sortedGuardianSignatures
+        GuardianSignature[] calldata sortedGuardianSignatures
     ) external {
         /// @dev The first most likely reason for the signature to go stale
         bytes32 onchainDepositRoot = DEPOSIT_CONTRACT.get_deposit_root();
@@ -493,32 +493,41 @@ contract DepositSecurityModule {
         bytes32 blockHash,
         uint256 stakingModuleId,
         uint256 nonce,
-        Signature[] memory sigs
+        GuardianSignature[] calldata sigs
     ) internal view {
-        bytes32 msgHash = keccak256(
-            abi.encodePacked(
-                ATTEST_MESSAGE_PREFIX,
-                blockNumber,
-                blockHash,
-                depositRoot,
-                stakingModuleId,
-                nonce
-            )
-        );
-
-        address prevSignerAddr;
-        address signerAddr;
+        address prevGuardian;
 
         for (uint256 i = 0; i < sigs.length;) {
-            signerAddr = ECDSA.recover(msgHash, sigs[i].r, sigs[i].vs);
-            if (!_isGuardian(signerAddr)) revert InvalidSignature();
-            if (signerAddr <= prevSignerAddr) revert SignaturesNotSorted();
-            prevSignerAddr = signerAddr;
+            GuardianSignature calldata sig = sigs[i];
+            address guardian = sig.guardian;
+            if (guardian <= prevGuardian) revert SignaturesNotSorted();
+
+            bytes32 msgHash = keccak256(
+                abi.encodePacked(
+                    ATTEST_MESSAGE_PREFIX,
+                    guardian,
+                    blockNumber,
+                    blockHash,
+                    depositRoot,
+                    stakingModuleId,
+                    nonce
+                )
+            );
+            if (!_isValidGuardianSignature(guardian, msgHash, sig.signature)) revert InvalidSignature();
+            prevGuardian = guardian;
 
             unchecked {
                 ++i;
             }
         }
+    }
+
+    function _isValidGuardianSignature(
+        address guardian,
+        bytes32 msgHash,
+        bytes calldata signature
+    ) internal view returns (bool) {
+        return _isGuardian(guardian) && SignatureChecker.isValidSignatureNow(guardian, msgHash, signature);
     }
 
     /**
@@ -540,7 +549,7 @@ contract DepositSecurityModule {
      *
      * The signature, if present, must be produced for the keccak256 hash of the following message:
      *
-     * | UNVET_MESSAGE_PREFIX | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
+     * | UNVET_MESSAGE_PREFIX | guardian | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
      */
     function unvetSigningKeys(
         uint256 blockNumber,
@@ -549,7 +558,7 @@ contract DepositSecurityModule {
         uint256 nonce,
         bytes calldata nodeOperatorIds,
         bytes calldata vettedSigningKeysCounts,
-        Signature calldata sig
+        GuardianSignature calldata sig
     ) external {
         /// @dev The most likely reason for the signature to go stale
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
@@ -567,14 +576,14 @@ contract DepositSecurityModule {
         }
 
         address guardianAddr = msg.sender;
-        int256 guardianIndex = _getGuardianIndex(msg.sender);
-
-        if (guardianIndex == -1) {
+        if (!_isGuardian(msg.sender)) {
+            guardianAddr = sig.guardian;
             bytes32 msgHash = keccak256(
                 // slither-disable-start encode-packed-collision
                 // values with a dynamic type checked earlier
                 abi.encodePacked(
                     UNVET_MESSAGE_PREFIX,
+                    guardianAddr,
                     blockNumber,
                     blockHash,
                     stakingModuleId,
@@ -584,9 +593,7 @@ contract DepositSecurityModule {
                 )
                 // slither-disable-end encode-packed-collision
             );
-            guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
-            guardianIndex = _getGuardianIndex(guardianAddr);
-            if (guardianIndex == -1) revert InvalidSignature();
+            if (!_isValidGuardianSignature(guardianAddr, msgHash, sig.signature)) revert InvalidSignature();
         }
 
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert UnvetUnexpectedBlockHash();
