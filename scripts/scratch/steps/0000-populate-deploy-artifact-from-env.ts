@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 
 import { log } from "lib";
 import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file";
@@ -13,6 +13,9 @@ function getEnvVariable(name: string, defaultValue?: string): string {
 }
 
 export async function main() {
+  const isLocalNode = ["hardhat", "localhost", "local"].includes(network.name);
+  const DEFAULT_GENESIS_FORK_VERSION = isLocalNode ? "0x00000000" : undefined;
+
   // Retrieve environment variables
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
   const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
@@ -20,7 +23,7 @@ export async function main() {
   const depositContractAddress = getEnvVariable("DEPOSIT_CONTRACT", "");
   const withdrawalQueueBaseUri = getEnvVariable("WITHDRAWAL_QUEUE_BASE_URI", "");
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
-  const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", "0x00000000");
+  const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", DEFAULT_GENESIS_FORK_VERSION);
   const consolidationMigratorSourceModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID", "");
   const consolidationMigratorTargetModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID", "");
 
