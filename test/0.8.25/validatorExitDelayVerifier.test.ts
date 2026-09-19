@@ -20,6 +20,7 @@ import {
   encodeExitRequestsDataListWithFormat,
   ExitRequest,
   findStakingRouterMockEvents,
+  generateValidatorStateProof,
   toHistoricalHeaderWitness,
   toProvableBeaconBlockHeader,
   toValidatorWitness,
@@ -1019,5 +1020,83 @@ describe("GIndex helpers", () => {
       harness,
       "HistoricalSummaryDoesNotExist",
     );
+  });
+});
+
+describe("generateValidatorStateProof", () => {
+  // Exercises the shared proof generator against a real verifier — not the harness — so it is
+  // driven exactly as the integration tests drive it: the generalized index is recomputed
+  // independently instead of being read back from the contract under test.
+  const FIRST_SUPPORTED_SLOT = 8192;
+  const CAPELLA_SLOT = 8192;
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
+  const SLOTS_PER_EPOCH = 32;
+  const SECONDS_PER_SLOT = 12;
+  const GENESIS_TIME = 1606824000;
+  const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
+  const VALIDATOR_INDEX = 3;
+
+  let vebo: ValidatorsExitBusOracle_Mock;
+  let stakingRouter: StakingRouter_Mock;
+
+  const deployVerifier = async (gloasSlot: bigint): Promise<ValidatorExitDelayVerifier> => {
+    vebo = await ethers.deployContract("ValidatorsExitBusOracle_Mock");
+    stakingRouter = await ethers.deployContract("StakingRouter_Mock");
+    const locator = await deployLidoLocator({
+      validatorsExitBusOracle: await vebo.getAddress(),
+      stakingRouter: await stakingRouter.getAddress(),
+    });
+
+    return ethers.deployContract("ValidatorExitDelayVerifier", [
+      await locator.getAddress(),
+      FIRST_SUPPORTED_SLOT,
+      gloasSlot,
+      CAPELLA_SLOT,
+      SLOTS_PER_HISTORICAL_ROOT,
+      SLOTS_PER_EPOCH,
+      SECONDS_PER_SLOT,
+      GENESIS_TIME,
+      SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+    ]);
+  };
+
+  const verifyGeneratedProof = async (gloasSlot: bigint, stateSlot: number) => {
+    const verifier = await deployVerifier(gloasSlot);
+    const proof = await generateValidatorStateProof(verifier, stateSlot, VALIDATOR_INDEX);
+
+    const intervalInSlots = 1000;
+    const proofSlotTimestamp = GENESIS_TIME + stateSlot * SECONDS_PER_SLOT;
+    const deliveryTimestamp = proofSlotTimestamp - intervalInSlots * SECONDS_PER_SLOT;
+
+    const exitRequests: ExitRequest[] = [
+      { moduleId: 3, nodeOpId: 7, valIndex: proof.validatorIndex, pubkey: proof.pubkey },
+    ];
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    await vebo.setExitRequests(encodedExitRequestsHash, deliveryTimestamp, exitRequests);
+
+    const rootsTimestamp = await updateBeaconBlockRoot(proof.headerRoot);
+
+    const receipt = await (
+      await verifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(proof.header, rootsTimestamp),
+        [proof.witness],
+        encodedExitRequests,
+      )
+    ).wait();
+
+    const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
+    expect(events.length).to.equal(1);
+    expect(events[0].args[3]).to.equal(proof.pubkey);
+    expect(events[0].args[4]).to.equal(intervalInSlots * SECONDS_PER_SLOT);
+  };
+
+  it("builds a proof the verifier accepts on the pre-Gloas layout", async () => {
+    // Sentinel fork slot: every slot stays on the fixed-depth validator list.
+    await verifyGeneratedProof(MAX_UINT64, FIRST_SUPPORTED_SLOT + 4096);
+  });
+
+  it("builds a proof the verifier accepts on the post-Gloas layout", async () => {
+    const gloasSlot = BigInt(FIRST_SUPPORTED_SLOT + 1024);
+    await verifyGeneratedProof(gloasSlot, Number(gloasSlot) + 100);
   });
 });
