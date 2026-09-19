@@ -8,9 +8,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "contracts/common/lib/RateLimit.sol";
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
-import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {CLProofVerifier} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
-import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
 interface IDepositSecurityModule {
     function isDepositsPaused() external view returns (bool);
@@ -100,7 +98,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
 
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
-    bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
+    /// @notice role that allows to set the consolidation request rate limit
+    bytes32 public constant CONSOLIDATION_LIMIT_MANAGER_ROLE = keccak256("CONSOLIDATION_LIMIT_MANAGER_ROLE");
 
     bytes32 public constant CONSOLIDATION_LIMIT_POSITION =
         keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
@@ -109,7 +108,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
 
     struct ConsolidationWitnessGroup {
         bytes[] sourcePubkeys;
-        IPredepositGuarantee.ValidatorWitness targetWitness;
+        ValidatorWitness targetWitness;
     }
 
     ILidoLocator internal immutable LOCATOR;
@@ -127,10 +126,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 maxConsolidationRequestsLimit,
         uint256 consolidationsPerFrame,
         uint256 frameDurationInSec,
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
-        uint64 _pivotSlot
-    ) CLProofVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
+        uint64 _gloasSlot
+    ) CLProofVerifier(_gloasSlot) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (lidoLocator == address(0)) revert ZeroArgument("lidoLocator");
         LOCATOR = ILidoLocator(lidoLocator);
@@ -232,7 +229,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 maxConsolidationRequestsLimit,
         uint256 consolidationsPerFrame,
         uint256 frameDurationInSec
-    ) external onlyRole(EXIT_LIMIT_MANAGER_ROLE) {
+    ) external onlyRole(CONSOLIDATION_LIMIT_MANAGER_ROLE) {
         _setConsolidationRequestLimit(maxConsolidationRequestsLimit, consolidationsPerFrame, frameDurationInSec);
     }
 

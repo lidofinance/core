@@ -115,8 +115,6 @@ describe("VaultHub.sol:owner-functions", () => {
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [
       "0x00000000", // GENESIS_FORK_VERSION
-      "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
     ]);
 

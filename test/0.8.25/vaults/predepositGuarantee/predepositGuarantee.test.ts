@@ -12,7 +12,7 @@ import {
   SSZMerkleTree,
   StakingVault__MockForPDG,
 } from "typechain-types";
-import { IPredepositGuarantee } from "typechain-types/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee";
+import { ICLProofVerifier } from "typechain-types/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee";
 
 import {
   addressToWC,
@@ -31,6 +31,8 @@ import {
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
+
+const MAX_UINT64 = (1n << 64n) - 1n;
 
 describe("PredepositGuarantee.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -65,11 +67,9 @@ describe("PredepositGuarantee.sol", () => {
     rejector = await ethers.deployContract("EthRejector");
 
     // PDG
-    pdgImpl = await ethers.deployContract(
-      "PredepositGuarantee",
-      [GENESIS_FORK_VERSION, localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
-      { from: deployer },
-    );
+    pdgImpl = await ethers.deployContract("PredepositGuarantee", [GENESIS_FORK_VERSION, MAX_UINT64], {
+      from: deployer,
+    });
     proxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
     pdg = await ethers.getContractAt("PredepositGuarantee", proxy, vaultOperator);
 
@@ -1245,14 +1245,14 @@ describe("PredepositGuarantee.sol", () => {
     context("proveInvalidValidatorWC", () => {
       let invalidWC: string;
       let invalidValidator: Validator;
-      let invalidValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
+      let invalidValidatorWitness: ICLProofVerifier.ValidatorWitnessStruct;
 
       let validWC: string;
       let validValidator: Validator;
-      let validValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
+      let validValidatorWitness: ICLProofVerifier.ValidatorWitnessStruct;
 
       let validNotPredepostedValidator: Validator;
-      let validNotPredepostedValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
+      let validNotPredepostedValidatorWitness: ICLProofVerifier.ValidatorWitnessStruct;
 
       beforeEach(async () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("20") });
@@ -1377,7 +1377,7 @@ describe("PredepositGuarantee.sol", () => {
     context("compensateDisprovenPredeposit", () => {
       let invalidWC: string;
       let invalidValidator: Validator;
-      let invalidValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
+      let invalidValidatorWitness: ICLProofVerifier.ValidatorWitnessStruct;
 
       let validWC: string;
       let validValidator: Validator;
