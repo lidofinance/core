@@ -12,12 +12,14 @@ import {SSZBLSHelpers} from "./SSZBLSHelpers.sol";
 /// NOT gas optimized, for testing proposes only
 contract SSZMerkleTree is SSZBLSHelpers {
     uint256 public immutable TREE_DEPTH; // Adjustable tree depth
+    uint8 public immutable TREE_POWER; // Width metadata carried by packed GIndices
     uint256 public leafCount = 0; // Number of leaves in the tree
     mapping(uint256 => bytes32) public nodes; // Merkle tree nodes mapping
 
     /// @notice Initializes the Merkle tree with a given depth and pre-filled nodes so GIndex can closesly match CL
     constructor(GIndex base) {
         TREE_DEPTH = depth(base);
+        TREE_POWER = base.pow();
         // allows to simulate middle part of the tree
         leafCount = base.index() - (1 << TREE_DEPTH);
     }
@@ -66,7 +68,7 @@ contract SSZMerkleTree is SSZBLSHelpers {
     function getGeneralizedIndex(uint256 position) public view returns (GIndex) {
         require(position < (1 << TREE_DEPTH), "Invalid position");
 
-        return pack((1 << TREE_DEPTH) + position, uint8(TREE_DEPTH));
+        return pack((1 << TREE_DEPTH) + position, TREE_POWER);
     }
 
     /// @dev Updates the tree after adding a leaf

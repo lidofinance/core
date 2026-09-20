@@ -8,12 +8,12 @@ import {
     AccessControlEnumerableUpgradeable
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
-import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
+import {ICLProofVerifier} from "contracts/common/interfaces/ICLProofVerifier.sol";
 
 interface IConsolidationGateway {
     struct ConsolidationWitnessGroup {
         bytes[] sourcePubkeys;
-        IPredepositGuarantee.ValidatorWitness targetWitness;
+        ICLProofVerifier.ValidatorWitness targetWitness;
     }
 
     function addConsolidationRequests(

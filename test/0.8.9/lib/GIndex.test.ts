@@ -4,7 +4,10 @@ import { ethers } from "hardhat";
 
 import { GIndex__Harness, GIndexLibrary__Harness } from "typechain-types";
 
+import { progressiveListNodeGIndexReference } from "test/common/lib/clGIndices";
 import { Snapshot } from "test/suite";
+
+const LARGEST_PROGRESSIVE_LIST_INDEX = ((4n ** 81n - 1n) * 4n) / 3n;
 
 /**
  * Wrapper for the GIndex operations to match the Solidity test
@@ -50,6 +53,10 @@ class GIndexWrapper {
 
   async fls(x: BigNumberish): Promise<bigint> {
     return await this.contract.fls(x);
+  }
+
+  async progressiveListNode(i: BigNumberish): Promise<string> {
+    return await this.contract.progressiveListNode(i);
   }
 }
 
@@ -364,5 +371,30 @@ describe("GIndex", () => {
     expect(await gIndex.fls(10n)).to.equal(3n); // 1010
     expect(await gIndex.fls(300n)).to.equal(8n); // 0001 0010 1100
     expect(await gIndex.fls(0n)).to.equal(256n);
+  });
+
+  it("test_progressiveListNode", async () => {
+    expect(await gIndex.progressiveListNode(0)).to.equal(await gIndex.pack(0x4, 0));
+    expect(await gIndex.progressiveListNode(1)).to.equal(await gIndex.pack(0x28, 0));
+    expect(await gIndex.progressiveListNode(12345678)).to.equal(await gIndex.pack(0x5ffe670bf9n, 0));
+
+    await expect(library.progressiveListNode(ethers.MaxUint256 / 3n)).to.be.revertedWithCustomError(
+      library,
+      "IndexOutOfRange",
+    );
+    await expect(library.progressiveListNode(ethers.MaxUint256)).to.be.revertedWithCustomError(
+      library,
+      "IndexOutOfRange",
+    );
+  });
+
+  it("testFuzz_progressiveListNode", async () => {
+    for (let run = 0; run < 20; run++) {
+      const i = BigInt(ethers.hexlify(randomBytes(32))) % (LARGEST_PROGRESSIVE_LIST_INDEX + 1n);
+      const gI = await gIndex.progressiveListNode(i);
+
+      expect(await gIndex.index(gI)).to.equal(progressiveListNodeGIndexReference(i));
+      expect(await gIndex.width(gI)).to.equal(1n);
+    }
   });
 });

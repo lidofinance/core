@@ -32,7 +32,6 @@ describe("TopUpGateway.sol", () => {
   const DEFAULT_MAX_VALIDATORS = 5n;
   const DEFAULT_MIN_BLOCK_DISTANCE = 1n;
   const DEFAULT_MAX_ROOT_AGE = 300n;
-  const G_INDEX = ethers.zeroPadValue("0x01", 32);
   const ZERO_BYTES_31 = "00".repeat(31);
   const WC_TYPE_02 = `0x02${ZERO_BYTES_31}`;
   const WC_TYPE_01 = `0x01${ZERO_BYTES_31}`;
@@ -74,13 +73,7 @@ describe("TopUpGateway.sol", () => {
       lido: await lido.getAddress(),
     });
 
-    const impl = await ethers.deployContract("TopUpGateway__Harness", [
-      await locator.getAddress(),
-      G_INDEX,
-      G_INDEX,
-      0,
-      SLOTS_PER_EPOCH,
-    ]);
+    const impl = await ethers.deployContract("TopUpGateway__Harness", [await locator.getAddress(), 0, SLOTS_PER_EPOCH]);
 
     [topUpGateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
 
@@ -143,6 +136,17 @@ describe("TopUpGateway.sol", () => {
       expect(await topUpGateway.harness_getLocator()).to.equal(await locator.getAddress());
     });
 
+    it("stores the Gloas fork slot from the constructor", async () => {
+      const gloasSlot = 12345n;
+      const impl = await ethers.deployContract("TopUpGateway__Harness", [
+        await locator.getAddress(),
+        gloasSlot,
+        SLOTS_PER_EPOCH,
+      ]);
+
+      expect(await impl.GLOAS_SLOT()).to.equal(gloasSlot);
+    });
+
     it("reverts on double initialization", async () => {
       await expect(
         topUpGateway.initialize(
@@ -159,8 +163,6 @@ describe("TopUpGateway.sol", () => {
     it("reverts when maxValidatorsPerTopUp is zero", async () => {
       const impl = await ethers.deployContract("TopUpGateway__Harness", [
         await locator.getAddress(),
-        G_INDEX,
-        G_INDEX,
         0,
         SLOTS_PER_EPOCH,
       ]);
@@ -180,8 +182,6 @@ describe("TopUpGateway.sol", () => {
     it("reverts when minBlockDistance is zero", async () => {
       const impl = await ethers.deployContract("TopUpGateway__Harness", [
         await locator.getAddress(),
-        G_INDEX,
-        G_INDEX,
         0,
         SLOTS_PER_EPOCH,
       ]);
@@ -201,8 +201,6 @@ describe("TopUpGateway.sol", () => {
     it("reverts when admin is zero address", async () => {
       const impl = await ethers.deployContract("TopUpGateway__Harness", [
         await locator.getAddress(),
-        G_INDEX,
-        G_INDEX,
         0,
         SLOTS_PER_EPOCH,
       ]);
@@ -222,9 +220,7 @@ describe("TopUpGateway.sol", () => {
     });
 
     it("reverts when lidoLocator is zero address (constructor)", async () => {
-      await expect(
-        ethers.deployContract("TopUpGateway__Harness", [ethers.ZeroAddress, G_INDEX, G_INDEX, 0, SLOTS_PER_EPOCH]),
-      )
+      await expect(ethers.deployContract("TopUpGateway__Harness", [ethers.ZeroAddress, 0, SLOTS_PER_EPOCH]))
         .to.be.revertedWithCustomError(await ethers.getContractFactory("TopUpGateway__Harness"), "ZeroArgument")
         .withArgs("_lidoLocator");
     });
@@ -232,8 +228,6 @@ describe("TopUpGateway.sol", () => {
     it("reverts when calling initialize on the implementation directly", async () => {
       const impl = await ethers.deployContract("TopUpGateway__Harness", [
         await locator.getAddress(),
-        G_INDEX,
-        G_INDEX,
         0,
         SLOTS_PER_EPOCH,
       ]);
