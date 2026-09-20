@@ -5,7 +5,7 @@ pragma solidity 0.8.25;
 
 import {pack, concat} from "contracts/common/lib/GIndex.sol";
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
-import {CLProofVerifier, SSZ, GIndex} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
+import {CLProofVerifier, SSZ, GIndex} from "contracts/0.8.25/CLProofVerifier.sol";
 
 contract CLProofVerifier__Harness is CLProofVerifier {
     constructor(uint64 _gloasSlot) CLProofVerifier(_gloasSlot) {}

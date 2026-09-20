@@ -85,7 +85,7 @@ contract UpgradeVoteScript is OmnibusBase {
     function _getVoteItems() internal view returns (VoteItem[] memory items) {
         UpgradeConfig config = UpgradeConfig(CONFIG);
         items = new VoteItem[](RAW_ACTIONS_COUNT);
-        uint256 i;
+        uint256 i = 0;
 
         items[i++] = _item(
             "Call UpgradeTemplate.startUpgrade",

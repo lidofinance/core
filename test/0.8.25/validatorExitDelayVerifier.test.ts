@@ -14,6 +14,7 @@ import { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0.8.25
 import { generateBeaconHeader, generateValidator, updateBeaconBlockRoot } from "lib";
 
 import {
+  giFirstBlockRootInSummary,
   giFirstHistoricalSummary,
   giFirstHistoricalSummaryPreGloas,
   giFirstValidatorPreGloas,
@@ -927,6 +928,65 @@ describe("verifyValidatorExitDelay (Gloas path)", () => {
         encodedExitRequests,
       ),
     ).to.be.reverted;
+  });
+
+  // The historical path picks the summaries-list layout off the *recent* block, so a post-Gloas
+  // recent block exercises `GI_FIRST_HISTORICAL_SUMMARY` — the Gloas constant nothing else covers.
+  it("accepts a historical proof anchored on a post-Gloas recent block", async () => {
+    const validatorIndex = 1n;
+    // Target block is itself post-Gloas, so the validator proof uses the progressive-list layout
+    // while the summaries proof uses the Gloas summaries constant.
+    const targetSlot = GLOAS_SLOT + 100;
+    const recentSlot = targetSlot + SLOTS_PER_HISTORICAL_ROOT;
+
+    const { pubkey, witness, buildHeader } = await buildGloasValidatorProof(validatorIndex, targetSlot);
+    const { header: oldHeader, headerRoot: oldHeaderRoot } = await buildHeader(targetSlot);
+
+    // Compose the generalized index independently instead of asking the verifier for it: reading
+    // it back would make the proof agree with whatever the contract says, including a wrong
+    // GI_FIRST_HISTORICAL_SUMMARY.
+    const gIndexLib = await ethers.deployContract("GIndex__Harness");
+    const summaryIndex = Math.floor((targetSlot - CAPELLA_SLOT) / SLOTS_PER_HISTORICAL_ROOT);
+    const rootIndex = targetSlot % SLOTS_PER_HISTORICAL_ROOT;
+    const historicalGI = await gIndexLib.shr(
+      await gIndexLib.concat(
+        await gIndexLib.shr(giFirstHistoricalSummary(), summaryIndex),
+        giFirstBlockRootInSummary(BigInt(SLOTS_PER_HISTORICAL_ROOT)),
+      ),
+      rootIndex,
+    );
+    expect(await harness.getHistoricalBlockRootGI.staticCall(recentSlot, targetSlot)).to.equal(historicalGI);
+
+    const recentStateTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [historicalGI]);
+    const oldBlockLeafIndex = await recentStateTree.leafCount();
+    await recentStateTree.addLeaf(oldHeaderRoot);
+
+    const historicalProof = await recentStateTree.getMerkleProof(oldBlockLeafIndex);
+    const recentStateRoot = await recentStateTree.getMerkleRoot();
+    const recentBase = generateBeaconHeader(recentStateRoot, recentSlot);
+    const recentHeader = { ...recentBase, slot: recentSlot, proposerIndex: String(recentBase.proposerIndex) };
+    const recentHeaderRoot = await recentStateTree.beaconBlockHeaderHashTreeRoot(recentHeader);
+
+    const intervalInSlots = 1000;
+    const proofSlotTimestamp = GENESIS_TIME + targetSlot * SECONDS_PER_SLOT;
+    const veboExitRequestTimestamp = proofSlotTimestamp - intervalInSlots * SECONDS_PER_SLOT;
+
+    const encodedExitRequests = await submitExitRequest(pubkey, Number(validatorIndex), veboExitRequestTimestamp);
+    const rootsTimestamp = await updateBeaconBlockRoot(recentHeaderRoot);
+
+    const receipt = await (
+      await harness.verifyHistoricalValidatorExitDelay(
+        toProvableBeaconBlockHeader(recentHeader, rootsTimestamp),
+        { header: oldHeader, proof: [...historicalProof] },
+        [witness],
+        encodedExitRequests,
+      )
+    ).wait();
+
+    const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
+    expect(events.length).to.equal(1);
+    expect(events[0].args[3]).to.equal(pubkey);
+    expect(events[0].args[4]).to.equal(intervalInSlots * SECONDS_PER_SLOT);
   });
 });
 

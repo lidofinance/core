@@ -79,3 +79,15 @@ export const giValidators = (): string => pack(progressiveListNodeGIndexReferenc
 /** `BeaconState.historical_summaries[0]` after Gloas, still a plain `List` under a progressive field. */
 export const giFirstHistoricalSummary = (): string =>
   listFirstElement(progressiveListNodeGIndexReference(HISTORICAL_SUMMARIES_FIELD_INDEX), HISTORICAL_ROOTS_LIMIT_LOG2);
+
+/**
+ * `HistoricalSummary.blockRoots[0]`. `block_summary_root` is field 0 of a two-field container, so
+ * it sits at gI 2, and below it hangs a `Vector[Root, slotsPerHistoricalRoot]`.
+ */
+export const giFirstBlockRootInSummary = (slotsPerHistoricalRoot: bigint): string => {
+  // `block_summary_root` is field 0 of a two-field container -> gI 2; the vector below it has
+  // depth log2(slotsPerHistoricalRoot), so its element 0 lands at 2 * slotsPerHistoricalRoot.
+  let pow = 0n;
+  while (1n << pow < slotsPerHistoricalRoot) pow += 1n;
+  return pack(2n * slotsPerHistoricalRoot, pow);
+};

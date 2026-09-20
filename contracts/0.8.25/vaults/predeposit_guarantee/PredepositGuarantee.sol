@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
-import {CLProofVerifier} from "./CLProofVerifier.sol";
+import {CLProofVerifier} from "contracts/0.8.25/CLProofVerifier.sol";
 import {MeIfNobodyElse} from "./MeIfNobodyElse.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";

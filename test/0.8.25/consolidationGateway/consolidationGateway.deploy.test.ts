@@ -29,6 +29,23 @@ describe("ConsolidationGateway.sol: deployment", () => {
     expect(await gateway.hasRole(adminRole, admin.address)).to.be.true;
   });
 
+  it("stores the Gloas fork slot", async () => {
+    const [admin] = await ethers.getSigners();
+    const locatorAddr = (await deployLidoLocator()).getAddress();
+    const gloasSlot = 12345n;
+
+    const gateway = await ethers.deployContract("ConsolidationGateway", [
+      admin.address,
+      locatorAddr,
+      100,
+      1,
+      48,
+      gloasSlot,
+    ]);
+
+    expect(await gateway.GLOAS_SLOT()).to.equal(gloasSlot);
+  });
+
   it("should initialize rate limit config during deployment", async () => {
     const [admin] = await ethers.getSigners();
     const locatorAddr = (await deployLidoLocator()).getAddress();

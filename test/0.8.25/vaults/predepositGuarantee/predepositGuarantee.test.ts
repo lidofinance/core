@@ -95,6 +95,15 @@ describe("PredepositGuarantee.sol", () => {
       await expect(pdgImpl.initialize(stranger)).to.be.revertedWithCustomError(pdgImpl, "InvalidInitialization");
     });
 
+    it("stores the Gloas fork slot from the constructor", async () => {
+      const gloasSlot = 12345n;
+      const impl = await ethers.deployContract("PredepositGuarantee", [GENESIS_FORK_VERSION, gloasSlot], {
+        from: deployer,
+      });
+
+      expect(await impl.GLOAS_SLOT()).to.equal(gloasSlot);
+    });
+
     it("reverts on `_defaultAdmin` address is zero", async () => {
       const pdgProxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
       const pdgLocal = await ethers.getContractAt("PredepositGuarantee", pdgProxy, vaultOperator);

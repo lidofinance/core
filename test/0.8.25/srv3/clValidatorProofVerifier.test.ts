@@ -6,6 +6,8 @@ import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain
 import { generateBeaconHeader, generateValidator, setBeaconBlockRoot } from "lib/pdg";
 import { prepareLocalMerkleTree } from "lib/top-ups";
 
+import { giValidators, progressiveListNodeGIndexReference } from "test/common/lib/clGIndices";
+
 const MAX_UINT64 = (1n << 64n) - 1n;
 
 const STATIC_VALIDATOR = {
@@ -502,5 +504,79 @@ describe("CLTopUpProofVerifier", () => {
     expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(
       "0x00000000000000000000000000000000000000000000000000000000002cc800",
     );
+  });
+
+  // The fork switch above only shows the index moves. This proves a real container against the
+  // progressive-list layout, where the proof depth varies per chunk — a mismatch there surfaces as
+  // an SSZ branch-length revert rather than a wrong index.
+  it("verifies a full Validator container on the post-Gloas layout", async () => {
+    const GLOAS_SLOT = 1000;
+    const VALIDATOR_INDEX = 1;
+
+    const gIndexLib = await ethers.deployContract("GIndex__Harness");
+    const gloasValidatorGI = await gIndexLib.concat(
+      giValidators(),
+      await gIndexLib.pack(progressiveListNodeGIndexReference(BigInt(VALIDATOR_INDEX)), 0),
+    );
+
+    const gloasVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [GLOAS_SLOT]);
+    expect(await gloasVerifier.TEST_getValidatorGI(VALIDATOR_INDEX, GLOAS_SLOT)).to.equal(gloasValidatorGI);
+
+    const v = generateValidator();
+    const FAR_FUTURE = (1n << 64n) - 1n;
+    v.container.slashed = false;
+    v.container.activationEligibilityEpoch = 1n;
+    v.container.activationEpoch = 2n;
+    v.container.exitEpoch = FAR_FUTURE;
+    v.container.withdrawableEpoch = FAR_FUTURE;
+
+    // Seed the tree at that index so the single validator it holds sits exactly where the verifier
+    // looks for validator[VALIDATOR_INDEX] after the fork.
+    const tree = await ethers.deployContract("SSZValidatorsMerkleTree", [gloasValidatorGI]);
+    const leafIndex = await tree.leafCount();
+    await tree.addValidatorsLeaf(v.container);
+
+    const SLOT = GLOAS_SLOT + 2200; // epoch well past activationEpoch, and after the fork
+    const stateRoot = await tree.getStateRoot();
+    const beaconBlockHeader = await generateBeaconHeader(stateRoot, SLOT);
+    const headerHash = await tree.beaconBlockHeaderHashTreeRoot(beaconBlockHeader);
+    const childBlockTimestamp = await setBeaconBlockRoot(headerHash);
+
+    const validatorProof = await tree.getValidatorProof(leafIndex);
+    const headerMerkle = await tree.getBeaconBlockHeaderProof(beaconBlockHeader);
+
+    const beaconRootData = {
+      childBlockTimestamp,
+      slot: beaconBlockHeader.slot,
+      proposerIndex: beaconBlockHeader.proposerIndex,
+    };
+    const validatorWitness = {
+      proofValidator: [...validatorProof, ...headerMerkle.proof],
+      pubkey: v.container.pubkey,
+      effectiveBalance: v.container.effectiveBalance,
+      slashed: v.container.slashed,
+      exitEpoch: v.container.exitEpoch,
+      activationEligibilityEpoch: v.container.activationEligibilityEpoch,
+      activationEpoch: v.container.activationEpoch,
+      withdrawableEpoch: v.container.withdrawableEpoch,
+    };
+
+    await gloasVerifier.TEST_verifyValidator(
+      beaconRootData,
+      validatorWitness,
+      VALIDATOR_INDEX,
+      v.container.withdrawalCredentials,
+    );
+
+    // The same proof must not verify on a pre-Gloas slot: the layout, and with it the depth, differ.
+    const preGloasVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [MAX_UINT64]);
+    await expect(
+      preGloasVerifier.TEST_verifyValidator(
+        beaconRootData,
+        validatorWitness,
+        VALIDATOR_INDEX,
+        v.container.withdrawalCredentials,
+      ),
+    ).to.be.reverted;
   });
 });

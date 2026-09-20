@@ -223,12 +223,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         // The consumed budget unavoidably resets with the contract; the configured limits must not.
         // A mismatch means the parameters file drifted from whatever governance last set on-chain.
+        // The two trailing return values are the consumed budget, deliberately not compared.
+        // slither-disable-start unused-return
         (uint256 oldMaxLimit, uint256 oldPerFrame, uint256 oldFrameDuration, , ) = IConsolidationGateway(
             oldGatewayAddr
         ).getConsolidationRequestLimitFullInfo();
         (uint256 newMaxLimit, uint256 newPerFrame, uint256 newFrameDuration, , ) = IConsolidationGateway(
             newGatewayAddr
         ).getConsolidationRequestLimitFullInfo();
+        // slither-disable-end unused-return
         _assertUint("gateway-max-limit", newMaxLimit, oldMaxLimit);
         _assertUint("gateway-per-frame", newPerFrame, oldPerFrame);
         _assertUint("gateway-frame-duration", newFrameDuration, oldFrameDuration);

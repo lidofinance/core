@@ -136,6 +136,17 @@ describe("TopUpGateway.sol", () => {
       expect(await topUpGateway.harness_getLocator()).to.equal(await locator.getAddress());
     });
 
+    it("stores the Gloas fork slot from the constructor", async () => {
+      const gloasSlot = 12345n;
+      const impl = await ethers.deployContract("TopUpGateway__Harness", [
+        await locator.getAddress(),
+        gloasSlot,
+        SLOTS_PER_EPOCH,
+      ]);
+
+      expect(await impl.GLOAS_SLOT()).to.equal(gloasSlot);
+    });
+
     it("reverts on double initialization", async () => {
       await expect(
         topUpGateway.initialize(
