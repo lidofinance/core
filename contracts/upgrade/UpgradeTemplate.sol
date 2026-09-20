@@ -11,7 +11,15 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 
 import {IUpgradeTemplate} from "./interfaces/IUpgradeTemplate.sol";
 import {UpgradeConfig} from "./UpgradeConfig.sol";
-import {UpgradeParameters, IGloasForkAware, IWithdrawalsManagerProxy} from "./UpgradeTypes.sol";
+import {
+    UpgradeParameters,
+    IConsolidationBus,
+    IConsolidationGateway,
+    IGloasForkAware,
+    IValidatorExitDelayVerifier,
+    IWithdrawalsManagerProxy,
+    IWithdrawalVault
+} from "./UpgradeTypes.sol";
 
 /// @title UpgradeTemplate
 /// @notice Pre/post checks wrapping the Gloas upgrade vote.
@@ -89,26 +97,37 @@ contract UpgradeTemplate is IUpgradeTemplate {
     }
 
     function _validatePreUpgradeState(UpgradeConfig config) internal virtual {
+        address newGatewayAddr = config.NEW_CONSOLIDATION_GATEWAY();
+        address oldGatewayAddr = config.OLD_CONSOLIDATION_GATEWAY();
+        address newVerifierAddr = config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER();
+        address oldVerifierAddr = config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER();
+        address circuitBreaker = config.CIRCUIT_BREAKER();
+        address resealManager = config.RESEAL_MANAGER();
+        address consolidationBus = config.CONSOLIDATION_BUS();
+        address agent = config.AGENT();
+        address locatorAddr = config.LOCATOR();
+        address stakingRouterAddr = config.STAKING_ROUTER();
+
         if (block.chainid != config.CHAIN_ID()) revert InvalidChainId(block.chainid, config.CHAIN_ID());
 
-        IOssifiableProxy locatorProxy = IOssifiableProxy(config.LOCATOR());
+        IOssifiableProxy locatorProxy = IOssifiableProxy(locatorAddr);
         _assertAddress(
             "locator-implementation", locatorProxy.proxy__getImplementation(), config.OLD_LOCATOR_IMPLEMENTATION()
         );
         _assertAddress("locator-admin", locatorProxy.proxy__getAdmin(), config.LOCATOR_ADMIN());
 
-        ILidoLocator locator = ILidoLocator(config.LOCATOR());
-        _assertAddress("locator-verifier", locator.validatorExitDelayVerifier(), config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER());
-        _assertAddress("locator-consolidation-gateway", locator.consolidationGateway(), config.OLD_CONSOLIDATION_GATEWAY());
+        ILidoLocator locator = ILidoLocator(locatorAddr);
+        _assertAddress("locator-verifier", locator.validatorExitDelayVerifier(), oldVerifierAddr);
+        _assertAddress("locator-consolidation-gateway", locator.consolidationGateway(), oldGatewayAddr);
         _assertUnchangedLocatorMembers(config, locator);
 
         // The candidate implementation must differ from the live one in exactly the two Gloas slots.
         ILidoLocator candidate = ILidoLocator(config.NEW_LOCATOR_IMPLEMENTATION());
         _assertAddress(
-            "candidate-verifier", candidate.validatorExitDelayVerifier(), config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER()
+            "candidate-verifier", candidate.validatorExitDelayVerifier(), newVerifierAddr
         );
         _assertAddress(
-            "candidate-consolidation-gateway", candidate.consolidationGateway(), config.NEW_CONSOLIDATION_GATEWAY()
+            "candidate-consolidation-gateway", candidate.consolidationGateway(), newGatewayAddr
         );
         if (_locatorHashExcludingGloas(locator) != _locatorHashExcludingGloas(candidate)) {
             revert LocatorChangedBeyondGloas();
@@ -116,82 +135,179 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         _assertNotYetUpgraded("pdg", IOssifiableProxy(config.PREDEPOSIT_GUARANTEE()).proxy__getImplementation(), config.NEW_PREDEPOSIT_GUARANTEE_IMPL());
         _assertNotYetUpgraded("top-up-gateway", IOssifiableProxy(config.TOP_UP_GATEWAY()).proxy__getImplementation(), config.NEW_TOP_UP_GATEWAY_IMPL());
-        _assertNotYetUpgraded("consolidation-bus", IOssifiableProxy(config.CONSOLIDATION_BUS()).proxy__getImplementation(), config.NEW_CONSOLIDATION_BUS_IMPL());
+        _assertNotYetUpgraded("consolidation-bus", IOssifiableProxy(consolidationBus).proxy__getImplementation(), config.NEW_CONSOLIDATION_BUS_IMPL());
         _assertNotYetUpgraded("withdrawal-vault", IWithdrawalsManagerProxy(config.WITHDRAWAL_VAULT()).implementation(), config.NEW_WITHDRAWAL_VAULT_IMPL());
+        // The only proxy admin the vote relies on but the locator does not pin down.
+        _assertAddress(
+            "withdrawal-vault-admin",
+            IWithdrawalsManagerProxy(config.WITHDRAWAL_VAULT()).proxy_getAdmin(),
+            agent
+        );
+
+        // These two are redeployed only because they hold the gateway in an immutable, so that
+        // immutable is the one thing worth checking. It lives in the implementation bytecode and
+        // reads straight off the implementation address, before any proxy is touched.
+        _assertAddress(
+            "new-bus-impl-gateway",
+            IConsolidationBus(config.NEW_CONSOLIDATION_BUS_IMPL()).getConsolidationGateway(),
+            newGatewayAddr
+        );
+        _assertAddress(
+            "new-wv-impl-gateway",
+            IWithdrawalVault(config.NEW_WITHDRAWAL_VAULT_IMPL()).CONSOLIDATION_GATEWAY(),
+            newGatewayAddr
+        );
 
         // Every new artifact must carry the same fork switch, otherwise the protocol would
         // straddle the fork with half of the proofs on the pre-Gloas layout.
         _assertConsistentGloasSlot(config);
 
-        IAccessControlEnumerable stakingRouter = IAccessControlEnumerable(config.STAKING_ROUTER());
-        if (!stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER())) {
-            revert InvalidFlag("old-verifier-report-role", config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER());
+        _assertUnchangedVerifierProfile(config);
+
+        IAccessControlEnumerable stakingRouter = IAccessControlEnumerable(stakingRouterAddr);
+        if (!stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, oldVerifierAddr)) {
+            revert InvalidFlag("old-verifier-report-role", oldVerifierAddr);
         }
-        if (stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER())) {
-            revert InvalidFlag("new-verifier-no-report-role", config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER());
+        if (stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, newVerifierAddr)) {
+            revert InvalidFlag("new-verifier-no-report-role", newVerifierAddr);
         }
 
         // The new gateway is deployed with the Agent as its admin and no other role granted yet.
-        IAccessControlEnumerable gateway = IAccessControlEnumerable(config.NEW_CONSOLIDATION_GATEWAY());
-        if (!gateway.hasRole(DEFAULT_ADMIN_ROLE, config.AGENT())) {
-            revert InvalidFlag("new-gateway-admin", config.AGENT());
+        IAccessControlEnumerable gateway = IAccessControlEnumerable(newGatewayAddr);
+        if (!gateway.hasRole(DEFAULT_ADMIN_ROLE, agent)) {
+            revert InvalidFlag("new-gateway-admin", agent);
         }
         _assertUint("new-gateway-pause-members", gateway.getRoleMemberCount(PAUSE_ROLE), 0);
         _assertUint("new-gateway-resume-members", gateway.getRoleMemberCount(RESUME_ROLE), 0);
         _assertUint("new-gateway-add-request-members", gateway.getRoleMemberCount(ADD_CONSOLIDATION_REQUEST_ROLE), 0);
 
         _assertAddress(
-            "new-gateway-pauser", ICircuitBreaker(config.CIRCUIT_BREAKER()).getPauser(config.NEW_CONSOLIDATION_GATEWAY()), address(0)
+            "new-gateway-pauser", ICircuitBreaker(circuitBreaker).getPauser(newGatewayAddr), address(0)
         );
+
+        // The grants below are replayed onto the new gateway from the config, so the config has to
+        // agree with the gateway that is actually in use today — otherwise a stale parameters file
+        // would wire the replacement to addresses that no longer control anything, and the
+        // post-checks, which read the same config, would happily confirm it.
+        IAccessControlEnumerable oldGateway = IAccessControlEnumerable(oldGatewayAddr);
+        if (!oldGateway.hasRole(PAUSE_ROLE, circuitBreaker)) {
+            revert InvalidFlag("old-gateway-pause-cb", circuitBreaker);
+        }
+        if (!oldGateway.hasRole(PAUSE_ROLE, resealManager)) {
+            revert InvalidFlag("old-gateway-pause-reseal", resealManager);
+        }
+        if (!oldGateway.hasRole(RESUME_ROLE, resealManager)) {
+            revert InvalidFlag("old-gateway-resume-reseal", resealManager);
+        }
+        if (!oldGateway.hasRole(ADD_CONSOLIDATION_REQUEST_ROLE, consolidationBus)) {
+            revert InvalidFlag("old-gateway-add-request-bus", consolidationBus);
+        }
+        // Member counts too: an extra holder on the live gateway would be silently dropped by a
+        // vote that only replays the four grants above.
+        _assertUint("old-gateway-pause-members", oldGateway.getRoleMemberCount(PAUSE_ROLE), 2);
+        _assertUint("old-gateway-resume-members", oldGateway.getRoleMemberCount(RESUME_ROLE), 1);
+        _assertUint("old-gateway-add-request-members", oldGateway.getRoleMemberCount(ADD_CONSOLIDATION_REQUEST_ROLE), 1);
+
+        _assertAddress(
+            "old-gateway-pauser",
+            ICircuitBreaker(circuitBreaker).getPauser(oldGatewayAddr),
+            config.CIRCUIT_BREAKER_COMMITTEE()
+        );
+
+        // The replacement is a fresh non-proxy contract, so it starts resumed. Enacting while
+        // consolidations are paused would lift the pause as a side effect; refuse instead and
+        // make it a conscious decision.
+        if (IConsolidationGateway(oldGatewayAddr).isPaused()) {
+            revert InvalidFlag("old-gateway-paused", oldGatewayAddr);
+        }
+
+        // The consumed budget unavoidably resets with the contract; the configured limits must not.
+        // A mismatch means the parameters file drifted from whatever governance last set on-chain.
+        (uint256 oldMaxLimit, uint256 oldPerFrame, uint256 oldFrameDuration, , ) = IConsolidationGateway(
+            oldGatewayAddr
+        ).getConsolidationRequestLimitFullInfo();
+        (uint256 newMaxLimit, uint256 newPerFrame, uint256 newFrameDuration, , ) = IConsolidationGateway(
+            newGatewayAddr
+        ).getConsolidationRequestLimitFullInfo();
+        _assertUint("gateway-max-limit", newMaxLimit, oldMaxLimit);
+        _assertUint("gateway-per-frame", newPerFrame, oldPerFrame);
+        _assertUint("gateway-frame-duration", newFrameDuration, oldFrameDuration);
     }
 
     function _validatePostUpgradeState(UpgradeConfig config) internal virtual {
-        IOssifiableProxy locatorProxy = IOssifiableProxy(config.LOCATOR());
+        address newGatewayAddr = config.NEW_CONSOLIDATION_GATEWAY();
+        address newVerifierAddr = config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER();
+        address oldVerifierAddr = config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER();
+        address circuitBreaker = config.CIRCUIT_BREAKER();
+        address resealManager = config.RESEAL_MANAGER();
+        address consolidationBus = config.CONSOLIDATION_BUS();
+        address agent = config.AGENT();
+        address locatorAddr = config.LOCATOR();
+        address stakingRouterAddr = config.STAKING_ROUTER();
+
+        IOssifiableProxy locatorProxy = IOssifiableProxy(locatorAddr);
         _assertAddress(
             "locator-implementation", locatorProxy.proxy__getImplementation(), config.NEW_LOCATOR_IMPLEMENTATION()
         );
         _assertAddress("locator-admin", locatorProxy.proxy__getAdmin(), config.LOCATOR_ADMIN());
 
-        ILidoLocator locator = ILidoLocator(config.LOCATOR());
-        _assertAddress("locator-verifier", locator.validatorExitDelayVerifier(), config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER());
-        _assertAddress("locator-consolidation-gateway", locator.consolidationGateway(), config.NEW_CONSOLIDATION_GATEWAY());
+        ILidoLocator locator = ILidoLocator(locatorAddr);
+        _assertAddress("locator-verifier", locator.validatorExitDelayVerifier(), newVerifierAddr);
+        _assertAddress("locator-consolidation-gateway", locator.consolidationGateway(), newGatewayAddr);
         _assertUnchangedLocatorMembers(config, locator);
 
         _assertAddress("pdg-implementation", IOssifiableProxy(config.PREDEPOSIT_GUARANTEE()).proxy__getImplementation(), config.NEW_PREDEPOSIT_GUARANTEE_IMPL());
         _assertAddress("top-up-gateway-implementation", IOssifiableProxy(config.TOP_UP_GATEWAY()).proxy__getImplementation(), config.NEW_TOP_UP_GATEWAY_IMPL());
-        _assertAddress("consolidation-bus-implementation", IOssifiableProxy(config.CONSOLIDATION_BUS()).proxy__getImplementation(), config.NEW_CONSOLIDATION_BUS_IMPL());
+        _assertAddress("consolidation-bus-implementation", IOssifiableProxy(consolidationBus).proxy__getImplementation(), config.NEW_CONSOLIDATION_BUS_IMPL());
         _assertAddress("withdrawal-vault-implementation", IWithdrawalsManagerProxy(config.WITHDRAWAL_VAULT()).implementation(), config.NEW_WITHDRAWAL_VAULT_IMPL());
 
-        IAccessControlEnumerable stakingRouter = IAccessControlEnumerable(config.STAKING_ROUTER());
+        // Same immutable as the pre-check, now observed through the live proxies.
+        _assertAddress(
+            "bus-gateway",
+            IConsolidationBus(consolidationBus).getConsolidationGateway(),
+            newGatewayAddr
+        );
+        _assertAddress(
+            "withdrawal-vault-gateway",
+            IWithdrawalVault(config.WITHDRAWAL_VAULT()).CONSOLIDATION_GATEWAY(),
+            newGatewayAddr
+        );
+
+        IAccessControlEnumerable stakingRouter = IAccessControlEnumerable(stakingRouterAddr);
         _assertUint("report-role-members", stakingRouter.getRoleMemberCount(REPORT_VALIDATOR_EXITING_STATUS_ROLE), 1);
-        if (stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER())) {
-            revert InvalidFlag("old-verifier-no-report-role", config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER());
+        if (stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, oldVerifierAddr)) {
+            revert InvalidFlag("old-verifier-no-report-role", oldVerifierAddr);
         }
-        if (!stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER())) {
-            revert InvalidFlag("new-verifier-report-role", config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER());
+        if (!stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, newVerifierAddr)) {
+            revert InvalidFlag("new-verifier-report-role", newVerifierAddr);
         }
 
-        IAccessControlEnumerable gateway = IAccessControlEnumerable(config.NEW_CONSOLIDATION_GATEWAY());
-        if (!gateway.hasRole(PAUSE_ROLE, config.CIRCUIT_BREAKER())) {
-            revert InvalidFlag("new-gateway-pause-cb", config.CIRCUIT_BREAKER());
+        IAccessControlEnumerable gateway = IAccessControlEnumerable(newGatewayAddr);
+        if (!gateway.hasRole(PAUSE_ROLE, circuitBreaker)) {
+            revert InvalidFlag("new-gateway-pause-cb", circuitBreaker);
         }
-        if (!gateway.hasRole(PAUSE_ROLE, config.RESEAL_MANAGER())) {
-            revert InvalidFlag("new-gateway-pause-reseal", config.RESEAL_MANAGER());
+        if (!gateway.hasRole(PAUSE_ROLE, resealManager)) {
+            revert InvalidFlag("new-gateway-pause-reseal", resealManager);
         }
-        if (!gateway.hasRole(RESUME_ROLE, config.RESEAL_MANAGER())) {
-            revert InvalidFlag("new-gateway-resume-reseal", config.RESEAL_MANAGER());
+        if (!gateway.hasRole(RESUME_ROLE, resealManager)) {
+            revert InvalidFlag("new-gateway-resume-reseal", resealManager);
         }
-        if (!gateway.hasRole(ADD_CONSOLIDATION_REQUEST_ROLE, config.CONSOLIDATION_BUS())) {
-            revert InvalidFlag("new-gateway-add-request-bus", config.CONSOLIDATION_BUS());
+        if (!gateway.hasRole(ADD_CONSOLIDATION_REQUEST_ROLE, consolidationBus)) {
+            revert InvalidFlag("new-gateway-add-request-bus", consolidationBus);
         }
-        if (!gateway.hasRole(DEFAULT_ADMIN_ROLE, config.AGENT())) {
-            revert InvalidFlag("new-gateway-admin", config.AGENT());
+        if (!gateway.hasRole(DEFAULT_ADMIN_ROLE, agent)) {
+            revert InvalidFlag("new-gateway-admin", agent);
         }
 
         _assertAddress(
             "new-gateway-pauser",
-            ICircuitBreaker(config.CIRCUIT_BREAKER()).getPauser(config.NEW_CONSOLIDATION_GATEWAY()),
+            ICircuitBreaker(circuitBreaker).getPauser(newGatewayAddr),
             config.CIRCUIT_BREAKER_COMMITTEE()
+        );
+        _assertAddress(
+            "old-gateway-pauser-cleared",
+            ICircuitBreaker(circuitBreaker).getPauser(config.OLD_CONSOLIDATION_GATEWAY()),
+            address(0)
         );
     }
 
@@ -201,6 +317,39 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertAddress("locator-pdg", locator.predepositGuarantee(), config.PREDEPOSIT_GUARANTEE());
         _assertAddress("locator-top-up-gateway", locator.topUpGateway(), config.TOP_UP_GATEWAY());
         _assertAddress("locator-withdrawal-vault", locator.withdrawalVault(), config.WITHDRAWAL_VAULT());
+    }
+
+    /// @dev Everything the verifier is pinned to except the Gloas switch itself. The chain is the
+    ///      same one, so the incoming deployment must agree with the outgoing one field for field.
+    function _assertUnchangedVerifierProfile(UpgradeConfig config) private view {
+        IValidatorExitDelayVerifier oldVerifier = IValidatorExitDelayVerifier(
+            config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER()
+        );
+        IValidatorExitDelayVerifier newVerifier = IValidatorExitDelayVerifier(
+            config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER()
+        );
+
+        _assertAddress("verifier-locator", newVerifier.LOCATOR(), config.LOCATOR());
+        _assertAddress("verifier-locator-unchanged", newVerifier.LOCATOR(), oldVerifier.LOCATOR());
+        _assertUint("verifier-genesis-time", newVerifier.GENESIS_TIME(), oldVerifier.GENESIS_TIME());
+        _assertUint("verifier-slots-per-epoch", newVerifier.SLOTS_PER_EPOCH(), oldVerifier.SLOTS_PER_EPOCH());
+        _assertUint("verifier-seconds-per-slot", newVerifier.SECONDS_PER_SLOT(), oldVerifier.SECONDS_PER_SLOT());
+        _assertUint(
+            "verifier-shard-committee-period",
+            newVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS(),
+            oldVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS()
+        );
+        _assertUint(
+            "verifier-first-supported-slot",
+            newVerifier.FIRST_SUPPORTED_SLOT(),
+            oldVerifier.FIRST_SUPPORTED_SLOT()
+        );
+        _assertUint("verifier-capella-slot", newVerifier.CAPELLA_SLOT(), oldVerifier.CAPELLA_SLOT());
+        _assertUint(
+            "verifier-slots-per-hist-root",
+            newVerifier.SLOTS_PER_HISTORICAL_ROOT(),
+            oldVerifier.SLOTS_PER_HISTORICAL_ROOT()
+        );
     }
 
     function _assertConsistentGloasSlot(UpgradeConfig config) private view {

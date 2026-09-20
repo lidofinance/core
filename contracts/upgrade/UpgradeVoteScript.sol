@@ -27,7 +27,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
     uint256 public constant DG_ITEMS_COUNT = 1;
     uint256 public constant VOTING_ITEMS_COUNT = 0;
-    uint256 public constant RAW_ACTIONS_COUNT = 14;
+    uint256 public constant RAW_ACTIONS_COUNT = 15;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -172,6 +172,13 @@ contract UpgradeVoteScript is OmnibusBase {
                 ICircuitBreaker.registerPauser,
                 (config.NEW_CONSOLIDATION_GATEWAY(), config.CIRCUIT_BREAKER_COMMITTEE())
             )
+        );
+        // Leaving the outgoing gateway registered would keep it looking pausable to the committee,
+        // so an incident response could be spent on a contract nothing calls any more.
+        items[i++] = _item(
+            "Unregister CircuitBreaker pauser for the old ConsolidationGateway",
+            config.CIRCUIT_BREAKER(),
+            abi.encodeCall(ICircuitBreaker.registerPauser, (config.OLD_CONSOLIDATION_GATEWAY(), address(0)))
         );
 
         items[i++] = _item(

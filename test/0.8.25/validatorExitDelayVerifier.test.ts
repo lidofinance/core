@@ -13,6 +13,12 @@ import { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0.8.25
 
 import { generateBeaconHeader, generateValidator, updateBeaconBlockRoot } from "lib";
 
+import {
+  giFirstHistoricalSummary,
+  giFirstHistoricalSummaryPreGloas,
+  giFirstValidatorPreGloas,
+  giValidators,
+} from "test/common/lib/clGIndices";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
@@ -56,10 +62,11 @@ describe("ValidatorExitDelayVerifier.sol", () => {
   const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
   describe("ValidatorExitDelayVerifier Constructor", () => {
-    const GI_FIRST_VALIDATOR_PRE_GLOAS = "0x0000000000000000000000000000000000000000000000000096000000000028";
-    const GI_VALIDATORS = "0x0000000000000000000000000000000000000000000000000000000000016600";
-    const GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS = "0x000000000000000000000000000000000000000000000000000000b600000018";
-    const GI_FIRST_HISTORICAL_SUMMARY = "0x0000000000000000000000000000000000000000000000000000170c00000018";
+    // Derived rather than restated, so a wrong constant cannot be "fixed" by pasting it here too.
+    const GI_FIRST_VALIDATOR_PRE_GLOAS = giFirstValidatorPreGloas();
+    const GI_VALIDATORS = giValidators();
+    const GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS = giFirstHistoricalSummaryPreGloas();
+    const GI_FIRST_HISTORICAL_SUMMARY = giFirstHistoricalSummary();
     const GI_FIRST_BLOCK_ROOT_IN_SUMMARY = "0x000000000000000000000000000000000000000000000000000000000040000d";
 
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
@@ -200,6 +207,23 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           SHARD_COMMITTEE_PERIOD_IN_SECONDS,
         ]),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidPerHistoricalRootSlot");
+    });
+
+    it("reverts with 'InvalidCapellaSlot' if capellaSlot is not a multiple of slotsPerHistoricalRoot", async () => {
+      // An unaligned Capella slot shifts every historical summary index by one.
+      await expect(
+        ethers.deployContract("ValidatorExitDelayVerifier", [
+          LIDO_LOCATOR,
+          FIRST_SUPPORTED_SLOT,
+          GLOAS_SLOT,
+          CAPELLA_SLOT + 32, // Epoch-aligned but not accumulator-aligned
+          SLOTS_PER_HISTORICAL_ROOT,
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+          SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+        ]),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidCapellaSlot");
     });
   });
 

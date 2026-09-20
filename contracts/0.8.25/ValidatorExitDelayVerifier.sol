@@ -156,6 +156,8 @@ contract ValidatorExitDelayVerifier {
         if (firstSupportedSlot > gloasSlot) revert InvalidGloasSlot();
         if (capellaSlot > firstSupportedSlot) revert InvalidCapellaSlot();
         if (!_isPowerOfTwo(slotsPerHistoricalRoot)) revert InvalidPerHistoricalRootSlot();
+        // `_getHistoricalBlockRootGI` would shift every summary index by one if unaligned.
+        if (capellaSlot % slotsPerHistoricalRoot != 0) revert InvalidCapellaSlot();
 
         LOCATOR = ILidoLocator(lidoLocator);
 

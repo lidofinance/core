@@ -4,25 +4,10 @@ import { ethers } from "hardhat";
 
 import { GIndex__Harness, GIndexLibrary__Harness } from "typechain-types";
 
+import { progressiveListNodeGIndexReference } from "test/common/lib/clGIndices";
 import { Snapshot } from "test/suite";
 
 const LARGEST_PROGRESSIVE_LIST_INDEX = ((4n ** 81n - 1n) * 4n) / 3n;
-
-function progressiveListNodeGIndexReference(i: bigint): bigint {
-  let depth = 0n;
-  let gI = 2n;
-
-  while (true) {
-    const chunkSize = 1n << depth;
-    if (i < chunkSize) {
-      return ((gI << 1n) << depth) + i;
-    }
-
-    i -= chunkSize;
-    depth += 2n;
-    gI = (gI << 1n) + 1n;
-  }
-}
 
 /**
  * Wrapper for the GIndex operations to match the Solidity test
