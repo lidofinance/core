@@ -1501,7 +1501,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/hardhat-errors@npm:^3.0.13, @nomicfoundation/hardhat-errors@npm:^3.0.15, @nomicfoundation/hardhat-errors@npm:^3.0.16, @nomicfoundation/hardhat-errors@npm:^3.0.17":
+"@nomicfoundation/hardhat-errors@npm:^3.0.13, @nomicfoundation/hardhat-errors@npm:^3.0.15, @nomicfoundation/hardhat-errors@npm:^3.0.16":
   version: 3.0.17
   resolution: "@nomicfoundation/hardhat-errors@npm:3.0.17"
   dependencies:
@@ -1536,19 +1536,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/hardhat-ethers@npm:4.0.15":
-  version: 4.0.15
-  resolution: "@nomicfoundation/hardhat-ethers@npm:4.0.15"
+"@nomicfoundation/hardhat-ethers@npm:4.2.0":
+  version: 4.2.0
+  resolution: "@nomicfoundation/hardhat-ethers@npm:4.2.0"
   dependencies:
-    "@nomicfoundation/hardhat-errors": "npm:^3.0.17"
-    "@nomicfoundation/hardhat-utils": "npm:^4.1.5"
+    "@nomicfoundation/hardhat-errors": "npm:^3.1.0"
+    "@nomicfoundation/hardhat-utils": "npm:^4.3.0"
     "@nomicfoundation/hardhat-zod-utils": "npm:^3.0.5"
-    ethereum-cryptography: "npm:^2.2.1"
+    ethereum-cryptography: "npm:^3.0.0"
     ethers: "npm:^6.14.0"
     zod: "npm:^3.23.8"
   peerDependencies:
-    hardhat: ^3.8.0
-  checksum: 10c0/5ee043fa7c7f29c1e2f6274444e204a41e612ecbd5931dd049ff1d9572fbd6a741ce8bbdd1523eead2c6b7ec1f99c0495fd76e86f60638c84d92a7aab3493a29
+    hardhat: ^3.18.0
+  checksum: 10c0/ba278f27578f1e09c03656a9d99a7e883365440f2df6ba284d5c7034de63a46562a1fa43205fa13b4e9b24f7c169a2faa78d17bc1ff16d09b21abe9d57343db1
   languageName: node
   linkType: hard
 
@@ -7198,7 +7198,7 @@ __metadata:
     "@commitlint/cli": "npm:^19.8.1"
     "@commitlint/config-conventional": "npm:^19.8.1"
     "@iarna/toml": "npm:^2.2.5"
-    "@nomicfoundation/hardhat-ethers": "npm:4.0.15"
+    "@nomicfoundation/hardhat-ethers": "npm:4.2.0"
     "@nomicfoundation/hardhat-ethers-chai-matchers": "npm:3.0.11"
     "@nomicfoundation/hardhat-ignition": "npm:3.1.8"
     "@nomicfoundation/hardhat-ignition-ethers": "npm:3.1.6"
