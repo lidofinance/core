@@ -1,15 +1,15 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
-import os from "os";
 import path from "path";
+import { prepareExternalProject, RPC_GAS_ARGS } from "scripts/utils/external-project";
 
 import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 const CIRCUIT_BREAKER_REPO = "https://github.com/lidofinance/circuit-breaker.git";
-const CIRCUIT_BREAKER_BRANCH = "deploy-script";
+const CIRCUIT_BREAKER_REF = "2567a2a683fa901a51a85f84d9427448201eb773";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -38,85 +38,80 @@ export async function main() {
 
   const params = state[Sk.circuitBreaker].deployParameters;
 
-  // Clone the CircuitBreaker repo into a temp directory
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "circuit-breaker-"));
-  log(`Cloning CircuitBreaker repo to ${tmpDir}...`);
+  const tmpDir = prepareExternalProject("circuit-breaker", CIRCUIT_BREAKER_REPO, CIRCUIT_BREAKER_REF, [
+    ["forge", "install"],
+  ]);
 
-  try {
-    const cloneCmd = `git clone --depth 1 --branch ${CIRCUIT_BREAKER_BRANCH} ${CIRCUIT_BREAKER_REPO} ${tmpDir}`;
-    execSync(cloneCmd, { stdio: "inherit" });
+  // Extract RPC URL and private key from Hardhat's network config
+  const networkConfig = hardhatNetwork.config;
+  const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
+  if (!rpcUrl) throw new Error("RPC URL is not available");
 
-    // Install foundry dependencies
-    execSync("forge install", { cwd: tmpDir, stdio: "inherit" });
-
-    // Extract RPC URL and private key from Hardhat's network config
-    const networkConfig = hardhatNetwork.config;
-    const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
-    if (!rpcUrl) throw new Error("RPC URL is not available");
-
-    const accounts = networkConfig.accounts;
-    let privateKey: string;
-    if (Array.isArray(accounts) && accounts.length > 0) {
-      privateKey = accounts[0] as string;
-    } else if (typeof accounts === "object" && "mnemonic" in accounts) {
-      const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
-      privateKey = wallet.privateKey;
-    } else {
-      // Fallback: derive from the default Hardhat mnemonic (used by "local" network with `npx hardhat node`)
-      const wallet = HDNodeWallet.fromMnemonic(
-        ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
-        `m/44'/60'/0'/0/0`,
-      );
-      privateKey = wallet.privateKey;
-    }
-
-    const forgeArgs = [
-      "forge script script/Deploy.s.sol:Deploy",
-      `--sig "run(address,uint256,uint256,uint256,uint256,uint256,uint256)"`,
-      agentAddress,
-      params.minPauseDuration.toString(),
-      params.maxPauseDuration.toString(),
-      params.minHeartbeatInterval.toString(),
-      params.maxHeartbeatInterval.toString(),
-      params.initialPauseDuration.toString(),
-      params.initialHeartbeatInterval.toString(),
-      `--rpc-url ${rpcUrl}`,
-      `--private-key ${privateKey}`,
-      "--broadcast",
-      // Override forge gas estimation until the CI Foundry version supports Amsterdam gas accounting (EIP-8037).
-      "--gas-limit 16000000",
-    ];
-
-    if (process.env.ETHERSCAN_API_KEY) {
-      forgeArgs.push("--verify", `--etherscan-api-key ${process.env.ETHERSCAN_API_KEY}`);
-    }
-
-    log("Running CircuitBreaker deploy script...");
-    execSync(forgeArgs.join(" "), { cwd: tmpDir, stdio: "inherit" });
-
-    await warmUpJsonRpcProvider();
-
-    // Read the deployment artifact
-    const network = await ethers.provider.getNetwork();
-    const chainId = network.chainId.toString();
-    const artifactName = process.env.DEPLOY_NAME || chainId;
-    const artifactPath = path.join(tmpDir, `${artifactName}.json`);
-
-    if (!fs.existsSync(artifactPath)) {
-      throw new Error(`CircuitBreaker deploy artifact not found at ${artifactPath}`);
-    }
-
-    const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
-    const circuitBreakerAddress = artifact.circuitBreaker;
-
-    log(`CircuitBreaker deployed at: ${cy(circuitBreakerAddress)}`);
-    log.emptyLine();
-
-    updateObjectInState(Sk.circuitBreaker, {
-      address: circuitBreakerAddress,
-    });
-  } finally {
-    // Clean up the temp directory
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  const accounts = networkConfig.accounts;
+  let privateKey: string;
+  if (Array.isArray(accounts) && accounts.length > 0) {
+    privateKey = accounts[0] as string;
+  } else if (typeof accounts === "object" && "mnemonic" in accounts) {
+    const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
+    privateKey = wallet.privateKey;
+  } else {
+    // Fallback: derive from the default Hardhat mnemonic (used by "local" network with `npx hardhat node`)
+    const wallet = HDNodeWallet.fromMnemonic(
+      ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
+      `m/44'/60'/0'/0/0`,
+    );
+    privateKey = wallet.privateKey;
   }
+
+  const forgeArgs = [
+    "script",
+    "script/Deploy.s.sol:Deploy",
+    "--sig",
+    "run(address,uint256,uint256,uint256,uint256,uint256,uint256)",
+    agentAddress,
+    params.minPauseDuration.toString(),
+    params.maxPauseDuration.toString(),
+    params.minHeartbeatInterval.toString(),
+    params.maxHeartbeatInterval.toString(),
+    params.initialPauseDuration.toString(),
+    params.initialHeartbeatInterval.toString(),
+    "--rpc-url",
+    rpcUrl,
+    "--private-key",
+    privateKey,
+    "--broadcast",
+    "--slow",
+    ...RPC_GAS_ARGS,
+  ];
+
+  if (process.env.ETHERSCAN_API_KEY) {
+    forgeArgs.push("--verify", "--etherscan-api-key", process.env.ETHERSCAN_API_KEY);
+  }
+
+  log("Running CircuitBreaker deploy script...");
+  execFileSync("forge", forgeArgs, { cwd: tmpDir, stdio: "inherit" });
+
+  await warmUpJsonRpcProvider();
+
+  // Read the deployment artifact
+  const network = await ethers.provider.getNetwork();
+  const chainId = network.chainId.toString();
+  const artifactName = process.env.DEPLOY_NAME || chainId;
+  const artifactPath = path.join(tmpDir, `${artifactName}.json`);
+
+  if (!fs.existsSync(artifactPath)) {
+    throw new Error(`CircuitBreaker deploy artifact not found at ${artifactPath}`);
+  }
+
+  const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+  const circuitBreakerAddress = artifact.circuitBreaker;
+
+  log(`CircuitBreaker deployed at: ${cy(circuitBreakerAddress)}`);
+  log.emptyLine();
+
+  updateObjectInState(Sk.circuitBreaker, {
+    address: circuitBreakerAddress,
+    repository: CIRCUIT_BREAKER_REPO,
+    ref: CIRCUIT_BREAKER_REF,
+  });
 }

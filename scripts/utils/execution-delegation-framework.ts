@@ -2,11 +2,12 @@ import { execFileSync } from "child_process";
 import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
-import os from "os";
 import path from "path";
 
 import { cy, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
+
+import { prepareExternalProject, RPC_GAS_ARGS } from "./external-project";
 
 export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
 // Pinned commit of lidofinance/execution-delegation-framework `main` (2026-08-10).
@@ -132,59 +133,55 @@ export async function deployExecutionDelegationFramework(
   const privateKey = getPrivateKey();
   const { chainId } = await ethers.provider.getNetwork();
   const artifactsDir = "./artifacts/local/";
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "execution-delegation-framework-"));
-  log(`Cloning Execution Delegation Framework repo to ${tmpDir}...`);
+  const tmpDir = prepareExternalProject("edf", EDF_REPO, EDF_REPO_REF, [["just", "deps"]]);
 
-  try {
-    run("git", ["clone", EDF_REPO, tmpDir], process.cwd(), process.env);
-    run("git", ["checkout", "--detach", EDF_REPO_REF], tmpDir, process.env);
-    run("just", ["deps"], tmpDir, process.env);
+  const externalEnv = {
+    ...process.env,
+    ...getRpcHostPort(rpcUrl),
+    RPC_URL: rpcUrl,
+    ARTIFACTS_DIR: artifactsDir,
+    YARN_IGNORE_NODE: "1",
+  } as unknown as NodeJS.ProcessEnv;
 
-    const externalEnv = {
-      ...process.env,
-      ...getRpcHostPort(rpcUrl),
-      RPC_URL: rpcUrl,
-      ARTIFACTS_DIR: artifactsDir,
-      YARN_IGNORE_NODE: "1",
-    } as unknown as NodeJS.ProcessEnv;
+  log("Deploying Execution Delegation Framework from external repo...");
+  run(
+    "just",
+    ["deploy-local-devnet", chainId.toString(), `--private-key=${privateKey}`, ...RPC_GAS_ARGS],
+    tmpDir,
+    externalEnv,
+  );
 
-    log("Deploying Execution Delegation Framework from external repo...");
-    run("just", ["deploy-local-devnet", chainId.toString(), `--private-key=${privateKey}`], tmpDir, externalEnv);
+  await warmUpJsonRpcProvider();
 
-    await warmUpJsonRpcProvider();
-
-    const artifactPath = path.join(tmpDir, artifactsDir, "deploy-local-devnet.json");
-    const artifact = readArtifact(artifactPath);
-    const clonedRef = runAndRead("git", ["rev-parse", "HEAD"], tmpDir);
-    if (!artifact["git-ref"] || artifact["git-ref"].toLowerCase() !== clonedRef.toLowerCase()) {
-      throw new Error(`EDF deploy artifact git ref ${artifact["git-ref"]} does not match cloned ref ${clonedRef}`);
-    }
-    if (artifact.ChainId === undefined || BigInt(artifact.ChainId) !== chainId) {
-      throw new Error(`EDF deploy artifact chain id ${artifact.ChainId} does not match RPC chain id ${chainId}`);
-    }
-
-    const factoryAddress = artifact.DelegationFactory;
-    if (!factoryAddress || ethers.getAddress(factoryAddress) === ethers.ZeroAddress) {
-      throw new Error("EDF deploy artifact does not contain a valid DelegationFactory address");
-    }
-
-    const normalizedFactoryAddress = ethers.getAddress(factoryAddress);
-    const runtimeCodeHash = await validateFactory(normalizedFactoryAddress, options.expectedRuntimeCodeHash);
-
-    updateObjectInState(Sk.delegationFactory, {
-      address: normalizedFactoryAddress,
-      contract: "external:execution-delegation-framework/src/DelegationFactory.sol:DelegationFactory",
-      constructorArgs: [],
-      deployArtifact: artifact,
-      runtimeCodeHash,
-      repository: EDF_REPO,
-      ref: clonedRef,
-    });
-
-    log(`Execution Delegation Framework deployed at: ${cy(normalizedFactoryAddress)}`);
-    log.emptyLine();
-    return normalizedFactoryAddress;
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  const artifactPath = path.join(tmpDir, artifactsDir, "deploy-local-devnet.json");
+  const artifact = readArtifact(artifactPath);
+  const clonedRef = runAndRead("git", ["rev-parse", "HEAD"], tmpDir);
+  if (!artifact["git-ref"] || artifact["git-ref"].toLowerCase() !== clonedRef.toLowerCase()) {
+    throw new Error(`EDF deploy artifact git ref ${artifact["git-ref"]} does not match cloned ref ${clonedRef}`);
   }
+  if (artifact.ChainId === undefined || BigInt(artifact.ChainId) !== chainId) {
+    throw new Error(`EDF deploy artifact chain id ${artifact.ChainId} does not match RPC chain id ${chainId}`);
+  }
+
+  const factoryAddress = artifact.DelegationFactory;
+  if (!factoryAddress || ethers.getAddress(factoryAddress) === ethers.ZeroAddress) {
+    throw new Error("EDF deploy artifact does not contain a valid DelegationFactory address");
+  }
+
+  const normalizedFactoryAddress = ethers.getAddress(factoryAddress);
+  const runtimeCodeHash = await validateFactory(normalizedFactoryAddress, options.expectedRuntimeCodeHash);
+
+  updateObjectInState(Sk.delegationFactory, {
+    address: normalizedFactoryAddress,
+    contract: "external:execution-delegation-framework/src/DelegationFactory.sol:DelegationFactory",
+    constructorArgs: [],
+    deployArtifact: artifact,
+    runtimeCodeHash,
+    repository: EDF_REPO,
+    ref: clonedRef,
+  });
+
+  log(`Execution Delegation Framework deployed at: ${cy(normalizedFactoryAddress)}`);
+  log.emptyLine();
+  return normalizedFactoryAddress;
 }
