@@ -1,4 +1,4 @@
-// SSZ for the exact Gloas layout pinned by zap-net's gloas:stable bake.
+// SSZ for the exact Gloas layout pinned by Panda's gloas:panda bake.
 // Schema source: sigp/lighthouse@2d281dfa1b407f7c81cd123954a9fd18ee8f02d2.
 // Root equality with Lighthouse is mandatory before any witness is used.
 import assert from "node:assert/strict";

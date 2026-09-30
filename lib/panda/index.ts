@@ -32,7 +32,7 @@ export class Panda {
   static async start({
     root = process.env.PANDA_ROOT,
     profile = "gloas",
-    bake = "stable",
+    bake = process.env.PANDA_BAKE ?? "panda",
     output = ".local/panda",
     port = 0,
   } = {}): Promise<Panda> {
@@ -41,10 +41,9 @@ export class Panda {
     const panda = new Panda(path.resolve(root), id, path.resolve(output, id), profile, bake);
     await mkdir(panda.directory, { recursive: true });
     const log = createWriteStream(path.join(panda.directory, "network.log"));
-    // Panda's current CLI retains the original ZAP_* environment names.
     const child = spawn(path.join(panda.root, "scripts/deno"), ["task", "up", "--profile", profile, "--bake", bake], {
       cwd: panda.root,
-      env: { ...process.env, ZAP_ID: id, ZAP_PORT: String(port) } as unknown as NodeJS.ProcessEnv,
+      env: { ...process.env, PANDA_ID: id, PANDA_PORT: String(port) } as unknown as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
     });
     panda.child = child;
@@ -146,7 +145,7 @@ export class Panda {
   }
 
   private async keymanager<T>(route: string, body?: unknown): Promise<T> {
-    const manifest = JSON.parse(await readFile(path.join(this.root, ".zap", this.id, "manifest.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(path.join(this.root, ".panda", this.id, "manifest.json"), "utf8"));
     assert.equal(manifest.config.id, this.id);
     assert.equal(new URL(manifest.vc).hostname, "127.0.0.1");
     const token = (await readFile(path.join(manifest.directory, "validator-keys/keys/api-token.txt"), "utf8")).trim();
@@ -170,7 +169,7 @@ export class Panda {
       ["task", "down", "--profile", this.profile, "--bake", this.bake],
       {
         cwd: this.root,
-        env: { ...process.env, ZAP_ID: this.id } as unknown as NodeJS.ProcessEnv,
+        env: { ...process.env, PANDA_ID: this.id } as unknown as NodeJS.ProcessEnv,
         stdio: ["ignore", "ignore", "pipe"],
       },
     );

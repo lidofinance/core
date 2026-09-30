@@ -54,7 +54,7 @@ export async function deployScratch(panda: Panda) {
     GAS_MAX_FEE: "10",
     GAS_LIMIT: "",
     NETWORK_STATE_FILE: file,
-    SCRATCH_DEPLOY_CONFIG: "scripts/scratch/deploy-params-zapnet.toml",
+    SCRATCH_DEPLOY_CONFIG: "scripts/scratch/deploy-params-panda.toml",
     STEPS_FILE: "scratch/steps.json",
     AUTO_CONFIRM: "true",
     ALLOW_SKIP_STEPS: "false",

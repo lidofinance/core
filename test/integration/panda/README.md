@@ -2,15 +2,16 @@
 
 One Hardhat/Mocha suite starts **one local Panda network**, performs **one scratch deployment**,
 then checks the four core verifiers in order. The suite stops its own network in `after`, including
-when a test fails. The previous manual pilot and its deployment file are untouched.
+when a test fails.
 
 ```sh
 PANDA_ROOT=/path/to/panda yarn test:integration:panda --bail
 ```
 
-The Panda checkout must already have the local `gloas:stable` bake and its Docker images. The test
-starts containers; it does not build clients. Node, Yarn, Forge and `just` are the same prerequisites
-as scratch deployment. Hardhat uses port 18547 by default; `PANDA_PORT` selects another local port.
+The Panda checkout must already have the local `gloas:panda` bake and its Docker images; `PANDA_BAKE`
+selects another compatible tag. The test starts containers; it does not build clients. Node, Yarn,
+Forge and `just` are the same prerequisites as scratch deployment. Hardhat uses port 18547 by default;
+`PANDA_PORT` selects another local port.
 
 Read [verifiers.integration.ts](verifiers.integration.ts) for the scenarios. Network lifecycle and
 HTTP calls live in `lib/panda/index.ts`; protocol fixture setup, the existing scratch command, and
@@ -58,7 +59,6 @@ The exit/history scenarios explicitly exercise that path. They do **not** certif
 duty coverage or absence of missed-duty penalties. Voting and validator activation advance full
 slots. Protocol delays and fork constants are unchanged.
 
-The SSZ schema is pinned to the Lighthouse version in `gloas:stable`:
+The SSZ schema is pinned to the Lighthouse version in `gloas:panda`:
 `2d281dfa1b407f7c81cd123954a9fd18ee8f02d2`. A different layout must fail root equality rather than
-silently creating a synthetic root. Development red/green evidence for the fixed-vs-progressive
-SSZ boundary is retained in `.local/zapnet/verifiers/ssz-{red,green}.log`.
+silently creating a synthetic root.

@@ -156,7 +156,7 @@ symbol = "unstETH"                    # NFT collection symbol
 # Validator exit delay verifier configuration for managing validator exits
 [validatorExitDelayVerifier]
 firstSupportedSlot = 0                     # Devnet: full history supported from genesis
-gloasSlot = 0 # zap-net gloas/stable: Gloas active from genesis
+gloasSlot = 0 # Panda gloas/panda: Gloas active from genesis
 capellaSlot = 0                            # Devnet: Capella active from genesis
 slotsPerHistoricalRoot = 8192              # Number of slots per historical root
 shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (2^8 * 32 * 12)
@@ -171,7 +171,7 @@ frameDurationInSec = 240               # Duration of each processing frame in se
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 36               # Duration of each processing frame in seconds
-gloasSlot = 0 # zap-net gloas/stable: Gloas active from genesis
+gloasSlot = 0 # Panda gloas/panda: Gloas active from genesis
 
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
@@ -186,7 +186,7 @@ targetModuleId = 4                    # Target staking module ID: CMv2 is plugge
 
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]
-gloasSlot = 0 # zap-net gloas/stable: Gloas active from genesis
+gloasSlot = 0 # Panda gloas/panda: Gloas active from genesis
 
 # Operator grid configuration for managing staking operators
 [operatorGrid]
@@ -206,7 +206,7 @@ minBlockDistance = 75                 # Minimum block distance between top-ups
 maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
 targetBalanceGwei = 2046750000000
 minTopUpGwei = 1000000000
-gloasSlot = 0 # zap-net gloas/stable: Gloas active from genesis
+gloasSlot = 0 # Panda gloas/panda: Gloas active from genesis
 
 # StakingRouter configuration
 [stakingRouter]
