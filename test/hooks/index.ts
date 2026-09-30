@@ -19,6 +19,9 @@ export const mochaRootHooks: Mocha.RootHookObject = {
   async beforeAll() {
     const hre = await import("hardhat");
 
+    // Panda uses real Geth/Lighthouse and owns initialization in its suite-level before hook.
+    if (hre.network.name === "panda") return;
+
     console.log(`#️⃣  Tests started on block number ${await hre.ethers.provider.getBlockNumber()}`);
 
     await mine();

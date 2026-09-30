@@ -56,7 +56,8 @@
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
     "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
-    "postinstall": "husky"
+    "postinstall": "husky",
+    "test:integration:panda": "SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true SKIP_LINT_SOLIDITY=true hardhat --network panda test test/integration/panda/verifiers.integration.ts"
   },
   "lint-staged": {
     "./**/*.ts": [
@@ -71,6 +72,7 @@
   },
   "devDependencies": {
     "@chainsafe/blst": "2.2.0",
+    "@chainsafe/persistent-merkle-tree": "1.2.0",
     "@chainsafe/ssz": "1.2.1",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
