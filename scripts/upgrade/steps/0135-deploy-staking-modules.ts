@@ -13,5 +13,5 @@ export async function main() {
 
   await logScriptHeader("SRv3/CMv2 — Deploy Staking Modules (CSM/CMv2)", deployer);
 
-  await deployStakingModules(state);
+  await deployStakingModules(state, { scratch: false });
 }
