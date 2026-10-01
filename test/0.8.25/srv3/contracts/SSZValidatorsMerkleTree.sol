@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat, fls} from "contracts/common/lib/GIndex.sol";
+import {GIndex, toGIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {SSZBLSHelpers} from "../../vaults/predepositGuarantee/contracts/SSZBLSHelpers.sol";
@@ -24,9 +24,9 @@ contract SSZValidatorsMerkleTree is SSZBLSHelpers {
         TREE_DEPTH = depth(validatorsBase);
 
         // offset to the start of validators field in the state tree
-        leafCount = validatorsBase.index() - (1 << TREE_DEPTH);
+        leafCount = validatorsBase.unwrap() - (1 << TREE_DEPTH);
 
-        VALIDATORS_BASE_INDEX = validatorsBase.index();
+        VALIDATORS_BASE_INDEX = validatorsBase.unwrap();
     }
 
     /// @notice Adds a new leaf to the validators tree
@@ -60,7 +60,7 @@ contract SSZValidatorsMerkleTree is SSZBLSHelpers {
     function getValidatorGeneralizedIndex(uint256 position) public view returns (GIndex) {
         require(position < (1 << TREE_DEPTH), "Invalid position");
         uint256 gi = (1 << TREE_DEPTH) + position;
-        return pack(gi, uint8(TREE_DEPTH));
+        return toGIndex(gi);
     }
 
     /// @notice Computes and returns the Merkle proof for a given *global* index
