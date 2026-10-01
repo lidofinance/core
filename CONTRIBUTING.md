@@ -325,7 +325,7 @@ Fuzzing and invariant tests help ensure that your contracts behave correctly und
 conditions. These tests are crucial for catching edge cases and potential vulnerabilities.
 
 ```bash
-yarn test:foundry       # Run all Foundry-based fuzzing and invariant tests
+yarn test:forge         # Run all Foundry-based fuzzing and invariant tests
 ```
 
 ### Running Integration Tests
@@ -364,8 +364,8 @@ as Anvil. Tracing is not supported in this setup.
 > Ensure that `MAINNET_RPC_URL` and other `MAINNET_*` environment variables are configured in the `.env` file.
 
 ```bash
-# Run integration tests on a local mainnet fork
-yarn test:integration:fork:mainnet
+# Run integration tests on a local mainnet fork (MODE=forking by default)
+yarn test:integration
 ```
 
 #### On Scratch Deployment of Protocol via Hardhat Network (with Tracing)
@@ -467,7 +467,7 @@ jobs:
       - name: Run integration tests
         working-directory: core
         shell: bash
-        run: yarn test:integration:fork:mainnet
+        run: yarn test:integration
         env:
           LOG_LEVEL: debug # optional
 ```
