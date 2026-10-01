@@ -51,6 +51,7 @@ describePanda("Core verifiers on Panda / Gloas", function () {
           JSON.stringify(
             {
               bake: await panda.status(),
+              endpoints: { rpc: panda.url, beacon: panda.beaconUrl },
               deploymentSeconds: protocol.deployment.elapsedSeconds,
               captures: protocol.captures,
               transactions: protocol.receipts,
@@ -305,6 +306,7 @@ describePanda("Core verifiers on Panda / Gloas", function () {
       await panda.advanceSlots(96);
       const after = await protocol.finality();
       expect(BigInt(after.epoch)).to.be.greaterThan(BigInt(before.epoch));
+      expect(BigInt(after.executionNumber)).to.be.greaterThan(BigInt(before.executionNumber));
       const resumed = await protocol.capture("resumed-finality");
       expect(resumed.state.validators.every((validator) => !validator.slashed)).to.equal(true);
       await expect(protocol.pdg.validatePubKeyWCProof(resumed.witness(validatorIndex).pubkey, validDeposit.wc)).not.to

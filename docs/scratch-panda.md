@@ -9,13 +9,32 @@ From this core checkout, install dependencies (`HUSKY=0 yarn install --immutable
 PANDA_ROOT=/path/to/panda yarn test:integration:panda --bail
 ```
 
-The Hardhat suite starts one fresh Panda network and invokes the ordinary `yarn deploy:scratch`
+To use a running Panda service, set `PANDA_URL=http://127.0.0.1:18547` instead of `PANDA_ROOT`:
+
+```sh
+PANDA_URL=http://127.0.0.1:18547 yarn test:integration:panda --bail
+```
+
+The service must expose a fresh Gloas chain (block 0, slot 0, automine off). The client connects over
+HTTP and leaves the externally owned service running when the suite ends. Validator import and
+voluntary exits use Panda's `/control` API; keymanager credentials stay inside Panda.
+
+Run the **Integration Tests Panda** workflow with the published
+`ghcr.io/eddort/panda-gloas@sha256:<digest>` from Panda's release artifact. It starts the image as a
+privileged service with its own Docker daemon and binds `127.0.0.1:18547:8545`. Deno and the Panda
+runtime are contained in the image. The workflow uses the command above; scratch deployment remains
+inside the existing suite. Private packages require `PANDA_REGISTRY_TOKEN` with package read access
+unless this repository's `GITHUB_TOKEN` already has access.
+
+The Hardhat suite uses one fresh Panda network and invokes the ordinary `yarn deploy:scratch`
 command through the TypeScript [deployment helper](../test/integration/panda/helpers/deploy.ts).
 The helper enables transaction-driven mining, waits for Geth indexer readiness, and records wall
 time, migration steps and output under `.local/panda/core-<id>/`. Each run has its own
-`deployment.json`. The suite then checks the four core verifiers and stops its network in `after`.
+`deployment.json`. The suite then checks the four core verifiers. Local mode starts and stops its
+own Panda process; service mode leaves lifecycle management to Docker/CI.
 See the [suite documentation](../test/integration/panda/README.md) for prerequisites and coverage.
-The default bake is `gloas:panda`; set `PANDA_BAKE` to match another compatible tag.
+Local startup defaults to `gloas:panda`; `PANDA_BAKE` selects another compatible tag. In service mode,
+`PANDA_BAKE` optionally asserts that the running service uses that exact bake tag.
 The standard public Hardhat development key is used only against this local Gloas network.
 
 The supplied scratch TOML keeps the original token allocations and vote durations, but assigns

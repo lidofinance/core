@@ -102,6 +102,8 @@ export class Protocol {
     blockRoot: string;
     childTimestamp: number;
     validatorCount: number;
+    executionHash: string;
+    executionNumber: string;
   }[] = [];
   pdg!: PredepositGuarantee;
   topUp!: TopUpGateway;
@@ -228,6 +230,8 @@ export class Protocol {
     const tree = State.node(state);
     assert.equal(hex(tree.root), header.state_root, "Independent SSZ state root must equal Lighthouse");
     assert.equal(hex(Header.node(header).root), response.data.root, "Independent header root must equal Lighthouse");
+    const execution = await this.panda.assertExecution(response.data.root);
+    assert.equal(execution.slot, header.slot, "Captured CL state and execution payload must belong to the same slot");
     await this.panda.advanceSlots(1);
     const child = await this.panda.rpc<ExecutionBlock>("eth_getBlockByNumber", ["latest", false]);
     assert.equal(child.parentBeaconBlockRoot, response.data.root, "EL child commits the actual CL parent");
@@ -254,10 +258,12 @@ export class Protocol {
       blockRoot: anchor,
       childTimestamp: timestamp,
       validatorCount: state.validators.length,
+      executionHash: execution.executionHash,
+      executionNumber: execution.executionNumber,
     });
     await writeFile(
       path.join(this.panda.directory, `${label}.json`),
-      JSON.stringify({ header: response, state: stateResponse }),
+      JSON.stringify({ header: response, state: stateResponse, execution }),
     );
     return result;
   }
@@ -365,25 +371,16 @@ export class Protocol {
     return { ...request, delivered: await this.veb.getDeliveryTimestamp(hash) };
   }
   async finality() {
-    const finality = (
-      await this.panda.beacon<BeaconResponse<{ finalized: { epoch: string; root: string } }>>(
-        "/eth/v1/beacon/states/head/finality_checkpoints",
-      )
-    ).data.finalized;
-    assert.ok(BigInt(finality.epoch) > 0n);
-    const checkpoint = await this.panda.beacon<BeaconResponse<BeaconBlock>>(`/eth/v2/beacon/blocks/${finality.root}`);
-    assert.equal(checkpoint.execution_optimistic, false);
-    const executionParent = checkpoint.data.message.body.signed_execution_payload_bid.message.parent_block_hash;
-    const el = await this.panda.rpc<ExecutionBlock>("eth_getBlockByNumber", ["finalized", false]);
-    assert.equal(el.hash, executionParent, "Gloas finalized execution is checkpoint execution parent");
-    return { epoch: finality.epoch, root: finality.root, executionHash: el.hash };
+    const checkpoint = await this.panda.finalized();
+    assert.ok(checkpoint, "CL must finalize a non-genesis checkpoint");
+    return checkpoint;
   }
   async historical(capture: Awaited<ReturnType<Protocol["capture"]>>) {
     const oldSlot = Number(capture.header.slot),
       boundary = (Math.floor(oldSlot / 8192) + 1) * 8192;
     // Explicit time-jump scenario: the current bake skips empty slots. This tests
     // real historical transitions, not complete validator duty/economics coverage.
-    await this.panda.advanceTo(Number(this.genesis.genesis_time) + boundary * 12 + 11.5);
+    await this.panda.advanceTo(Number(this.genesis.genesis_time) + boundary * 12 + 11.5, { mode: "fast" });
     const recent = await this.capture("historical-anchor");
     const index = Math.floor(oldSlot / 8192);
     const roots = State.fields.block_roots.node(recent.state.block_roots);
@@ -402,11 +399,11 @@ export class Protocol {
   }
   async waitForFinalizedBlock(number: number): Promise<void> {
     for (let slots = 0; slots <= 128; slots += 32) {
-      const finalized = await this.panda.rpc<ExecutionBlock>("eth_getBlockByNumber", ["finalized", false]);
-      if (Number(BigInt(finalized.number)) >= number) return;
+      const finalized = await this.panda.finalized();
+      if (finalized && BigInt(finalized.executionNumber) >= BigInt(number)) return;
       if (slots < 128) await this.panda.advanceSlots(32);
     }
-    assert.fail(`EL block ${number} was not finalized within 128 slots`);
+    assert.fail(`EL block ${number} was not confirmed by CL finality within 128 slots`);
   }
   async expectConsolidationRequest(source: string, target: string): Promise<void> {
     for (let i = 0; i < 3; i++) {
@@ -426,7 +423,7 @@ export class Protocol {
     const earliest = BigInt(this.genesis.genesis_time) + (await this.exitVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS());
     const eligible = delivered > earliest ? delivered : earliest;
     const deadline = eligible + (await this.nor.exitDeadlineThreshold(0)) + 24n;
-    await this.panda.advanceTo(Number(deadline) + 11.5);
+    await this.panda.advanceTo(Number(deadline) + 11.5, { mode: "fast" });
   }
   expectExitDelayEvent(receipt: TransactionReceipt, pubkey: string): void {
     const events = receipt.logs

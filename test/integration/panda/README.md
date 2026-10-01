@@ -8,10 +8,24 @@ when a test fails.
 PANDA_ROOT=/path/to/panda yarn test:integration:panda --bail
 ```
 
-The Panda checkout must already have the local `gloas:panda` bake and its Docker images; `PANDA_BAKE`
+For local startup, the Panda checkout must already have the `gloas:panda` bake and its Docker images; `PANDA_BAKE`
 selects another compatible tag. The test starts containers; it does not build clients. Node, Yarn,
 Forge and `just` are the same prerequisites as scratch deployment. Hardhat uses port 18547 by default;
 `PANDA_PORT` selects another local port.
+
+For a container service, publish its native Beacon port 5052 on loopback and run:
+
+```sh
+PANDA_URL=http://127.0.0.1:18547 PANDA_BEACON_URL=http://127.0.0.1:5052 \
+  yarn test:integration:panda --bail
+```
+
+The service must provide fresh Gloas genesis with automine off; the suite performs its own deployment
+and warmup. This mode needs no Panda checkout or Deno on the test runner. The client leaves the service
+running after the suite. The **Integration Tests Panda** workflow accepts its immutable image digest.
+It configures both endpoints explicitly. All Beacon reads and writes use `PANDA_BEACON_URL` when set;
+without it, local startup and older consumers use Panda's Beacon HTTP proxy. An unavailable explicit
+CL endpoint fails the suite instead of falling back to that proxy.
 
 Read [verifiers.integration.ts](verifiers.integration.ts) for the scenarios. Network lifecycle and
 HTTP calls live in `lib/panda/index.ts`; protocol fixture setup, the existing scratch command, and
@@ -50,12 +64,20 @@ and successful consolidation processing are separate scenarios.
 ## Evidence and time
 
 Each run saves network/deployment logs, deployment addresses, captured CL states and transaction
-receipts under `.local/panda/core-<id>/`. The SDK asserts fresh genesis before deployment. Every
-witness is anchored only after its complete reconstructed state root matches Lighthouse and its
-beacon root matches both the EL child header and EIP-4788.
+receipts under `.local/panda/core-<id>/`. Before deployment, the SDK checks fresh EL and canonical,
+non-optimistic CL genesis, matching genesis time and chain ID, and the mainnet/Gloas configuration.
+The native endpoint's head must match Panda's own Beacon head.
 
-The current bake implements large `advanceTo` jumps using skipped slots and real state transitions.
-The exit/history scenarios explicitly exercise that path. They do **not** certify complete validator
+Every witness is anchored only after its complete reconstructed state root matches Lighthouse,
+its Gloas bid and payload envelope agree on the captured Beacon root/slot and execution hash/parent,
+and the canonical EL block agrees on hash, parent, number and timestamp. The beacon root must also
+match both the EL child header and EIP-4788. Captures record the checked execution hash and number.
+Deposit processing waits for a CL checkpoint confirmed by EL, using Gloas's checkpoint execution
+parent rule. The final recovery test requires both CL finalized epoch and confirmed EL block number
+to advance. The SDK's HTTP fixture tests cover these rejection paths without launching clients.
+
+The exit/history scenarios explicitly call `advanceTo(..., { mode: "fast" })`, using skipped slots
+and real state transitions. The client's omitted mode preserves Panda's honest default. These fast scenarios do **not** certify complete validator
 duty coverage or absence of missed-duty penalties. Voting and validator activation advance full
 slots. Protocol delays and fork constants are unchanged.
 
