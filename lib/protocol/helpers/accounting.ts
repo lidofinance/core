@@ -500,9 +500,10 @@ export async function reportWithoutExtraData(
   extraData: ReturnType<typeof prepareExtraData>,
   {
     effectiveClDiff,
+    ...reportOverrides
   }: {
     effectiveClDiff?: bigint;
-  } = {},
+  } & Partial<OracleReportParams> = {},
 ) {
   const { accountingOracle } = ctx.contracts;
 
@@ -520,6 +521,7 @@ export async function reportWithoutExtraData(
     reportWithdrawalsVault: false,
     stakingModuleIdsWithNewlyExitedValidators,
     skipWithdrawals: true,
+    ...reportOverrides,
   };
 
   const { data } = await report(ctx, { ...reportData, dryRun: true });
