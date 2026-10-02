@@ -34,7 +34,7 @@ describePanda("Core verifiers on Panda / Gloas", function () {
 
   before("start one Panda network and scratch-deploy once for the whole suite", async () => {
     await initializeSSZ();
-    panda = await Panda.start({ port: Number(process.env.PANDA_PORT || 18547) });
+    panda = await Panda.start({ port: Number(process.env.PANDA_PORT || 18547), timeoutMs: 120_000 });
     const deployment = await deployScratch(panda);
     console.log(`    Scratch: ${deployment.steps} steps in ${deployment.elapsedSeconds.toFixed(2)}s`);
     protocol = new Protocol(panda, deployment, await ethers.getSigner(deployment.state.deployer));

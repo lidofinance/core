@@ -13,16 +13,39 @@ selects another compatible tag. The test starts containers; it does not build cl
 Forge and `just` are the same prerequisites as scratch deployment. Hardhat uses port 18547 by default;
 `PANDA_PORT` selects another local port.
 
-For a container service, publish its native Beacon port 5052 on loopback and run:
+For the published **Panda v0.3.0** service, start its `linux/amd64` image with RPC, Beacon and validator
+client ports on loopback. The digest below is the immutable image behind
+`ghcr.io/eddort/panda-gloas:v0.3.0`:
+
+```sh
+docker run --detach --platform linux/amd64 --privileged \
+  --name panda-core-v030 --label io.panda.id=core-v030 \
+  --stop-timeout 120 \
+  -p 127.0.0.1:18547:8545 -p 127.0.0.1:5052:5052 -p 127.0.0.1:5062:5062 \
+  ghcr.io/eddort/panda-gloas@sha256:6a40dcdd762911cf8ca261c25f1547d07bd1a56084db1150b0f3236d7eaee661
+```
+
+Wait for `docker inspect --format '{{.State.Health.Status}}' panda-core-v030` to report `healthy`, then run:
 
 ```sh
 PANDA_URL=http://127.0.0.1:18547 PANDA_BEACON_URL=http://127.0.0.1:5052 \
   yarn test:integration:panda --bail
 ```
 
+Inspect controller/client output with `docker logs panda-core-v030` and
+`docker exec panda-core-v030 panda logs cl --tail 200` (`el` and `vc` select the other clients).
+After the run, stop and remove only this test service:
+
+```sh
+docker stop panda-core-v030
+docker rm --volumes panda-core-v030
+```
+
 The service must provide fresh Gloas genesis with automine off; the suite performs its own deployment
 and warmup. This mode needs no Panda checkout or Deno on the test runner. The client leaves the service
-running after the suite. The **Integration Tests Panda** workflow accepts its immutable image digest.
+running after the suite. The **Integration Tests Panda** workflow runs on every push, like the other
+integration workflows, using the same v0.3.0 digest. It also supports a manual run with another
+published Gloas image digest when needed.
 It configures both endpoints explicitly. All Beacon reads and writes use `PANDA_BEACON_URL` when set;
 without it, local startup and older consumers use Panda's Beacon HTTP proxy. An unavailable explicit
 CL endpoint fails the suite instead of falling back to that proxy.
@@ -84,3 +107,5 @@ slots. Protocol delays and fork constants are unchanged.
 The SSZ schema is pinned to the Lighthouse version in `gloas:panda`:
 `2d281dfa1b407f7c81cd123954a9fd18ee8f02d2`. A different layout must fail root equality rather than
 silently creating a synthetic root.
+
+The SDK defaults to a one-hour wall-clock watchdog (`PANDA_TIMEOUT_MS`). This verifier suite explicitly uses `timeoutMs: 120_000` per request and a 20-minute Mocha limit per test/hook. These are test budgets, independent of the controller service default.

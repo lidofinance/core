@@ -54,6 +54,7 @@ export class Panda {
     readonly bake: string,
     public url = "",
     public beaconUrl = "",
+    readonly timeoutMs = 3_600_000,
   ) {}
 
   static async start({
@@ -64,13 +65,15 @@ export class Panda {
     bake = process.env.PANDA_BAKE,
     output = ".local/panda",
     port = 0,
+    timeoutMs = Number(process.env.PANDA_TIMEOUT_MS ?? 3_600_000),
   } = {}): Promise<Panda> {
+    assert.ok(Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 2147483647, "Invalid timeoutMs");
     const id = `core-${randomUUID().slice(0, 8)}`;
     const beaconEndpoint = beaconUrl ? endpoint(beaconUrl, "PANDA_BEACON_URL") : "";
     if (url) {
       const controllerEndpoint = endpoint(url, "PANDA_URL");
       const directory = path.resolve(output, id);
-      const connection = new Panda("", id, directory, profile, bake ?? "", controllerEndpoint);
+      const connection = new Panda("", id, directory, profile, bake ?? "", controllerEndpoint, "", timeoutMs);
       const status = await connection.status();
       assert.match(status.id, /^[a-z0-9][a-z0-9-]{0,39}$/);
       assert.equal(status.profile, profile);
@@ -84,6 +87,7 @@ export class Panda {
         status.bake,
         controllerEndpoint,
         beaconEndpoint || controllerEndpoint,
+        timeoutMs,
       );
       await panda.assertFreshGenesis(status);
       await mkdir(directory, { recursive: true });
@@ -91,12 +95,26 @@ export class Panda {
     }
     assert.ok(root, "Set PANDA_ROOT for local startup or PANDA_URL for a running service");
     bake ??= "panda";
-    const panda = new Panda(path.resolve(root), id, path.resolve(output, id), profile, bake, "", beaconEndpoint);
+    const panda = new Panda(
+      path.resolve(root),
+      id,
+      path.resolve(output, id),
+      profile,
+      bake,
+      "",
+      beaconEndpoint,
+      timeoutMs,
+    );
     await mkdir(panda.directory, { recursive: true });
     const log = createWriteStream(path.join(panda.directory, "network.log"));
     const child = spawn(path.join(panda.root, "scripts/deno"), ["task", "up", "--profile", profile, "--bake", bake], {
       cwd: panda.root,
-      env: { ...process.env, PANDA_ID: id, PANDA_PORT: String(port) } as unknown as NodeJS.ProcessEnv,
+      env: {
+        ...process.env,
+        PANDA_ID: id,
+        PANDA_PORT: String(port),
+        PANDA_TIMEOUT_MS: String(timeoutMs),
+      } as unknown as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
     });
     panda.child = child;
@@ -109,7 +127,7 @@ export class Panda {
     );
     try {
       panda.url = await new Promise<string>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error(`Panda startup timed out: ${panda.directory}`)), 120_000);
+        const timer = setTimeout(() => reject(new Error(`Panda startup timed out: ${panda.directory}`)), timeoutMs);
         createInterface({ input: child.stdout }).on("line", (line) => {
           log.write(`${line}\n`);
           let event: { event?: string; id?: string; url?: string };
@@ -150,10 +168,11 @@ export class Panda {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
-    assert.ok(response.ok, `Panda HTTP ${response.status}`);
-    const body = (await response.json()) as { result: T; error?: unknown };
+    const text = await response.text();
+    assert.ok(response.ok, `${method}: Panda HTTP ${response.status}: ${text.slice(0, 4096)}`);
+    const body = JSON.parse(text) as { result: T; error?: unknown };
     if (body.error) throw new Error(`${method}: ${JSON.stringify(body.error)}`);
     return body.result;
   }
@@ -167,7 +186,7 @@ export class Panda {
       ...(body === undefined
         ? {}
         : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     assert.ok(response.ok, `Beacon ${route}: HTTP ${response.status}`);
     const text = await response.text();

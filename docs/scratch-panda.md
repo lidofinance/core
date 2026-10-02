@@ -12,16 +12,20 @@ PANDA_ROOT=/path/to/panda yarn test:integration:panda --bail
 To use a running Panda service, set `PANDA_URL=http://127.0.0.1:18547` instead of `PANDA_ROOT`:
 
 ```sh
-PANDA_URL=http://127.0.0.1:18547 yarn test:integration:panda --bail
+PANDA_URL=http://127.0.0.1:18547 PANDA_BEACON_URL=http://127.0.0.1:5052 \
+  yarn test:integration:panda --bail
 ```
 
 The service must expose a fresh Gloas chain (block 0, slot 0, automine off). The client connects over
 HTTP and leaves the externally owned service running when the suite ends. Validator import and
 voluntary exits use Panda's `/control` API; keymanager credentials stay inside Panda.
 
-Run the **Integration Tests Panda** workflow with the published
-`ghcr.io/eddort/panda-gloas@sha256:<digest>` from Panda's release artifact. It starts the image as a
-privileged service with its own Docker daemon and binds `127.0.0.1:18547:8545`. Deno and the Panda
+The **Integration Tests Panda** workflow runs on every push with its default **Panda v0.3.0** image:
+`ghcr.io/eddort/panda-gloas@sha256:6a40dcdd762911cf8ca261c25f1547d07bd1a56084db1150b0f3236d7eaee661`.
+This is the immutable digest of `ghcr.io/eddort/panda-gloas:v0.3.0`; another published Gloas digest
+can be supplied through the manual workflow's `image` input. It starts the image as a privileged service
+with its own Docker daemon and binds RPC `127.0.0.1:18547:8545`, Beacon `127.0.0.1:5052:5052`
+and validator API `127.0.0.1:5062:5062`. Deno and the Panda
 runtime are contained in the image. The workflow uses the command above; scratch deployment remains
 inside the existing suite. Private packages require `PANDA_REGISTRY_TOKEN` with package read access
 unless this repository's `GITHUB_TOKEN` already has access.
@@ -59,30 +63,29 @@ Genesis time, fork version and deposit contract address match the existing Gloas
   genesis time and slot parameters. The former constant silently left both external oracles
   inactive on this network; the real-chain acceptance caught this before the final fresh run.
 
-## Acceptance
+## Validation
 
-Before changes, the environment regression fails because genesis is overwritten and 16M gas is
-forced. The real-chain acceptance fails on the original partial deployment because external
-packages, modules, final handoff and the governance vote are missing. Red logs are preserved with
-this pilot's report.
+Run the standard repository checks:
 
 ```sh
-node --test scripts/tests/migration-env.test.cjs
-yarn typecheck
+yarn check
 ```
 
-A successful deployment requires all 21 migration steps, no failed transaction receipts, deployed
-bytecode, four registered staking modules, active external modules/consensus, circuit breaker
-permissions, final DAO admin ownership with deployer rights revoked, and an executed DAO vote.
-The standalone `scripts/tests/scratch-acceptance.cjs` script reads an existing deployment from
-`NETWORK_STATE_FILE` and a running Geth endpoint from `RPC_URL`. It was used for the original pilot
-acceptance checks; it is not part of the verifier suite.
+The Panda integration uses the existing Hardhat/Mocha command above and
+[verifiers.integration.ts](../test/integration/panda/verifiers.integration.ts). Its current
+coverage and limitations are documented in the [suite README](../test/integration/panda/README.md).
 
 This is the upstream scratch scope: EasyTrack is still its upstream `EasyTrackEVMScriptExecutorStub`.
-The verifier suite's protocol coverage and limitations are documented in its README.
 
 For a new measurement, rerun the Hardhat command above. Each run starts a fresh chain and stores
 its own artifacts; source/build caches may be reused.
+
+## Original pilot evidence
+
+The original pilot checked all 21 migration steps, transaction receipts, deployed bytecode,
+four registered staking modules, active external modules/consensus, circuit breaker permissions,
+final DAO admin ownership with deployer rights revoked, and an executed DAO vote. These historical
+acceptance results are separate from the current verifier suite's coverage.
 
 The original pilot's verified fresh-chain run completed all 21 steps in **263.27 seconds** with cached dependencies
 and compiler artifacts: 514 successful transactions, no failed receipts, and all six acceptance

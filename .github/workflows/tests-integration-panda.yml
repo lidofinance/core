@@ -1,0 +1,80 @@
+name: Integration Tests Panda
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Published Gloas image pinned by digest (default Panda v0.3.0)
+        required: true
+        type: string
+        default: ghcr.io/eddort/panda-gloas@sha256:6a40dcdd762911cf8ca261c25f1547d07bd1a56084db1150b0f3236d7eaee661
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.select.outputs.image }}
+    steps:
+      - id: select
+        env:
+          PANDA_IMAGE: ${{ inputs.image || 'ghcr.io/eddort/panda-gloas@sha256:6a40dcdd762911cf8ca261c25f1547d07bd1a56084db1150b0f3236d7eaee661' }}
+        run: |
+          [[ "$PANDA_IMAGE" =~ ^ghcr\.io/eddort/panda-gloas@sha256:[a-f0-9]{64}$ ]]
+          echo "image=$PANDA_IMAGE" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: select
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PANDA_URL: http://127.0.0.1:18547
+      PANDA_BEACON_URL: http://127.0.0.1:5052
+      NODE_OPTIONS: --max_old_space_size=10240
+    services:
+      panda:
+        image: ${{ needs.select.outputs.image }}
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.PANDA_REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
+        ports:
+          - 127.0.0.1:18547:8545
+          - 127.0.0.1:5052:5052
+          - 127.0.0.1:5062:5062
+        options: --privileged --stop-timeout 120 --label io.panda.id=lido-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Common setup
+        uses: ./.github/workflows/setup
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.7.1
+      - name: Install just
+        run: cargo install just --locked
+      - run: cp .env.example .env
+      # The suite checks block zero and owns deployment, warmup, automine and time controls.
+      - name: Run existing Panda integration suite
+        run: yarn test:integration:panda --bail
+      - name: Save Panda service and client logs
+        if: failure()
+        env:
+          SERVICE_ID: ${{ job.services.panda.id }}
+        run: |
+          mkdir -p .local/panda
+          docker logs "$SERVICE_ID" > .local/panda/service.log 2>&1 || true
+          for client in el cl vc; do
+            docker exec "$SERVICE_ID" panda logs "$client" --tail 2000 \
+              > ".local/panda/$client.log" 2>&1 || true
+          done
+      - name: Upload Panda evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: panda-integration-${{ github.run_attempt }}
+          path: .local/panda/
+          retention-days: 7
