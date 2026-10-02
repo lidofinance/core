@@ -3,8 +3,9 @@ import { ethers } from "hardhat";
 import { log } from "lib";
 import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file";
 
-// Default chainId of Hardhat Network and Anvil
-const LOCAL_CHAIN_ID = 31337n;
+// Chains whose genesis fork version is mainnet's 0x00000000: Mainnet itself (also used by
+// the lidofinance/hardhat-node scratch image in CI) and the default Hardhat Network/Anvil chain
+const MAINNET_GENESIS_FORK_VERSION_CHAIN_IDS = [1n, 31337n];
 
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
@@ -18,7 +19,9 @@ function getEnvVariable(name: string, defaultValue?: string): string {
 export async function main() {
   const chainId = (await ethers.provider.getNetwork()).chainId;
   // Keyed on chainId rather than network name: `local` may point at any RPC (e.g. a devnet)
-  const DEFAULT_GENESIS_FORK_VERSION = chainId === LOCAL_CHAIN_ID ? "0x00000000" : undefined;
+  const DEFAULT_GENESIS_FORK_VERSION = MAINNET_GENESIS_FORK_VERSION_CHAIN_IDS.includes(chainId)
+    ? "0x00000000"
+    : undefined;
 
   // Retrieve environment variables
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
