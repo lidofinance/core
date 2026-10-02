@@ -5,12 +5,12 @@
  * - LOCAL_RPC_URL (or RPC_URL), LOCAL_DEVNET_PK, DEPLOYER
  * - GAS_PRIORITY_FEE, GAS_MAX_FEE
  * - GLOAS_FORK_SLOT (Gloas fork epoch multiplied by the chain's slotsPerEpoch)
+ * - GENESIS_FORK_VERSION (bytes4 genesis fork version of the devnet)
  * - A deployment state file selected by NETWORK_STATE_FILE (defaults to deployed-local-devnet.json)
  *
  * Optional environment:
  * - CAPELLA_FORK_SLOT (defaults to 0)
  * - FIRST_SUPPORTED_SLOT (defaults to CAPELLA_FORK_SLOT)
- * - GENESIS_FORK_VERSION (read from the current PredepositGuarantee deployment when omitted)
  *
  * Run with:
  *   GLOAS_FORK_SLOT=<slot> yarn deploy:devnet:gloas-verifiers
@@ -35,14 +35,10 @@ function readUintEnv(name: string, fallback?: bigint): bigint {
   return BigInt(value);
 }
 
-function readGenesisForkVersion(state: ReturnType<typeof readNetworkState>): string {
-  const envValue = process.env.GENESIS_FORK_VERSION;
-  const value =
-    envValue && envValue !== "" ? envValue : state[Sk.predepositGuarantee]?.implementation?.constructorArgs?.[0];
-  if (typeof value !== "string" || !/^0x[\da-fA-F]{8}$/.test(value)) {
-    throw new Error(
-      "GENESIS_FORK_VERSION must be a bytes4 value when it cannot be read from the current PredepositGuarantee deployment",
-    );
+function readGenesisForkVersion(): string {
+  const value = process.env.GENESIS_FORK_VERSION;
+  if (!value || !/^0x[\da-fA-F]{8}$/.test(value)) {
+    throw new Error("GENESIS_FORK_VERSION must be a bytes4 value");
   }
   return value;
 }
@@ -70,7 +66,7 @@ async function main(): Promise<void> {
     await locator.consolidationGateway(),
   );
   const consolidationLimits = await currentConsolidationGateway.getConsolidationRequestLimitFullInfo();
-  const genesisForkVersion = readGenesisForkVersion(state);
+  const genesisForkVersion = readGenesisForkVersion();
 
   log(`Deploying Gloas verifiers on local-devnet with fork slot ${gloasForkSlot}`);
 
