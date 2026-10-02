@@ -1,4 +1,4 @@
-import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "ethers";
+import { BigNumberish, hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "ethers";
 import { ethers } from "hardhat";
 
 import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
@@ -23,6 +23,29 @@ const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
 // Start from a pseudo-random child index so that every test run exercises a different
 // sequence of BLS keys, while still being deterministic within a single process.
 let secretIndex = randomInt(1_000_000);
+
+// Depth of the pre-Gloas `BeaconState.validators` list, log2(VALIDATOR_REGISTRY_LIMIT).
+const VALIDATORS_DEPTH_PRE_GLOAS = 40n;
+
+/**
+ * Generalized index of `BeaconState.validators[0]` in a pre-Gloas state given the generalized index of the
+ * `BeaconState.validators` field, e.g. `GI_VALIDATORS_PRE_GLOAS` of the verifiers.
+ * A `List` roots as `hash(data_root, length)`, so its elements live under the left child of the list root.
+ */
+export const firstValidatorGIndexPreGloas = (validatorsGI: BigNumberish): bigint =>
+  (BigInt(validatorsGI) * 2n) << VALIDATORS_DEPTH_PRE_GLOAS;
+
+/**
+ * Generalized index of `BeaconState.validators[0]` on mainnet before Gloas.
+ * `BeaconState.validators` is the field 11 of the 37-fields container: 2^6 + 11 = 0x4b.
+ */
+export const MAINNET_FIRST_VALIDATOR_GINDEX_PRE_GLOAS = firstValidatorGIndexPreGloas(0x4bn);
+
+/**
+ * Converts a legacy GIndex value of the already deployed contracts, packed as `index << 8 | pow`,
+ * to the plain generalized index.
+ */
+export const unpackLegacyGIndex = (packed: BigNumberish): bigint => BigInt(packed) >> 8n;
 
 export const addressToWC = (address: string, version = 2) =>
   `${hexlify(new Uint8Array([version]))}${"00".repeat(11)}${de0x(address.toLowerCase())}`;
@@ -222,7 +245,7 @@ export const setBeaconBlockRoot = async (root: string) => {
 export interface LocalMerkleTree {
   sszMerkleTree: SSZMerkleTree;
   firstValidatorLeafIndex: bigint;
-  gIFirstValidator: string;
+  gIFirstValidator: bigint;
   totalValidators: number;
   addValidator: (validator: SSZBLSHelpers.ValidatorStruct) => Promise<{ validatorIndex: number }>;
   validatorAtIndex: (index: number) => SSZBLSHelpers.ValidatorStruct;
@@ -234,7 +257,7 @@ export interface LocalMerkleTree {
 
 // Default mainnet values for validator state tree
 export const prepareLocalMerkleTree = async (
-  gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028",
+  gIndex: BigNumberish = MAINNET_FIRST_VALIDATOR_GINDEX_PRE_GLOAS,
 ): Promise<LocalMerkleTree> => {
   const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [gIndex], {});
   const firstValidator = generateValidator();
@@ -245,7 +268,7 @@ export const prepareLocalMerkleTree = async (
   const firstValidatorLeafIndex = (await sszMerkleTree.leafCount()) - 1n;
   const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(firstValidatorLeafIndex);
 
-  if (BigInt(gIFirstValidator) !== BigInt(gIndex)) throw new Error("Invariant: sszMerkleTree implementation is broken");
+  if (gIFirstValidator !== BigInt(gIndex)) throw new Error("Invariant: sszMerkleTree implementation is broken");
 
   const addValidator = async (validator: SSZBLSHelpers.ValidatorStruct) => {
     await sszMerkleTree.addValidatorLeaf(validator);

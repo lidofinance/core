@@ -495,15 +495,9 @@ describe("CLTopUpProofVerifier", () => {
     const gloasSlot = 1000;
 
     const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [gloasSlot], {});
-    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(
-      "0x0000000000000000000000000000000000000000000000000096000000000128",
-    );
-    expect(await proofVerifier.TEST_getValidatorGI(0n, gloasSlot)).to.equal(
-      "0x0000000000000000000000000000000000000000000000000000000000059800",
-    );
-    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(
-      "0x00000000000000000000000000000000000000000000000000000000002cc800",
-    );
+    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(0x960000000001n);
+    expect(await proofVerifier.TEST_getValidatorGI(0n, gloasSlot)).to.equal(0x598n);
+    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(0x2cc8n);
   });
 
   // The fork switch above only shows the index moves. This proves a real container against the
@@ -516,7 +510,7 @@ describe("CLTopUpProofVerifier", () => {
     const gIndexLib = await ethers.deployContract("GIndex__Harness");
     const gloasValidatorGI = await gIndexLib.concat(
       giValidators(),
-      await gIndexLib.pack(progressiveListNodeGIndexReference(BigInt(VALIDATOR_INDEX)), 0),
+      progressiveListNodeGIndexReference(BigInt(VALIDATOR_INDEX)),
     );
 
     const gloasVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [GLOAS_SLOT]);

@@ -26,12 +26,14 @@ import {
   days,
   de0x,
   findEventsWithInterfaces,
+  firstValidatorGIndexPreGloas,
   generatePredeposit,
   getCurrentBlockTimestamp,
   impersonate,
   log,
   prepareLocalMerkleTree,
   TOTAL_BASIS_POINTS,
+  unpackLegacyGIndex,
   Validator,
 } from "lib";
 
@@ -648,7 +650,7 @@ export const getFirstValidatorGIndexForProof = async (
   }
 
   if (BigInt(slot) < gloasSlot) {
-    return predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS();
+    return firstValidatorGIndexPreGloas(await predepositGuarantee.GI_VALIDATORS_PRE_GLOAS());
   }
 
   if (gloasSlot !== 0n) {
@@ -657,13 +659,13 @@ export const getFirstValidatorGIndexForProof = async (
 
   // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS PDG IS DEPLOYED WITH A REAL GLOAS SLOT.
   // Fork tests use the deployed legacy verifier, where the zero slot selects
-  // a static post-fork validator gindex.
+  // a static post-fork validator gindex packed in the legacy `index << 8 | pow` format.
   const legacyVerifier = new ethers.Contract(
     await predepositGuarantee.getAddress(),
     ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
     ethers.provider,
   );
-  return legacyVerifier.GI_FIRST_VALIDATOR_CURR();
+  return unpackLegacyGIndex(await legacyVerifier.GI_FIRST_VALIDATOR_CURR());
 };
 
 export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {

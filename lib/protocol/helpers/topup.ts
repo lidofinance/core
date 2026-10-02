@@ -4,7 +4,13 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { certainAddress, ether, impersonate, log } from "lib";
-import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "lib/pdg";
+import {
+  addressToWC,
+  firstValidatorGIndexPreGloas,
+  generateBeaconHeader,
+  setBeaconBlockRoot,
+  unpackLegacyGIndex,
+} from "lib/pdg";
 import { prepareLocalMerkleTree } from "lib/top-ups";
 
 import { ProtocolContext } from "../types";
@@ -89,14 +95,17 @@ export const prepareTopUpWitnesses = async (
   }
 
   // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS SLOT.
+  // The legacy gateway returns the gindex packed in the `index << 8 | pow` format.
   const gIFirstValidator =
     gloasSlot === 0n
-      ? await new ethers.Contract(
-          await topUpGateway.getAddress(),
-          ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
-          ethers.provider,
-        ).GI_FIRST_VALIDATOR_CURR()
-      : await topUpGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
+      ? unpackLegacyGIndex(
+          await new ethers.Contract(
+            await topUpGateway.getAddress(),
+            ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+            ethers.provider,
+          ).GI_FIRST_VALIDATOR_CURR(),
+        )
+      : firstValidatorGIndexPreGloas(await topUpGateway.GI_VALIDATORS_PRE_GLOAS());
 
   const { stateTree, firstValidatorLeafIndex } = await prepareLocalMerkleTree(gIFirstValidator);
 

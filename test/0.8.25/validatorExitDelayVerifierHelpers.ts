@@ -11,6 +11,8 @@ import {
 
 import { de0x, findEventsWithInterfaces, generateBeaconHeader, generateValidator, numberToHex } from "lib";
 
+import { VALIDATOR_REGISTRY_LIMIT_LOG2 } from "test/common/lib/clGIndices";
+
 import { BlockHeader, ValidatorStateProof } from "./validatorState";
 
 const FAR_FUTURE_EPOCH = (1n << 64n) - 1n;
@@ -119,7 +121,10 @@ export async function generateValidatorStateProof(
 
   const validatorGI =
     BigInt(slot) < gloasSlot
-      ? await gIndexLib.shr(await verifier.GI_FIRST_VALIDATOR_PRE_GLOAS(), validatorIndex)
+      ? await gIndexLib.concat(
+          await verifier.GI_VALIDATORS_PRE_GLOAS(),
+          await gIndexLib.staticListNode(validatorIndex, VALIDATOR_REGISTRY_LIMIT_LOG2),
+        )
       : await gIndexLib.concat(await verifier.GI_VALIDATORS(), await gIndexLib.progressiveListNode(validatorIndex));
 
   const { container } = generateValidator();
