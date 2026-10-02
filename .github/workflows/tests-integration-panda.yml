@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       image:
-        description: Published Gloas image pinned by digest (default Panda v0.3.0)
+        description: Published Gloas image tag or digest (latest falls back to v0.1.0 if missing)
         required: true
         type: string
-        default: ghcr.io/eddort/panda-gloas@sha256:6a40dcdd762911cf8ca261c25f1547d07bd1a56084db1150b0f3236d7eaee661
+        default: ghcr.io/lidofinance/panda-gloas:latest
 
 permissions:
   contents: read
@@ -22,10 +22,28 @@ jobs:
     steps:
       - id: select
         env:
-          PANDA_IMAGE: ${{ inputs.image || 'ghcr.io/eddort/panda-gloas@sha256:6a40dcdd762911cf8ca261c25f1547d07bd1a56084db1150b0f3236d7eaee661' }}
+          PANDA_IMAGE: ${{ inputs.image || 'ghcr.io/lidofinance/panda-gloas:latest' }}
+          REGISTRY_TOKEN: ${{ secrets.PANDA_REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          [[ "$PANDA_IMAGE" =~ ^ghcr\.io/eddort/panda-gloas@sha256:[a-f0-9]{64}$ ]]
+          [[ "$PANDA_IMAGE" =~ ^ghcr\.io/lidofinance/panda-gloas(:(latest|v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)|@sha256:[a-f0-9]{64})$ ]]
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if [[ "$PANDA_IMAGE" == ghcr.io/lidofinance/panda-gloas:latest ]]; then
+            if docker manifest inspect "$PANDA_IMAGE" > /dev/null 2> "$RUNNER_TEMP/panda-manifest-error"; then
+              echo "Using published Panda latest"
+            elif grep -Eqi 'unauthorized|denied|forbidden|timeout|timed out' "$RUNNER_TEMP/panda-manifest-error"; then
+              cat "$RUNNER_TEMP/panda-manifest-error" >&2
+              exit 1
+            elif grep -Eqi 'manifest unknown|no such manifest|not found' "$RUNNER_TEMP/panda-manifest-error"; then
+              PANDA_IMAGE=ghcr.io/lidofinance/panda-gloas:v0.1.0
+              docker manifest inspect "$PANDA_IMAGE" > /dev/null
+              echo "::notice::Panda latest is absent; using $PANDA_IMAGE"
+            else
+              cat "$RUNNER_TEMP/panda-manifest-error" >&2
+              exit 1
+            fi
+          fi
           echo "image=$PANDA_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Panda service image: \`$PANDA_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
 
   test:
     needs: select

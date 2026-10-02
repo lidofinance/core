@@ -45,6 +45,7 @@ export class Panda {
   private child?: ChildProcess;
   private exited?: Promise<void>;
   private closed = false;
+  private closing?: Promise<void>;
   private genesisTime = 0n;
   private constructor(
     readonly root: string,
@@ -107,13 +108,12 @@ export class Panda {
     );
     await mkdir(panda.directory, { recursive: true });
     const log = createWriteStream(path.join(panda.directory, "network.log"));
-    const child = spawn(path.join(panda.root, "scripts/deno"), ["task", "up", "--profile", profile, "--bake", bake], {
+    const child = spawn("deno", ["task", "up", "--profile", profile, "--bake", bake], {
       cwd: panda.root,
       env: {
         ...process.env,
         PANDA_ID: id,
         PANDA_PORT: String(port),
-        PANDA_TIMEOUT_MS: String(timeoutMs),
       } as unknown as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -314,20 +314,25 @@ export class Panda {
     await this.rpc("exitValidator", [pubkey], true);
   }
 
-  async close(): Promise<void> {
-    if (!this.child || this.closed) return;
-    this.closed = true;
-    if (!this.url) this.child.kill("SIGTERM");
+  close(): Promise<void> {
+    if (!this.child || this.closed) return Promise.resolve();
+    return (this.closing ??= this.stopLocal(this.child)
+      .then(() => {
+        this.closed = true;
+      })
+      .finally(() => {
+        this.closing = undefined;
+      }));
+  }
+
+  private async stopLocal(child: ChildProcess): Promise<void> {
+    if (!this.url) child.kill("SIGTERM");
     // The CLI waits for cleanup and scopes every mutation to this exact network id.
-    const down = spawn(
-      path.join(this.root, "scripts/deno"),
-      ["task", "down", "--profile", this.profile, "--bake", this.bake],
-      {
-        cwd: this.root,
-        env: { ...process.env, PANDA_ID: this.id } as unknown as NodeJS.ProcessEnv,
-        stdio: ["ignore", "ignore", "pipe"],
-      },
-    );
+    const down = spawn("deno", ["task", "down", "--profile", this.profile, "--bake", this.bake], {
+      cwd: this.root,
+      env: { ...process.env, PANDA_ID: this.id } as unknown as NodeJS.ProcessEnv,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
     let stderr = "";
     down.stderr.on("data", (chunk) => {
       stderr = (stderr + chunk).slice(-4000);

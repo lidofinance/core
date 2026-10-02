@@ -1,9 +1,11 @@
 import { ethers } from "hardhat";
 
-import { getDeployerSigner } from "lib/account";
+import { getDeployerSigner, impersonate } from "lib/account";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
-import { DeploymentState, Sk } from "lib/state-file";
+import { getNetworkName } from "lib/network";
+import { DeploymentState, incrementGasUsed, Sk } from "lib/state-file";
+import { ether } from "lib/units";
 
 export type AgentCall = { to: string; data: string };
 
@@ -12,6 +14,28 @@ function callsScript(calls: AgentCall[]): string {
     "0x00000001",
     ...calls.flatMap(({ to, data }) => [to, ethers.toBeHex(ethers.dataLength(data), 4), data]),
   ]);
+}
+
+/** Local EVM fixtures use Agent impersonation; real clients execute the same calls through voting. */
+export async function executeScratchAgentCalls(calls: AgentCall[], state: DeploymentState) {
+  if (!calls.length) return;
+  const clientVersion: string = await ethers.provider.send("web3_clientVersion", []);
+  if (!/^(HardhatNetwork|anvil)\//i.test(clientVersion)) {
+    await executeScratchVote(calls, state);
+    return;
+  }
+
+  const agent = state[Sk.appAgent].proxy.address;
+  const signer = await impersonate(agent, ether("1"));
+  try {
+    for (const call of calls) {
+      const receipt = await (await signer.sendTransaction(call)).wait();
+      if (!receipt || receipt.status !== 1) throw new Error(`Scratch Agent call failed: ${call.to}`);
+      incrementGasUsed(receipt.gasUsed);
+    }
+  } finally {
+    await ethers.provider.send(`${await getNetworkName()}_stopImpersonatingAccount`, [agent]);
+  }
 }
 
 /** Execute setup using ordinary token-holder transactions and the DAO's existing permissions. */

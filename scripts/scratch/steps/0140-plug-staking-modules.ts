@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { AgentCall, executeScratchVote } from "scripts/utils/scratch-governance";
+import { AgentCall, executeScratchAgentCalls } from "scripts/utils/scratch-governance";
 
 import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
@@ -346,7 +346,7 @@ export async function main() {
     }
   }
 
-  await executeScratchVote(agentCalls, state);
+  await executeScratchAgentCalls(agentCalls, state);
 
   // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.
   await makeTx(

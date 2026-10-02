@@ -9,6 +9,9 @@ From this core checkout, install dependencies (`HUSKY=0 yarn install --immutable
 PANDA_ROOT=/path/to/panda yarn test:integration:panda --bail
 ```
 
+This optional local mode requires Deno 2.9.7 on `PATH` and an existing compatible Panda bake.
+The HTTP service mode below needs neither Deno nor a Panda checkout on the core test runner.
+
 To use a running Panda service, set `PANDA_URL=http://127.0.0.1:18547` instead of `PANDA_ROOT`:
 
 ```sh
@@ -20,10 +23,12 @@ The service must expose a fresh Gloas chain (block 0, slot 0, automine off). The
 HTTP and leaves the externally owned service running when the suite ends. Validator import and
 voluntary exits use Panda's `/control` API; keymanager credentials stay inside Panda.
 
-The **Integration Tests Panda** workflow runs on every push with its default **Panda v0.3.0** image:
-`ghcr.io/eddort/panda-gloas@sha256:6a40dcdd762911cf8ca261c25f1547d07bd1a56084db1150b0f3236d7eaee661`.
-This is the immutable digest of `ghcr.io/eddort/panda-gloas:v0.3.0`; another published Gloas digest
-can be supplied through the manual workflow's `image` input. It starts the image as a privileged service
+The **Integration Tests Panda** workflow runs on every push with
+`ghcr.io/lidofinance/panda-gloas:latest`, following the latest successful stable Panda publication.
+If that tag does not exist yet, it selects `ghcr.io/lidofinance/panda-gloas:v0.1.0`. The selected image
+is recorded in the workflow summary; authentication or network errors fail the job.
+A published version tag or image digest from the same repository can be supplied through the manual
+workflow's `image` input. It starts the image as a privileged service
 with its own Docker daemon and binds RPC `127.0.0.1:18547:8545`, Beacon `127.0.0.1:5052:5052`
 and validator API `127.0.0.1:5062:5062`. Deno and the Panda
 runtime are contained in the image. The workflow uses the command above; scratch deployment remains
@@ -53,9 +58,10 @@ Genesis time, fork version and deposit contract address match the existing Gloas
 - External sources use fixed commits and retain dependencies/compiler artifacts under
   `.cache/external-deploy/`. `EXTERNAL_DEPLOY_CACHE` can override this directory. Source revision
   and tracked-file cleanliness are checked before use.
-- Module activation is encoded into one genuine DAO vote. The configured LDO holder creates the
+- On Panda, module activation is encoded into one genuine DAO vote. The configured LDO holder creates the
   vote through TokenManager, votes, and executes it through Voting and Agent. There is no account
-  impersonation or direct balance/code overwrite.
+  impersonation or direct balance/code overwrite on that path. Ordinary Hardhat/Anvil scratch
+  deployment keeps its Agent impersonation setup.
 - The vote helper emits `scratch-vote-wait`. The TypeScript helper advances complete slots through the
   ordinary control API, preserving the original voting duration and validator duties. With an
   ordinary progressing chain the helper waits naturally, with a bounded wall-clock deadline.
