@@ -1,7 +1,10 @@
-import { ethers, network } from "hardhat";
+import { ethers } from "hardhat";
 
 import { log } from "lib";
 import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file";
+
+// Default chainId of Hardhat Network and Anvil
+const LOCAL_CHAIN_ID = 31337n;
 
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
@@ -13,8 +16,9 @@ function getEnvVariable(name: string, defaultValue?: string): string {
 }
 
 export async function main() {
-  const isLocalNode = ["hardhat", "localhost", "local"].includes(network.name);
-  const DEFAULT_GENESIS_FORK_VERSION = isLocalNode ? "0x00000000" : undefined;
+  const chainId = (await ethers.provider.getNetwork()).chainId;
+  // Keyed on chainId rather than network name: `local` may point at any RPC (e.g. a devnet)
+  const DEFAULT_GENESIS_FORK_VERSION = chainId === LOCAL_CHAIN_ID ? "0x00000000" : undefined;
 
   // Retrieve environment variables
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
@@ -24,6 +28,9 @@ export async function main() {
   const withdrawalQueueBaseUri = getEnvVariable("WITHDRAWAL_QUEUE_BASE_URI", "");
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
   const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", DEFAULT_GENESIS_FORK_VERSION);
+  if (!/^0x[\da-fA-F]{8}$/.test(genesisForkVersion)) {
+    throw new Error(`GENESIS_FORK_VERSION must be a bytes4 value, got ${genesisForkVersion}`);
+  }
   const consolidationMigratorSourceModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID", "");
   const consolidationMigratorTargetModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID", "");
 
@@ -32,7 +39,7 @@ export async function main() {
 
   // Update network-related information
   state.networkId = parseInt(await ethers.provider.send("net_version"));
-  state.chainId = parseInt((await ethers.provider.getNetwork()).chainId.toString());
+  state.chainId = Number(chainId);
   state.deployer = deployer;
 
   // Update state with new values from environment variables

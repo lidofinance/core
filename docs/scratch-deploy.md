@@ -129,7 +129,8 @@ To do a testnet deployment, the following parameters must be set up via env vari
   on whether specific components of the environment, such as the DepositContract, are deployed or not.
 - `RPC_URL`. Address of the Ethereum RPC node to use, e.g.: `https://<network>.infura.io/v3/<yourProjectId>`
 - `GENESIS_FORK_VERSION`. Genesis fork version of the network to use, e.g. `0x00000000` for Mainnet, `0x90000069` for Sepolia,
-  `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network.
+  `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network. Required on every chain except
+  local Hardhat/Anvil nodes (chainId `31337`), where it defaults to `0x00000000`.
 - `GAS_PRIORITY_FEE`. Gas priority fee. By default set to `2`
 - `GAS_MAX_FEE`. Gas max fee. By default set to `100`
 - `WITHDRAWAL_QUEUE_BASE_URI`. BaseURI for WithdrawalQueueERC721. By default not set (left an empty string)
