@@ -149,23 +149,15 @@ contract HashConsensus is AccessControlEnumerable {
         uint64 lastReportRefSlot;
         // the last reference slot a consensus was reached for
         uint64 lastConsensusRefSlot;
-        // the last consensus variant index
-        uint64 lastConsensusVariantIndex;
+        // the last consensus report hash
+        bytes32 lastConsensusReport;
     }
 
     struct MemberState {
         // the last reference slot a report from this member was received for
         uint64 lastReportRefSlot;
-        // the variant index of the last report from this member
-        uint64 lastReportVariantIndex;
     }
 
-    struct ReportVariant {
-        // the reported hash
-        bytes32 hash;
-        // how many unique members from the current set reported this hash in the current frame
-        uint64 support;
-    }
 
     /// @notice An ACL role granting the permission to modify members list members and
     /// change the quorum by calling addMember, removeMember, and setQuorum functions.
@@ -224,11 +216,14 @@ contract HashConsensus is AccessControlEnumerable {
     /// @dev Oracle committee members quorum value, must be larger than totalMembers // 2
     uint256 internal _quorum;
 
-    /// @dev Mapping from a report variant index to the ReportVariant structure
-    mapping(uint256 => ReportVariant) internal _reportVariants;
+    /// @dev Mapping from member address to their current report hash for the current frame
+    mapping(address => bytes32) internal _memberReports;
 
-    /// @dev The number of report variants
-    uint256 internal _reportVariantsLength;
+    /// @dev Mapping from report hash to the number of members supporting it
+    mapping(bytes32 => uint256) internal _hashSupport;
+
+    /// @dev Array of addresses that submitted reports in the current frame
+    address[] internal _currentFrameReporters;
 
     /// @dev The address of the report processor contract
     address internal _reportProcessor;
@@ -503,7 +498,7 @@ contract HashConsensus is AccessControlEnumerable {
         bool isReportProcessing
     ) {
         refSlot = _getCurrentFrame().refSlot;
-        (consensusReport,,) = _getConsensusReport(refSlot, _quorum);
+        (consensusReport,) = _getConsensusReport(refSlot, _quorum);
         isReportProcessing = _getLastProcessingRefSlot() == refSlot;
     }
 
@@ -517,15 +512,36 @@ contract HashConsensus is AccessControlEnumerable {
             return (variants, support);
         }
 
-        uint256 variantsLength = _reportVariantsLength;
-        variants = new bytes32[](variantsLength);
-        support = new uint256[](variantsLength);
+        address[] memory reporters = _currentFrameReporters;
+        variants = new bytes32[](reporters.length);
+        support = new uint256[](reporters.length);
 
-        for (uint256 i = 0; i < variantsLength; ++i) {
-            ReportVariant memory variant = _reportVariants[i];
-            variants[i] = variant.hash;
-            support[i] = variant.support;
+        uint256 variantCount = 0;
+
+        for (uint256 i = 0; i < reporters.length; i++) {
+            bytes32 memberHash = _memberReports[reporters[i]];
+            if (memberHash != ZERO_HASH) {
+                bool found = false;
+                for (uint256 j = 0; j < variantCount; j++) {
+                    if (variants[j] == memberHash) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    variants[variantCount] = memberHash;
+                    support[variantCount] = _hashSupport[memberHash];
+                    variantCount++;
+                }
+            }
         }
+
+        assembly {
+            mstore(variants, variantCount)
+            mstore(support, variantCount)
+        }
+
+        return (variants, support);
     }
 
     struct MemberConsensusState {
@@ -566,7 +582,7 @@ contract HashConsensus is AccessControlEnumerable {
     {
         ConsensusFrame memory frame = _getCurrentFrame();
         result.currentFrameRefSlot = frame.refSlot;
-        (result.currentFrameConsensusReport,,) = _getConsensusReport(frame.refSlot, _quorum);
+        (result.currentFrameConsensusReport,) = _getConsensusReport(frame.refSlot, _quorum);
 
         uint256 index = _memberIndices1b[addr];
         result.isMember = index != 0;
@@ -578,7 +594,7 @@ contract HashConsensus is AccessControlEnumerable {
             result.lastMemberReportRefSlot = memberState.lastReportRefSlot;
             result.currentFrameMemberReport =
                 result.lastMemberReportRefSlot == frame.refSlot
-                    ? _reportVariants[memberState.lastReportVariantIndex].hash
+                    ? _memberReports[addr]
                     : ZERO_HASH;
 
             uint256 slot = _computeSlotAtTimestamp(_getTime());
@@ -740,7 +756,7 @@ contract HashConsensus is AccessControlEnumerable {
         if (_isMember(addr)) revert DuplicateMember();
         if (addr == address(0)) revert AddressCannotBeZero();
 
-        _memberStates.push(MemberState(0, 0));
+        _memberStates.push(MemberState(0));
         _memberAddresses.push(addr);
 
         uint256 newTotalMembers = _memberStates.length;
@@ -780,7 +796,15 @@ contract HashConsensus is AccessControlEnumerable {
             ) {
                 // member reported for the current ref. slot and the consensus report
                 // is not processing yet => need to cancel the member's report
-                --_reportVariants[memberState.lastReportVariantIndex].support;
+                bytes32 memberHash = _memberReports[addr];
+                if (memberHash != ZERO_HASH) {
+                    if (_hashSupport[memberHash] <= 1) {
+                        delete _hashSupport[memberHash];
+                    } else {
+                        --_hashSupport[memberHash];
+                    }
+                    delete _memberReports[addr];
+                }
             }
         }
 
@@ -895,55 +919,54 @@ contract HashConsensus is AccessControlEnumerable {
             }
         }
 
-        uint256 variantsLength;
-
         if (_reportingState.lastReportRefSlot != slot) {
-            // first report for a new slot => clear report variants
+            // first report for a new slot => clear report mappings for new frame
             _reportingState.lastReportRefSlot = uint64(slot);
-            variantsLength = 0;
-        } else {
-            variantsLength = _reportVariantsLength;
+            _clearMemberReports();
         }
 
-        uint64 varIndex = 0;
+        address member = _msgSender();
+        bytes32 oldReport = _memberReports[member];
         bool prevConsensusLost = false;
 
-        while (varIndex < variantsLength && _reportVariants[varIndex].hash != report) {
-            ++varIndex;
+        if (oldReport == report) {
+            revert DuplicateReport();
         }
 
-        if (slot == memberState.lastReportRefSlot) {
-            uint64 prevVarIndex = memberState.lastReportVariantIndex;
-            assert(prevVarIndex < variantsLength);
-            if (varIndex == prevVarIndex) {
-                revert DuplicateReport();
+        // Remove support from member's previous report (if any)
+        if (oldReport != ZERO_HASH) {
+            uint256 oldSupport = _hashSupport[oldReport];
+
+            if (oldSupport <= 1) {
+                delete _hashSupport[oldReport];
+                oldSupport = 0;
             } else {
-                uint256 support = --_reportVariants[prevVarIndex].support;
-                if (support == _quorum - 1) {
-                    prevConsensusLost = true;
-                }
+                --_hashSupport[oldReport];
+                oldSupport--;
+            }
+
+            if (oldSupport == _quorum - 1) {
+                prevConsensusLost = true;
             }
         }
 
-        uint256 support;
+        // Add support to the new report
+        _memberReports[member] = report;
+        uint256 support = ++_hashSupport[report];
 
-        if (varIndex < variantsLength) {
-            support = ++_reportVariants[varIndex].support;
-        } else {
-            support = 1;
-            _reportVariants[varIndex] = ReportVariant({hash: report, support: 1});
-            _reportVariantsLength = ++variantsLength;
+        // Track this member as a reporter in current frame (avoid duplicates)
+        if (oldReport == ZERO_HASH) {
+            _currentFrameReporters.push(member);
         }
 
         _memberStates[memberIndex] = MemberState({
-            lastReportRefSlot: uint64(slot),
-            lastReportVariantIndex: varIndex
+            lastReportRefSlot: uint64(slot)
         });
 
         emit ReportReceived(slot, _msgSender(), report);
 
         if (support >= _quorum) {
-            _consensusReached(frame, report, varIndex, support);
+            _consensusReached(frame, report, support);
         } else if (prevConsensusLost) {
             _consensusNotReached(frame);
         }
@@ -952,14 +975,13 @@ contract HashConsensus is AccessControlEnumerable {
     function _consensusReached(
         ConsensusFrame memory frame,
         bytes32 report,
-        uint256 variantIndex,
         uint256 support
     ) internal {
         if (_reportingState.lastConsensusRefSlot != frame.refSlot ||
-            _reportingState.lastConsensusVariantIndex != variantIndex
+            _reportingState.lastConsensusReport != report
         ) {
             _reportingState.lastConsensusRefSlot = uint64(frame.refSlot);
-            _reportingState.lastConsensusVariantIndex = uint64(variantIndex);
+            _reportingState.lastConsensusReport = report;
             emit ConsensusReached(frame.refSlot, report, support);
             _submitReportForProcessing(frame, report);
         }
@@ -1010,40 +1032,37 @@ contract HashConsensus is AccessControlEnumerable {
             return;
         }
 
-        (bytes32 consensusReport, int256 consensusVariantIndex, uint256 support) =
+        (bytes32 consensusReport, uint256 support) =
             _getConsensusReport(frame.refSlot, quorum);
 
-        if (consensusVariantIndex >= 0) {
-            _consensusReached(frame, consensusReport, uint256(consensusVariantIndex), support);
+        if (consensusReport != ZERO_HASH && support >= quorum) {
+            _consensusReached(frame, consensusReport, support);
         } else {
             _consensusNotReached(frame);
         }
     }
 
     function _getConsensusReport(uint256 currentRefSlot, uint256 quorum)
-        internal view returns (bytes32 report, int256 variantIndex, uint256 support)
+        internal view returns (bytes32 report, uint256 support)
     {
         if (_reportingState.lastReportRefSlot != currentRefSlot) {
             // there were no reports for the current ref. slot
-            return (ZERO_HASH, -1, 0);
+            return (ZERO_HASH, 0);
         }
 
-        uint256 variantsLength = _reportVariantsLength;
-        variantIndex = -1;
-        report = ZERO_HASH;
-        support = 0;
+        address[] memory members = _memberAddresses;
 
-        for (uint256 i = 0; i < variantsLength; ++i) {
-            uint256 iSupport = _reportVariants[i].support;
-            if (iSupport >= quorum) {
-                variantIndex = int256(i);
-                report = _reportVariants[i].hash;
-                support = iSupport;
-                break;
+        for (uint256 i = 0; i < members.length; i++) {
+            bytes32 memberHash = _memberReports[members[i]];
+            if (memberHash != ZERO_HASH) {
+                uint256 hashSupport = _hashSupport[memberHash];
+                if (hashSupport >= quorum) {
+                    return (memberHash, hashSupport);
+                }
             }
         }
 
-        return (report, variantIndex, support);
+        return (ZERO_HASH, 0);
     }
 
     ///
@@ -1069,7 +1088,7 @@ contract HashConsensus is AccessControlEnumerable {
             processingRefSlotNext < frame.refSlot &&
             lastConsensusRefSlot == frame.refSlot
         ) {
-            bytes32 report = _reportVariants[_reportingState.lastConsensusVariantIndex].hash;
+            bytes32 report = _reportingState.lastConsensusReport;
             _submitReportForProcessing(frame, report);
         }
     }
@@ -1092,5 +1111,20 @@ contract HashConsensus is AccessControlEnumerable {
 
     function _getConsensusVersion() internal view returns (uint256) {
         return IReportAsyncProcessor(_reportProcessor).getConsensusVersion();
+    }
+
+    /// @dev Clears member reports and hash support mappings for a new frame
+    function _clearMemberReports() internal {
+        address[] memory reporters = _currentFrameReporters;
+        uint256 reportersLength = reporters.length;
+        for (uint256 i = 0; i < reportersLength; i++) {
+            address reporter = reporters[i];
+            bytes32 oldReport = _memberReports[reporter];
+            if (oldReport != ZERO_HASH) {
+                delete _hashSupport[oldReport];
+                delete _memberReports[reporter];
+            }
+        }
+        delete _currentFrameReporters;
     }
 }
