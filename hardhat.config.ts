@@ -67,6 +67,13 @@ const config: HardhatUserConfig = {
       url: RPC_URL,
       timeout: 120_000,
     },
+    // Panda starts this real Geth endpoint in the integration suite before hook.
+    "panda": {
+      url: process.env.PANDA_URL || `http://127.0.0.1:${process.env.PANDA_PORT || "18547"}`,
+      chainId: 1337,
+      accounts: ["0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"],
+      timeout: 120_000,
+    },
     // local nodes
     "local": {
       url: RPC_URL,

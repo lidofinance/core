@@ -3,7 +3,6 @@ import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
 import { getMode } from "hardhat.helpers";
-import os from "os";
 import path from "path";
 import {
   readUpgradeParameters,
@@ -16,8 +15,10 @@ import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
 import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
+import { prepareExternalProject, RPC_GAS_ARGS } from "./external-project";
+
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
-const STAKING_MODULES_REPO_BRANCH = "develop";
+const STAKING_MODULES_REPO_REF = "e37fa1b783f34792f6db75684e74eb2be6c4b70f";
 
 type ExternalDeployArtifact = Record<string, unknown> & {
   CSModule?: string;
@@ -349,80 +350,69 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
     getAddress(Sk.hashConsensusForAccountingOracle, state),
   );
   const { epochsPerFrame } = await hashConsensus.getFrameConfig();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "staking-modules-"));
-  log(`Cloning staking modules repo to ${tmpDir}...`);
+  const tmpDir = prepareExternalProject("staking-modules", STAKING_MODULES_REPO, STAKING_MODULES_REPO_REF, [
+    ["just", "deps"],
+  ]);
 
-  try {
-    run(
-      "git",
-      ["clone", "--depth", "1", "-b", STAKING_MODULES_REPO_BRANCH, "--single-branch", STAKING_MODULES_REPO, tmpDir],
-      process.cwd(),
-      process.env,
-    );
-    run("just", ["deps"], tmpDir, process.env);
+  const { isScratch, chain } = getEnvParams();
+  const artifactsDir = "./artifacts/local/";
 
-    const { isScratch, chain } = getEnvParams();
-    const artifactsDir = "./artifacts/local/";
+  const externalEnv = {
+    ...process.env,
+    ...getRpcHostPort(rpcUrl),
+    RPC_URL: rpcUrl,
+    CHAIN: chain,
+    ARTIFACTS_DIR: artifactsDir,
+    YARN_IGNORE_NODE: "1",
+    DEVNET_CHAIN_ID: chainId.toString(),
+    DEVNET_SLOTS_PER_EPOCH: slotsPerEpoch.toString(),
+    DEVNET_GENESIS_TIME: genesisTime.toString(),
+    DEVNET_CAPELLA_EPOCH: capellaEpoch.toString(),
+    DEVNET_ELECTRA_EPOCH: capellaEpoch.toString(),
+    CSM_EPOCHS_PER_FRAME: epochsPerFrame.toString(),
+    CSM_LOCATOR_ADDRESS: state[Sk.lidoLocator].proxy.address,
+    CSM_ARAGON_AGENT_ADDRESS: state[Sk.appAgent].proxy.address,
+    CSM_FIRST_ADMIN_ADDRESS: state[Sk.appAgent].proxy.address,
+    CSM_CIRCUIT_BREAKER_ADDRESS: state[Sk.circuitBreaker]?.address,
+    CSM_RESEAL_MANAGER_ADDRESS: state[Sk.resealManager]?.address || state[Sk.appAgent].proxy.address,
+    EVM_SCRIPT_EXECUTOR_ADDRESS: state[Sk.appVoting].proxy.address,
+  } as unknown as NodeJS.ProcessEnv;
 
-    const externalEnv = {
-      ...process.env,
-      ...getRpcHostPort(rpcUrl),
-      RPC_URL: rpcUrl,
-      CHAIN: chain,
-      ARTIFACTS_DIR: artifactsDir,
-      YARN_IGNORE_NODE: "1",
-      DEVNET_CHAIN_ID: chainId.toString(),
-      DEVNET_SLOTS_PER_EPOCH: slotsPerEpoch.toString(),
-      DEVNET_GENESIS_TIME: genesisTime.toString(),
-      DEVNET_CAPELLA_EPOCH: capellaEpoch.toString(),
-      DEVNET_ELECTRA_EPOCH: capellaEpoch.toString(),
-      CSM_EPOCHS_PER_FRAME: epochsPerFrame.toString(),
-      CSM_LOCATOR_ADDRESS: state[Sk.lidoLocator].proxy.address,
-      CSM_ARAGON_AGENT_ADDRESS: state[Sk.appAgent].proxy.address,
-      CSM_FIRST_ADMIN_ADDRESS: state[Sk.appAgent].proxy.address,
-      CSM_CIRCUIT_BREAKER_ADDRESS: state[Sk.circuitBreaker]?.address,
-      CSM_RESEAL_MANAGER_ADDRESS: state[Sk.resealManager]?.address || state[Sk.appAgent].proxy.address,
-      EVM_SCRIPT_EXECUTOR_ADDRESS: state[Sk.appVoting].proxy.address,
-    } as unknown as NodeJS.ProcessEnv;
-
-    if (!csmDeployed) {
-      log("Deploying Community Staking Module from external repo...");
-      let artifactsFile: string;
-      const cmdOptions: string[] = [];
-      if (isScratch) {
-        cmdOptions.push(`deploy-csm`);
-        artifactsFile = `deploy-${chain}.json`;
-      } else {
-        cmdOptions.push(`deploy-csm-impl`);
-        cmdOptions.push(`--broadcast`);
-        cmdOptions.push(`--slow`);
-        artifactsFile = `upgrade-${chain}.json`;
-      }
-      cmdOptions.push(`--private-key=${privateKey}`);
-      run("just", cmdOptions, tmpDir, externalEnv);
-      const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm", artifactsFile));
-      saveCSMArtifact(state, artifact, isScratch);
-      log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
-      log.emptyLine();
+  if (!csmDeployed) {
+    log("Deploying Community Staking Module from external repo...");
+    let artifactsFile: string;
+    const cmdOptions: string[] = [];
+    if (isScratch) {
+      cmdOptions.push(`deploy-csm`);
+      artifactsFile = `deploy-${chain}.json`;
+    } else {
+      cmdOptions.push(`deploy-csm-impl`);
+      cmdOptions.push(`--broadcast`);
+      cmdOptions.push(`--slow`);
+      artifactsFile = `upgrade-${chain}.json`;
     }
-
-    if (!curatedDeployed) {
-      log("Deploying Curated Module v2 from external repo...");
-      /// @dev using deploy-curated for both scratch and upgrade, since Curated doesn't exist yet
-      ///      and there's nothing to update. Reserved for future use
-      const cmdOptions: string[] = [];
-      cmdOptions.push("deploy-curated");
-      cmdOptions.push(`--private-key=${privateKey}`);
-      const artifactsFile = `deploy-${chain}.json`;
-      run("just", cmdOptions, tmpDir, externalEnv);
-      const artifact = readArtifact(path.join(tmpDir, artifactsDir, "curated", artifactsFile));
-      saveCuratedArtifact(state, artifact);
-      log(`Curated Module v2 deployed at: ${cy(artifact.CuratedModule!)}`);
-      log.emptyLine();
-    }
-
-    await warmUpJsonRpcProvider();
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cmdOptions.push(`--private-key=${privateKey}`, ...RPC_GAS_ARGS);
+    run("just", cmdOptions, tmpDir, externalEnv);
+    const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm", artifactsFile));
+    saveCSMArtifact(state, artifact, isScratch);
+    log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
+    log.emptyLine();
   }
+
+  if (!curatedDeployed) {
+    log("Deploying Curated Module v2 from external repo...");
+    /// @dev using deploy-curated for both scratch and upgrade, since Curated doesn't exist yet
+    ///      and there's nothing to update. Reserved for future use
+    const cmdOptions: string[] = [];
+    cmdOptions.push("deploy-curated");
+    cmdOptions.push(`--private-key=${privateKey}`, ...RPC_GAS_ARGS);
+    const artifactsFile = `deploy-${chain}.json`;
+    run("just", cmdOptions, tmpDir, externalEnv);
+    const artifact = readArtifact(path.join(tmpDir, artifactsDir, "curated", artifactsFile));
+    saveCuratedArtifact(state, artifact);
+    log(`Curated Module v2 deployed at: ${cy(artifact.CuratedModule!)}`);
+    log.emptyLine();
+  }
+
+  await warmUpJsonRpcProvider();
 }

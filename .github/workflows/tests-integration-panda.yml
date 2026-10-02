@@ -1,0 +1,98 @@
+name: Integration Tests Panda
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Published Gloas image tag or digest (latest falls back to v0.1.0 if missing)
+        required: true
+        type: string
+        default: ghcr.io/lidofinance/panda-gloas:latest
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.select.outputs.image }}
+    steps:
+      - id: select
+        env:
+          PANDA_IMAGE: ${{ inputs.image || 'ghcr.io/lidofinance/panda-gloas:latest' }}
+          REGISTRY_TOKEN: ${{ secrets.PANDA_REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          [[ "$PANDA_IMAGE" =~ ^ghcr\.io/lidofinance/panda-gloas(:(latest|v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)|@sha256:[a-f0-9]{64})$ ]]
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if [[ "$PANDA_IMAGE" == ghcr.io/lidofinance/panda-gloas:latest ]]; then
+            if docker manifest inspect "$PANDA_IMAGE" > /dev/null 2> "$RUNNER_TEMP/panda-manifest-error"; then
+              echo "Using published Panda latest"
+            elif grep -Eqi 'unauthorized|denied|forbidden|timeout|timed out' "$RUNNER_TEMP/panda-manifest-error"; then
+              cat "$RUNNER_TEMP/panda-manifest-error" >&2
+              exit 1
+            elif grep -Eqi 'manifest unknown|no such manifest|not found' "$RUNNER_TEMP/panda-manifest-error"; then
+              PANDA_IMAGE=ghcr.io/lidofinance/panda-gloas:v0.1.0
+              docker manifest inspect "$PANDA_IMAGE" > /dev/null
+              echo "::notice::Panda latest is absent; using $PANDA_IMAGE"
+            else
+              cat "$RUNNER_TEMP/panda-manifest-error" >&2
+              exit 1
+            fi
+          fi
+          echo "image=$PANDA_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Panda service image: \`$PANDA_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: select
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PANDA_URL: http://127.0.0.1:18547
+      PANDA_BEACON_URL: http://127.0.0.1:5052
+      NODE_OPTIONS: --max_old_space_size=10240
+    services:
+      panda:
+        image: ${{ needs.select.outputs.image }}
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.PANDA_REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
+        ports:
+          - 127.0.0.1:18547:8545
+          - 127.0.0.1:5052:5052
+          - 127.0.0.1:5062:5062
+        options: --privileged --stop-timeout 120 --label io.panda.id=lido-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Common setup
+        uses: ./.github/workflows/setup
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.7.1
+      - name: Install just
+        run: cargo install just --locked
+      - run: cp .env.example .env
+      # The suite checks block zero and owns deployment, warmup, automine and time controls.
+      - name: Run existing Panda integration suite
+        run: yarn test:integration:panda --bail
+      - name: Save Panda service and client logs
+        if: failure()
+        env:
+          SERVICE_ID: ${{ job.services.panda.id }}
+        run: |
+          mkdir -p .local/panda
+          docker logs "$SERVICE_ID" > .local/panda/service.log 2>&1 || true
+          for client in el cl vc; do
+            docker exec "$SERVICE_ID" panda logs "$client" --tail 2000 \
+              > ".local/panda/$client.log" 2>&1 || true
+          done
+      - name: Upload Panda evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: panda-integration-${{ github.run_attempt }}
+          path: .local/panda/
+          retention-days: 7

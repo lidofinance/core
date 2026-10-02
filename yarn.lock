@@ -8454,6 +8454,7 @@ __metadata:
     "@aragon/minime": "npm:1.0.0"
     "@aragon/os": "npm:4.4.0"
     "@chainsafe/blst": "npm:2.2.0"
+    "@chainsafe/persistent-merkle-tree": "npm:1.2.0"
     "@chainsafe/ssz": "npm:1.2.1"
     "@commitlint/cli": "npm:^19.8.1"
     "@commitlint/config-conventional": "npm:^19.8.1"
