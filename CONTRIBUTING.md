@@ -404,7 +404,7 @@ jobs:
 
     services:
       mainnet-fork:
-        image: ghcr.io/lidofinance/hardhat-node:3.15.0
+        image: ghcr.io/lidofinance/hardhat-node:3.18.1
         ports:
           - 8545:8545
         env:
