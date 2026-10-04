@@ -1,7 +1,7 @@
-import { Contract, Log, LogDescription, Signer } from "ethers";
-import { ethers } from "hardhat";
+import { Contract, getAddress, type Log, type LogDescription, type Signer } from "ethers";
+import hre from "hardhat";
 
-import { readNetworkState, Sk } from "lib/state-file";
+import { readNetworkState, Sk } from "../../state-file.js";
 
 export const DELEGATION_FACTORY_ABI = [
   "function deploy(address owner, address delegate, uint256 cooldown) returns (address instance)",
@@ -28,10 +28,11 @@ export type DeployedDelegationContract = {
   contract: Contract;
 };
 
-export const getDelegationFactory = () => {
+export const getDelegationFactory = async () => {
+  const { ethers } = await hre.network.getOrCreate();
   const factoryAddress = readNetworkState()[Sk.delegationFactory]?.address;
   if (!factoryAddress) throw new Error("DelegationFactory address is missing in deployment state");
-  return new ethers.Contract(factoryAddress, DELEGATION_FACTORY_ABI, ethers.provider);
+  return new Contract(factoryAddress, DELEGATION_FACTORY_ABI, ethers.provider);
 };
 
 export const deployDelegationContract = async (
@@ -39,7 +40,8 @@ export const deployDelegationContract = async (
   delegate: string,
   cooldown: bigint = 0n,
 ): Promise<DeployedDelegationContract> => {
-  const factory = getDelegationFactory().connect(owner) as Contract;
+  const { ethers } = await hre.network.getOrCreate();
+  const factory = (await getDelegationFactory()).connect(owner) as Contract;
   const ownerAddress = await owner.getAddress();
   const tx = await factory.deploy(ownerAddress, delegate, cooldown);
   const receipt = await tx.wait();
@@ -56,13 +58,13 @@ export const deployDelegationContract = async (
     .find((event: LogDescription | null) => event?.name === "DelegationContractDeployed");
   if (!deploymentEvent) throw new Error("DelegationContractDeployed event was not emitted");
 
-  const address = ethers.getAddress(deploymentEvent.args.instance);
+  const address = getAddress(deploymentEvent.args.instance);
   if ((await ethers.provider.getCode(address)) === "0x") {
     throw new Error(`DelegationContract at ${address} has no bytecode`);
   }
 
   return {
     address,
-    contract: new ethers.Contract(address, DELEGATION_CONTRACT_ABI, ethers.provider),
+    contract: new Contract(address, DELEGATION_CONTRACT_ABI, ethers.provider),
   };
 };

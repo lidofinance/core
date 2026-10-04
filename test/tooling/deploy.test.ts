@@ -2,9 +2,10 @@ import { mock } from "node:test";
 
 import { expect } from "chai";
 import { FeeData, parseUnits } from "ethers";
-import { ethers } from "hardhat";
 
-import { deployContract } from "lib/deploy";
+import { deployContract } from "#lib/deploy.js";
+
+import { ethers } from "#test/suite";
 
 describe("Deployment fees", () => {
   const envKeys = ["AUTO_FEE", "GAS_PRIORITY_FEE", "GAS_MAX_FEE", "GAS_LIMIT", "DEPLOYER"] as const;

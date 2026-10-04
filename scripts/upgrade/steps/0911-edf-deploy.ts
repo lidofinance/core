@@ -1,10 +1,7 @@
-import { getResolvedDelegationContractAddress } from "scripts/utils/edf-upgrade";
-import { readEDFUpgradeParameters } from "scripts/utils/upgrade";
-
-import { DepositSecurityModule__factory, LidoLocator, LidoLocator__factory } from "typechain-types";
+import type { DepositSecurityModule__factory, LidoLocator, LidoLocator__factory } from "typechain-types/index.js";
 
 import {
-  ConstructorArgs,
+  type ConstructorArgs,
   deployImplementation,
   deployWithoutProxy,
   getAddress,
@@ -17,7 +14,10 @@ import {
   makeTx,
   readNetworkState,
   Sk,
-} from "lib";
+} from "#lib";
+
+import { getResolvedDelegationContractAddress } from "#scripts/utils/edf-upgrade.js";
+import { readEDFUpgradeParameters } from "#scripts/utils/upgrade.js";
 
 export async function main() {
   const state = readNetworkState();

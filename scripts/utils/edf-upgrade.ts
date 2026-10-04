@@ -1,15 +1,16 @@
-import { Contract, Log, LogDescription } from "ethers";
-import { ethers, network as hardhatNetwork } from "hardhat";
+import { type Contract, ethers, type Log, type LogDescription } from "ethers";
+import hre from "hardhat";
+
+import { cy, getDeployerSigner, log } from "#lib";
+import type { EDFDelegationContract, EDFUpgradeParameters } from "#lib/config-schemas.js";
+import { DELEGATION_CONTRACT_ABI, DELEGATION_FACTORY_ABI } from "#lib/protocol/helpers/edf.js";
+import { type DeploymentState, getAddress, Sk, updateObjectInState } from "#lib/state-file.js";
+
 import {
   deployExecutionDelegationFramework,
   EDF_REPO,
   EDF_REPO_REF,
-} from "scripts/utils/execution-delegation-framework";
-
-import { cy, getDeployerSigner, log } from "lib";
-import { EDFDelegationContract, EDFUpgradeParameters } from "lib/config-schemas";
-import { DELEGATION_CONTRACT_ABI, DELEGATION_FACTORY_ABI } from "lib/protocol/helpers/edf";
-import { DeploymentState, getAddress, Sk, updateObjectInState } from "lib/state-file";
+} from "#scripts/utils/execution-delegation-framework.js";
 
 const ERC1271_INTERFACE_ID = "0x1626ba7e";
 const LOCATOR_ABI = ["function depositSecurityModule() view returns (address)"];
@@ -111,7 +112,8 @@ export function buildDelegationDeploymentPlan(
 }
 
 async function validateChainState(state: DeploymentState, expectedChainId: number) {
-  const { chainId } = await ethers.provider.getNetwork();
+  const { provider } = (await hre.network.getOrCreate()).ethers;
+  const { chainId } = await provider.getNetwork();
   const stateChainId = state[Sk.chainId] ?? state[Sk.chainSpec]?.chainId;
   if (chainId !== BigInt(expectedChainId) || stateChainId === undefined || BigInt(stateChainId) !== chainId) {
     throw new Error(
@@ -146,9 +148,10 @@ async function validateSourceMembership(
   parameters: EDFUpgradeParameters,
   validateOracleCommittees: boolean,
 ) {
-  const locator = new ethers.Contract(getAddress(Sk.lidoLocator, state), LOCATOR_ABI, ethers.provider);
+  const { provider } = (await hre.network.getOrCreate()).ethers;
+  const locator = new ethers.Contract(getAddress(Sk.lidoLocator, state), LOCATOR_ABI, provider);
   const activeDSMAddress = await locator.depositSecurityModule();
-  const dsm = new ethers.Contract(activeDSMAddress, DSM_MEMBERSHIP_ABI, ethers.provider);
+  const dsm = new ethers.Contract(activeDSMAddress, DSM_MEMBERSHIP_ABI, provider);
   const guardianMappings = parameters.depositSecurityModule.guardianMappings;
   const guardians = await dsm.getGuardians();
   // Hoodi removes an extra Lido dev council seat. Other networks keep the guardian count.
@@ -172,9 +175,9 @@ async function validateSourceMembership(
   if (!validateOracleCommittees) return;
 
   for (const committee of parameters.oracleCommittees) {
-    const code = await ethers.provider.getCode(committee.consensusContract);
+    const code = await provider.getCode(committee.consensusContract);
     if (code === "0x") throw new Error(`${committee.id} consensus contract has no bytecode`);
-    const consensus = new ethers.Contract(committee.consensusContract, HASH_CONSENSUS_ABI, ethers.provider);
+    const consensus = new ethers.Contract(committee.consensusContract, HASH_CONSENSUS_ABI, provider);
     const [members] = await consensus.getMembers();
     await validateMembership(
       committee.id,
@@ -207,11 +210,12 @@ async function validateDelegationContract(
   expectedCooldown?: number,
   expectedRuntimeCodeHash?: string,
 ): Promise<ValidatedDelegationContract> {
+  const { provider } = (await hre.network.getOrCreate()).ethers;
   const normalizedAddress = ethers.getAddress(address);
-  const code = await ethers.provider.getCode(normalizedAddress);
+  const code = await provider.getCode(normalizedAddress);
   if (code === "0x") throw new Error(`Delegation contract ${id} at ${normalizedAddress} has no bytecode`);
 
-  const contract = new ethers.Contract(normalizedAddress, DELEGATION_CONTRACT_ABI, ethers.provider);
+  const contract = new ethers.Contract(normalizedAddress, DELEGATION_CONTRACT_ABI, provider);
   const owner = ethers.getAddress(await contract.owner());
   const delegate = ethers.getAddress(await contract.getDelegate());
   const cooldown = await contract.getCooldown();
@@ -291,7 +295,8 @@ async function validateDeploymentProvenance(
   delegate: string,
   cooldown: number,
 ) {
-  const receipt = await ethers.provider.getTransactionReceipt(deploymentTx);
+  const { provider } = (await hre.network.getOrCreate()).ethers;
+  const receipt = await provider.getTransactionReceipt(deploymentTx);
   if (!receipt || receipt.status !== 1) {
     throw new Error(`Delegation contract ${id} deployment transaction is missing or failed`);
   }
@@ -335,6 +340,7 @@ export async function deployOrReuseEDFDelegationContracts(
   parameters: EDFUpgradeParameters,
   scope: EDFDelegationContractScope = "all",
 ): Promise<Record<string, StoredDelegationContract>> {
+  const { ethers: hardhatEthers, networkName } = await hre.network.getOrCreate();
   await validateChainState(state, parameters.chainId);
   const framework = parameters.executionDelegationFramework;
   if (framework.repository !== EDF_REPO || framework.ref !== EDF_REPO_REF) {
@@ -345,7 +351,7 @@ export async function deployOrReuseEDFDelegationContracts(
 
   const delegationContracts = getDelegationContractsForScope(parameters, scope);
 
-  const canDeployPrerequisites = hardhatNetwork.name === "local" || hardhatNetwork.name === "local-devnet";
+  const canDeployPrerequisites = networkName === "local" || networkName === "local-devnet";
   if (!canDeployPrerequisites) {
     if (!framework.factory.address || !framework.factory.runtimeCodeHash) {
       throw new Error("DelegationFactory address and runtime code hash are required on this network");
@@ -355,7 +361,7 @@ export async function deployOrReuseEDFDelegationContracts(
       throw new Error(`Delegation contract ${incompleteContract.id} requires an address on this network`);
     }
   }
-  if (hardhatNetwork.name === "local-devnet") {
+  if (networkName === "local-devnet") {
     const incompleteContract = delegationContracts.find(
       ({ address, owner, delegate, cooldown }) => !address && (!owner || !delegate || cooldown === undefined),
     );
@@ -381,8 +387,8 @@ export async function deployOrReuseEDFDelegationContracts(
   const plan = buildDelegationDeploymentPlan(delegationContracts, stored);
 
   const needsTestConfiguration = plan.some((item) => item.action === "deploy" && (!item.owner || !item.delegate));
-  const testSigners = needsTestConfiguration ? await ethers.getSigners() : [];
-  if (needsTestConfiguration && hardhatNetwork.name !== "local") {
+  const testSigners = needsTestConfiguration ? await hardhatEthers.getSigners() : [];
+  if (needsTestConfiguration && networkName !== "local") {
     throw new Error("Missing delegation contract owner/delegate configuration outside the local fork runtime");
   }
   if (needsTestConfiguration && testSigners.length < 2) {

@@ -1,8 +1,8 @@
-import { EDFUpgradeVoteScript__factory } from "typechain-types";
-import { EDFUpgradeVoteScript } from "typechain-types/contracts/upgrade/EDFUpgradeVoteScript";
+import type { EDFUpgradeVoteScript__factory } from "typechain-types/index.js";
+import type { EDFUpgradeVoteScript } from "typechain-types/contracts/upgrade/EDFUpgradeVoteScript.js";
 
 import {
-  ConstructorArgs,
+  type ConstructorArgs,
   deployWithoutProxy,
   getDeployerSigner,
   logArgs,
@@ -12,7 +12,7 @@ import {
   persistNetworkState,
   readNetworkState,
   Sk,
-} from "lib";
+} from "#lib";
 
 export async function main() {
   const state = readNetworkState();

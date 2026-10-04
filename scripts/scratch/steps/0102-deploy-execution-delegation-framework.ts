@@ -1,11 +1,9 @@
-import { ethers } from "hardhat";
-import { deployExecutionDelegationFramework } from "scripts/utils/execution-delegation-framework";
+import { getDeployerState } from "#lib/deploy.js";
 
-import { readNetworkState } from "lib/state-file";
+import { deployExecutionDelegationFramework } from "#scripts/utils/execution-delegation-framework.js";
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { state } = await getDeployerState();
 
   await deployExecutionDelegationFramework(state);
 }
