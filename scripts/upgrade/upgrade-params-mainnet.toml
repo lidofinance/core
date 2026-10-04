@@ -1,0 +1,157 @@
+# EDF / DSM v5 Mainnet release manifest.
+
+chainId = 1
+
+[executionDelegationFramework]
+repository = "https://github.com/lidofinance/execution-delegation-framework.git"
+ref = "557299104ad3eb1a74198933bd016328c490e276"
+
+[executionDelegationFramework.factory]
+address = "0xD990770eB2B4b6062EDdB06892fF179C693b46e6"
+runtimeCodeHash = "0x0898ad72098301345c44103c8aca22cd8a0a02a339bffe222c6487ec25ff3591"
+
+[guardians.lido-dev-team]
+currentAddress = "0x5fd0dDbC3351d009eb3f88DE7Cd081a614C519F1"
+delegationContract = "0x915F0Fa50E1af761B113b41c79ab33Bf4734C36E"
+owner = "0x2E6e175F57D7a18b3CA5490844034600FC18EF83"
+delegate = "0x5ecf14e7a3831D44e2F7d4542Ba98C6c96E47420"
+cooldown = 172800
+
+[guardians.p2p]
+currentAddress = "0xa56b128Ea2Ea237052b0fA2a96a387C0E43157d8"
+delegationContract = "0xe387Ba1d5C9f6306eCe9ac949C7fB6233dD5411E"
+owner = "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A"
+delegate = "0xAEbd3E0c29111C02166FB2d560f7158a6ccE6841"
+cooldown = 172800
+
+[guardians.staking-facilities]
+currentAddress = "0xf82D88217C249297C6037BA77CE34b3d8a90ab43"
+delegationContract = "0x35506190Ca6df385aA6Bc4a970646dd4f49426c1"
+owner = "0x3d49967d09637B83E465Cc32b1C5d968e3d34eA8"
+delegate = "0x06d6c4F26354aA1426c0Abd79A5f18A5d5fF684f"
+cooldown = 172800
+
+[guardians.blockscape]
+currentAddress = "0x7912Fa976BcDe9c2cf728e213e892AD7588E6AaF"
+delegationContract = "0xDc1579636686C082fc3b00B9EB25259A110D0C44"
+owner = "0xFcBC1BB96b3F521fe7BFD1E2E309eC032F078fDE"
+delegate = "0x6aF45f506fD171994D26d014Fc079137532Db219"
+cooldown = 172800
+
+[guardians.stakefish]
+currentAddress = "0x4B87F16B8d32cb5a859a4C48a88edB5adBe3498E"
+delegationContract = "0x031E597BcF680f1f2293b119b4b2B14096B15497"
+owner = "0xaB61339Cb8A5BBED2dEaC4D2c6E71B912919aBdB"
+delegate = "0xA4512893C5B8BCD8E7AE1cAa56b8402951720D14"
+cooldown = 172800
+
+[guardians.stakely]
+# Replace Kiln's current DSM seat with the Stakely DelegationContract.
+currentAddress = "0x6d22aE126eB2c37F67a1391B37FF4f2863e61389"
+delegationContract = "0x6A22d74a816662078f2371A7138E7614874cd61d"
+owner = "0xce0F8F5019856D79840F9463b5D05c44c7d9B791"
+delegate = "0xc04c1979e37e53FD21E40bd089D311EEfFdb4E00"
+cooldown = 172800
+
+# Instadapp
+[oracleMembers.oracle-member-01]
+currentAddress = "0x73181107c8D9ED4ce0bbeF7A0b4ccf3320C41d12"
+delegationContract = "0xE75A431A98487DC69A14Bdd13d858E3238e9C1b3"
+owner = "0x772E9D0387671Ce641f17FD1fCFB3a9cE8ED05fB"
+delegate = "0x5595033F304217aFDB8ffB35E42C22B72184730b"
+cooldown = 172800
+
+# Caliber
+[oracleMembers.oracle-member-02]
+currentAddress = "0x4118DAD7f348A4063bD15786c299De2f3B1333F3"
+delegationContract = "0xc77d0Bf3AA4778E36a89CDC8bbc9c34d8060637d"
+owner = "0x84225B558e224dc6C38f4eda1d3591fE6b5E34aa"
+delegate = "0x82A821E8a2585D1AC8f346BE7Da6995490d21Ca6"
+cooldown = 172800
+
+# Staking Facilities
+[oracleMembers.oracle-member-03]
+currentAddress = "0x404335BcE530400a5814375E7Ec1FB55fAff3eA2"
+delegationContract = "0xc7442d4d8F3FfEa0fA4a18Ad3062c8137cE21749"
+owner = "0x035AcCF7E230f32028a1134134A035dda567C86e"
+delegate = "0x7abC999C7E1f22a7E12b2A1024bC17676FE18b4b"
+cooldown = 172800
+
+# Chorus One(Bitwise)
+[oracleMembers.oracle-member-04]
+currentAddress = "0x8dB977C13CAA938BC58464bFD622DF0570564b78"
+delegationContract = "0x56B3eA8016Da18C6E8CD8135492d242F0dE0DBBC"
+owner = "0x6057526Da2Dc9Bd23a3C6F1b15C74De2D7593378"
+delegate = "0x5416CAAb6f37BF81cb2dc7ce0a363AfB9DD92d57"
+cooldown = 172800
+
+# p2p
+[oracleMembers.oracle-member-05]
+currentAddress = "0x007DE4a5F7bc37E2F26c0cb2E8A95006EE9B89b5"
+delegationContract = "0x4E3F2DEeb59eB9a205D82D17647b3e56422e0FEe"
+owner = "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A"
+delegate = "0x565F04cB319EC2295E1fcbBbe5F708687FFcCE75"
+cooldown = 172800
+
+# Chainlayer
+[oracleMembers.oracle-member-06]
+currentAddress = "0xc79F702202E3A6B0B6310B537E786B9ACAA19BAf"
+delegationContract = "0xd524101C3c40f71Fce7B9312D299603880a06Bdb"
+owner = "0x48D10eaec45e330003E62115e56d2A05F29eca70"
+delegate = "0x4D3aD7E8e591d389B612Fc063f53837E284d3F86"
+cooldown = 172800
+
+# bloXroute
+[oracleMembers.oracle-member-07]
+currentAddress = "0x61c91ECd902EB56e314bB2D5c5C07785444Ea1c8"
+delegationContract = "0x99Cd2EF33040879D40BBC77Df81863D97f13C64d"
+owner = "0x9462A9FfF5646d0b6517D8eac49de49277e89dB9"
+delegate = "0x375ABa35EA2011Af97b51bd395494C827d1C39BD"
+cooldown = 172800
+
+# MatrixedLink
+[oracleMembers.oracle-member-08]
+currentAddress = "0xe57B3792aDCc5da47EF4fF588883F0ee0c9835C9"
+delegationContract = "0xC4f2704273598d51A0ec76A31C12553ec8f5A891"
+owner = "0x60D78785B763374bd552F5cE270da77781C6066C"
+delegate = "0xC10258969442c7957351A0ddc8194D2685B2a2c2"
+cooldown = 172800
+
+# Stakefish
+[oracleMembers.oracle-member-09]
+currentAddress = "0x042a9e5acCfa17e28300F1b5967f20891E973922"
+delegationContract = "0x5e8Ed9f10307eD6FA793A347e4D0f407D00B9C6f"
+owner = "0x3F7c24Cc2C91E8BEb20498E61b51a696ffb2AbA5"
+delegate = "0x2aE828F10DfeE5b4c42f6E61D3d30033D4520753"
+cooldown = 172800
+
+[depositSecurityModule]
+maxOperatorsPerUnvetting = 200
+pauseIntentValidityPeriodBlocks = 6646
+quorum = 4
+
+[oracleCommittees.accounting-oracle]
+consensusContract = "0xD624B08C83bAECF0807Dd2c6880C3154a5F0B288"
+quorum = 5
+
+[oracleCommittees.validators-exit-bus-oracle]
+consensusContract = "0x7FaDB6358950c5fAA66Cb5EB8eE5147De3df355a"
+quorum = 5
+
+[oracleCommittees.csm-fee-oracle]
+consensusContract = "0x71093efF8D8599b5fA340D665Ad60fA7C80688e4"
+quorum = 5
+
+[oracleCommittees.curated-module-fee-oracle]
+consensusContract = "0x902D64c93F6595339aA46105627a085591051aFb"
+quorum = 5
+
+[topUpGateway]
+address = "0x3FC2C71579D80790Aaa3fc7Be8B66ac39dC57374"
+
+[topUpGateway.depositorContract]
+id = "depositor-bot"
+delegationContract = "0x6Aa249bA53A3abcaC52F91146583B3eE2Ee4C7F5"
+owner = "0x2E6e175F57D7a18b3CA5490844034600FC18EF83"
+delegate = "0x2df4013EF30b09100A027192E700114cD0D13900"
+cooldown = 172800

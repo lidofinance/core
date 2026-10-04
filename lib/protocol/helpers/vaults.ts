@@ -211,7 +211,7 @@ export async function autofillRoles(
  * Sets up the protocol with a maximum external ratio
  */
 export async function setupLidoForVaults(ctx: ProtocolContext) {
-  const { lido, acl } = ctx.contracts;
+  const { lido, acl, hashConsensus, lazyOracle } = ctx.contracts;
 
   if ((await lido.getMaxExternalRatioBP()) < 20_00n) {
     const agentSigner = await ctx.getSigner("agent");
@@ -226,6 +226,27 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
   // Initialize LazyOracle timestamp after the upgrade without activating
   // existing CL pending validators from the migrated state.
   await ensureFirstPostMigrationReport(ctx);
+
+  // A live fork can start after HashConsensus enters a new frame but before
+  // AccountingOracle reports it. LazyOracle is one frame behind in that window.
+  // Vault tests then advance another frame and can revert with VaultReportStale,
+  // so synchronize the fixture with the current consensus frame first.
+  const currentRefSlot = (await hashConsensus.getCurrentFrame()).refSlot;
+  const [, latestVaultReportRefSlot] = await lazyOracle.latestReportData();
+
+  if (latestVaultReportRefSlot < currentRefSlot) {
+    await reportWithoutClActivation(ctx, {
+      waitNextReportTime: false,
+      reportBurner: false,
+      reportElVault: false,
+      reportWithdrawalsVault: true,
+      skipWithdrawals: true,
+    });
+  }
+
+  const [, fixtureVaultReportRefSlot] = await lazyOracle.latestReportData();
+  expect(fixtureVaultReportRefSlot).to.equal(currentRefSlot, "Vault fixture report is not from the current frame");
+
   await anchorFreshReport(ctx);
   await normalizeWithdrawalVaultBaseline(ctx, 0n);
 }

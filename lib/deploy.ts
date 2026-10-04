@@ -1,4 +1,11 @@
-import { type ContractFactory, type ContractTransactionReceipt, getAddress, parseUnits, type Signer } from "ethers";
+import {
+  type ContractFactory,
+  type ContractTransactionReceipt,
+  formatUnits,
+  getAddress,
+  parseUnits,
+  type Signer,
+} from "ethers";
 import hre from "hardhat";
 
 import type { FactoryOptions } from "@nomicfoundation/hardhat-ethers/types";
@@ -16,10 +23,7 @@ import {
 import { bl, type ConvertibleToString, cy, log, yl } from "./log.js";
 import { keysOf } from "./protocol/types.js";
 import { incrementGasUsed, readNetworkState, Sk, updateObjectInState } from "./state-file.js";
-
-const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
-const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;
-const GAS_LIMIT = process.env.GAS_LIMIT || null;
+import { toBool } from "./string.js";
 
 const PROXY_CONTRACT_NAME = "OssifiableProxy";
 
@@ -97,13 +101,29 @@ async function getDeploySigner(deployer: string): Promise<Signer> {
   return deployerSigner;
 }
 
-function getDeployTxParams(): DeployTxParams {
-  if (GAS_PRIORITY_FEE !== null && GAS_MAX_FEE !== null) {
+async function getDeployTxParams(): Promise<DeployTxParams> {
+  const gasLimit = process.env.GAS_LIMIT || null;
+  if (toBool(process.env.AUTO_FEE)) {
+    const { ethers } = await hre.network.getOrCreate();
+    const { maxPriorityFeePerGas, maxFeePerGas } = await ethers.provider.getFeeData();
+    if (maxPriorityFeePerGas === null || maxFeePerGas === null) {
+      throw new Error("AUTO_FEE requires EIP-1559 fee data from the provider");
+    }
+    log.withArguments("Automatic deployment fees (gwei)", [
+      `maxPriorityFeePerGas=${formatUnits(maxPriorityFeePerGas, "gwei")}`,
+      `maxFeePerGas=${formatUnits(maxFeePerGas, "gwei")}`,
+    ]);
+    return { type: 2, maxPriorityFeePerGas, maxFeePerGas, gasLimit };
+  }
+
+  const gasPriorityFee = process.env.GAS_PRIORITY_FEE || null;
+  const gasMaxFee = process.env.GAS_MAX_FEE || null;
+  if (gasPriorityFee !== null && gasMaxFee !== null) {
     return {
       type: 2,
-      maxPriorityFeePerGas: parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
-      maxFeePerGas: parseUnits(String(GAS_MAX_FEE), "gwei"),
-      gasLimit: GAS_LIMIT,
+      maxPriorityFeePerGas: parseUnits(gasPriorityFee, "gwei"),
+      maxFeePerGas: parseUnits(gasMaxFee, "gwei"),
+      gasLimit,
     };
   } else {
     throw new Error('Must specify gas ENV vars: "GAS_PRIORITY_FEE" and "GAS_MAX_FEE" in gwei (like just "3")');
@@ -118,7 +138,7 @@ export async function deployContract(
   signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
   const { ethers } = await hre.network.getOrCreate();
-  const txParams = getDeployTxParams();
+  const txParams = await getDeployTxParams();
   const deployerSigner = await getDeploySigner(deployer);
   const factory = (await ethers.getContractFactory(
     artifactName,

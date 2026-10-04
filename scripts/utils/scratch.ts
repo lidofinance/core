@@ -32,6 +32,9 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
       address: null, // Set by deployment scripts
       deployParameters: params.circuitBreaker,
     },
+    [Sk.delegationFactory]: {
+      address: null, // Set by deployment scripts
+    },
     lidoApmEnsName: params.lidoApm.ensName,
     lidoApmEnsRegDurationSec: params.lidoApm.ensRegDurationSec,
     daoAragonId: params.dao.aragonId,

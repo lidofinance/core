@@ -1,5 +1,6 @@
 import { type ContractTransactionReceipt, type ContractTransactionResponse } from "ethers";
 import fs from "fs";
+import hre from "hardhat";
 import { getMode } from "hardhat.helpers.js";
 
 import * as toml from "@iarna/toml";
@@ -26,7 +27,12 @@ import {
   yl,
 } from "#lib";
 import { impersonate } from "#lib/account.js";
-import { type UpgradeParameters, validateUpgradeParameters } from "#lib/config-schemas.js";
+import {
+  type EDFUpgradeParameters,
+  type UpgradeParameters,
+  validateEDFUpgradeParameters,
+  validateUpgradeParameters,
+} from "#lib/config-schemas.js";
 import { loadContract } from "#lib/contract.js";
 import { getTxLink } from "#lib/explorer.js";
 import { log } from "#lib/log.js";
@@ -52,7 +58,7 @@ const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
 const VOTE_DESCRIPTION = process.env.VOTE_DESCRIPTION || "vote-description";
 const VOTE_MODE = process.env.VOTE_MODE || "dg"; // DG mode by default
 
-export type { UpgradeParameters };
+export type { EDFUpgradeParameters, UpgradeParameters };
 
 ///
 /// ---- Upgrade helpers ----
@@ -70,6 +76,18 @@ export function readUpgradeParameters(skipValidation: boolean = false): UpgradeP
     return validateUpgradeParameters(parsedData);
   } catch (error) {
     throw new Error(`Invalid upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
+  }
+}
+
+export function readEDFUpgradeParameters(): EDFUpgradeParameters {
+  const filePath = getUpgradeParametersFilePath();
+  const rawData = fs.readFileSync(filePath, "utf8");
+  const parsedData = toml.parse(rawData);
+
+  try {
+    return validateEDFUpgradeParameters(parsedData);
+  } catch (error) {
+    throw new Error(`Invalid EDF upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
   }
 }
 
@@ -174,7 +192,8 @@ export function writeUpgradeParameterAddresses(sectionName: string, paramKey: st
 }
 
 export const mockAragonVoting = async (state: DeploymentState) => {
-  const holderAddress = process.env.HOLDER || process.env.DEPLOYER || "";
+  const defaultHolder = state[Sk.chainId] === 1 ? getAddress(Sk.appAgent, state) : process.env.DEPLOYER;
+  const holderAddress = process.env.HOLDER || defaultHolder || "";
   const holder = await getSignerOrImpersonate(holderAddress, ether("100"));
   log("Starting mock Aragon voting...");
 
@@ -211,7 +230,7 @@ export const mockAragonVoting = async (state: DeploymentState) => {
     const agent = await impersonate(getAddress(Sk.appAgent, state), ether("100"));
     receipt = await mockEnactDGProposal(state, proposalId, agent);
   }
-  const { template } = await upgCtx(state);
+  const { template } = await aragonCtx(state);
   const event = findEventsWithInterfaces(receipt, "UpgradeFinished", [template.interface])[0];
   if (event) {
     log.success("Template UpgradeFinished event found in tx:", receipt.hash);
@@ -223,7 +242,7 @@ async function newAragonVoting(
   holder: HardhatEthersSigner,
   voteDescription: string,
 ): Promise<bigint> {
-  const { tm, voting, voteScript } = await upgCtx(state);
+  const { tm, voting, voteScript } = await aragonCtx(state);
   let voteItems: VoteItem[] = [];
   let evmScriptNewVote;
   if (VOTE_MODE === "dg") {
@@ -264,7 +283,7 @@ async function newAragonVoting(
 }
 
 async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, holder: HardhatEthersSigner) {
-  const { voting } = await upgCtx(state);
+  const { voting } = await aragonCtx(state);
 
   const vote = await voting.getVote(voteId);
 
@@ -272,7 +291,23 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
     throw new Error(`VoteId ${voteId} does not exist or already executed`);
   }
 
-  if ((await voting.canVote(voteId, holder)) && (await voting.getVoterState(voteId, holder)) !== 1n) {
+  const voterState = await voting.getVoterState(voteId, holder);
+  if (getMode() === "forking" && voterState !== 1n) {
+    const [currentTime, voteTime, objectionPhaseTime] = await Promise.all([
+      getCurrentBlockTimestamp(),
+      voting.voteTime(),
+      voting.objectionPhaseTime(),
+    ]);
+    const mainPhaseEnd = vote.startDate + voteTime - objectionPhaseTime;
+    const nextBlockTime = currentTime + 1n;
+    if (nextBlockTime >= mainPhaseEnd) {
+      throw new Error(`VoteId ${voteId} is no longer in its main voting phase`);
+    }
+    const { ethers } = await hre.network.getOrCreate();
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(nextBlockTime)]);
+  }
+
+  if ((await voting.canVote(voteId, holder)) && voterState !== 1n) {
     log("Try to cast...");
     const voteTx = await voting.connect(holder).vote(voteId, true, true);
     await txWaitAndLog(voteTx);
@@ -433,7 +468,7 @@ export async function mockDGAragonVoting(state: DeploymentState) {
   }
 
   const receipt = await mockEnactDGProposal(state, proposalId, agent);
-  const { template } = await upgCtx(state);
+  const { template } = await aragonCtx(state);
   const event = findEventsWithInterfaces(receipt, "UpgradeFinished", [template.interface])[0];
   if (!event) {
     throw new Error("UpgradeFinished event not found");
@@ -451,18 +486,40 @@ type Ctx = {
   timelock: LoadedContract<ITimelock>;
 };
 
+type AragonCtx = Pick<Ctx, "tm" | "voting" | "template" | "voteScript">;
+
+let aragonCtxPromise: Promise<AragonCtx> | undefined;
 let ctxPromise: Promise<Ctx> | undefined;
+
+export const aragonCtx = (state: DeploymentState): Promise<AragonCtx> => {
+  if (!aragonCtxPromise) {
+    aragonCtxPromise = (async () => {
+      try {
+        const [tm, voting, template, voteScript] = await Promise.all([
+          loadContract<TokenManager>("TokenManager", getAddress(Sk.appTokenManager, state)),
+          loadContract<Voting>("Voting", getAddress(Sk.appVoting, state)),
+          loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state)),
+          loadContract<UpgradeVoteScript>("UpgradeVoteScript", getAddress(Sk.upgradeVoteScript, state)),
+        ]);
+
+        return { tm, voting, template, voteScript };
+      } catch (error) {
+        aragonCtxPromise = undefined;
+        throw error;
+      }
+    })();
+  }
+
+  return aragonCtxPromise;
+};
 
 export const upgCtx = (state: DeploymentState): Promise<Ctx> => {
   if (!ctxPromise) {
     ctxPromise = (async () => {
       try {
-        const [tm, dg, voting, template, voteScript, timelock] = await Promise.all([
-          loadContract<TokenManager>("TokenManager", getAddress(Sk.appTokenManager, state)),
+        const [{ tm, voting, template, voteScript }, dg, timelock] = await Promise.all([
+          aragonCtx(state),
           loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state)),
-          loadContract<Voting>("Voting", getAddress(Sk.appVoting, state)),
-          loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state)),
-          loadContract<UpgradeVoteScript>("UpgradeVoteScript", getAddress(Sk.upgradeVoteScript, state)),
           loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state)),
         ]);
 

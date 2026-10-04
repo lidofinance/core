@@ -220,7 +220,7 @@ export default defineConfig({
     },
     "local": {
       type: "http",
-      url: getRpcUrl("LOCAL_RPC_URL"),
+      url: configVariable("RPC_URL"),
       timeout: 20 * 60 * 1000, // 20 minutes
     },
     "local-devnet": {

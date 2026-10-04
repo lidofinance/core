@@ -27,6 +27,8 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Run integration tests
+        # Use the following command if there are upgrade steps
+        # run: yarn test:integration:upgrade
         run: yarn test:integration
         env:
           NETWORK: "mainnet"

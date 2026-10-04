@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 120
     env:
       STATE_MATE_BRANCH: "main"
-      ETH_HOODI_RPC_URL: "https://hoodi.drpc.org"
+      ETH_HOODI_RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
       ETHERSCAN_TOKEN: "${{ secrets.ETHERSCAN_TOKEN }}"
 
     steps:

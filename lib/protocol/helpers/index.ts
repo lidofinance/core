@@ -33,7 +33,8 @@ export {
 } from "./accounting.js";
 export type { OracleReportParams, OracleReportSubmitParams } from "./accounting.js";
 
-export { ensureDsmGuardians } from "./dsm.js";
+export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm.js";
+export { deployDelegationContract, getDelegationFactory } from "./edf.js";
 export {
   norEnsureDepositedOperatorKeys,
   norSdvtEnsureOperators,
