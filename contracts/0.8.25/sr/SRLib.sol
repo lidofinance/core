@@ -16,7 +16,6 @@ import {
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting,
-    ValidatorExitData,
     ValidatorsCountsCorrection,
     RouterStateAccounting
 } from "./SRTypes.sol";
@@ -577,40 +576,6 @@ library SRLib {
         SRUtils._requireModuleIdExists(_stakingModuleId);
         _stakingModuleId.getIStakingModule()
             .reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
-    }
-
-    /// @notice Handles the triggerable exit event for a set of validators.
-    /// @dev This function is called when validators are exited using triggerable exit requests on the Execution Layer.
-    /// @param validatorExitData An array of `ValidatorExitData` structs, each representing a validator
-    ///        for which a triggerable exit was requested. Each entry includes:
-    ///        - `stakingModuleId`: ID of the staking module.
-    ///        - `nodeOperatorId`: ID of the node operator.
-    ///        - `pubkey`: Validator public key, 48 bytes length.
-    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
-    /// @param _exitType The type of exit being performed.
-    ///        This parameter may be interpreted differently across various staking modules depending on their specific implementation.
-    function _onValidatorExitTriggered(
-        ValidatorExitData[] calldata validatorExitData,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) public {
-        ValidatorExitData calldata data;
-        for (uint256 i = 0; i < validatorExitData.length; ++i) {
-            data = validatorExitData[i];
-            SRUtils._requireModuleIdExists(data.stakingModuleId);
-            try data.stakingModuleId.getIStakingModule()
-                .onValidatorExitTriggered(data.nodeOperatorId, data.pubkey, _withdrawalRequestPaidFee, _exitType) {}
-            catch (bytes memory lowLevelRevertData) {
-                /// @dev This check is required to prevent incorrect gas estimation of the method.
-                ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                ///      return an invalid value when the onValidatorExitTriggered()
-                ///      reverts because of the "out of gas" error. Here we assume that the
-                ///      onValidatorExitTriggered() method doesn't have reverts with
-                ///      empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert ISRBase.UnrecoverableModuleError();
-                emit ISRBase.StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
-            }
-        }
     }
 
     /// @notice Reports the minted rewards to the staking modules with the specified ids.

@@ -60,7 +60,7 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
     /// @notice Initializes the contract.
     /// @param admin Address granted DEFAULT_ADMIN_ROLE.
     function initialize(address admin) external initializer {
-        if (admin == address(0)) revert AdminCannotBeZero();
+        if (admin == address(0)) revert ZeroArgument("admin");
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
@@ -91,6 +91,7 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
             });
         }
 
+        // forge-lint: disable-next-line(unsafe-typecast)
         $.tail = uint128(firstIndex + count);
 
         emit WithdrawalIntentsAdded(firstIndex, count);
@@ -124,6 +125,7 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
             delete $.intents[index];
         }
 
+        // forge-lint: disable-next-line(unsafe-typecast)
         $.head = uint128(head + processedCount);
 
         emit WithdrawalIntentsProcessed(head, processedCount);
@@ -181,11 +183,13 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
 
     function _unpack(PackedIntent storage packed) internal view returns (WithdrawalIntent memory) {
         bytes32 pubkeyTailAndAmount = packed.pubkeyTailAndAmount;
+        // forge-lint: disable-start(unsafe-typecast)
         return
             WithdrawalIntent({
                 amount: uint64(uint256(pubkeyTailAndAmount)),
                 pubkey: abi.encodePacked(packed.pubkeyHead, bytes16(pubkeyTailAndAmount))
             });
+        // forge-lint: disable-end(unsafe-typecast)
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -222,11 +226,6 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
      * @param name Name of the argument that was zero
      */
     error ZeroArgument(string name);
-
-    /**
-     * @notice Thrown when attempting to set the admin address to zero
-     */
-    error AdminCannotBeZero();
 
     /**
      * @notice Thrown when a pubkey length is not 48 bytes

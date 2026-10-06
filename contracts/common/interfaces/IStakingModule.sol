@@ -32,21 +32,6 @@ interface IStakingModule {
         uint256 _eligibleToExitInSec
     ) external;
 
-    /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
-    /// @dev This function is called by the StakingRouter when a validator is triggered to exit using the triggerable
-    ///      exit request on the Execution Layer (EL).
-    /// @param _nodeOperatorId The ID of the node operator.
-    /// @param _publicKey The public key of the validator being reported.
-    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
-    /// @param _exitType The type of exit being performed.
-    ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
-    function onValidatorExitTriggered(
-        uint256 _nodeOperatorId,
-        bytes calldata _publicKey,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) external;
-
     /// @notice Determines whether a validator's exit status should be updated and will have an effect on the Node Operator.
     /// @param _nodeOperatorId The ID of the node operator.
     /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
