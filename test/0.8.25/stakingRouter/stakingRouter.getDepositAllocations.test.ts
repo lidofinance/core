@@ -63,9 +63,9 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  context("getDepositAllocations with _isTopUp = false (initial deposits)", () => {
+  context("getDepositAllocations (seed deposits)", () => {
     it("Returns empty arrays when there are no modules registered", async () => {
-      const result = await stakingRouter.getDepositAllocations(100n, false);
+      const result = await stakingRouter.getDepositAllocations(100n);
       expect(result.totalAllocated).to.equal(0n);
       expect(result.allocated).to.deep.equal([]);
       expect(result.newAllocations).to.deep.equal([]);
@@ -82,7 +82,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const ethToDeposit = 150n * DEFAULT_MEB;
       const moduleAllocation = config.depositable * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.totalAllocated).to.equal(moduleAllocation);
       expect(result.newAllocations).to.deep.equal([moduleAllocation]);
       expect(result.allocated).to.deep.equal([moduleAllocation]);
@@ -102,7 +102,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const ethToDeposit = 200n * DEFAULT_MEB;
       const moduleAllocation = config.depositable * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.totalAllocated).to.equal(moduleAllocation * 2n);
       expect(result.newAllocations).to.deep.equal([moduleAllocation, moduleAllocation]);
       expect(result.allocated).to.deep.equal([moduleAllocation, moduleAllocation]);
@@ -122,7 +122,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const ethToDeposit = 200n * DEFAULT_MEB;
       const moduleAllocation = config.depositable * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.totalAllocated).to.equal(moduleAllocation);
       expect(result.newAllocations).to.deep.equal([moduleAllocation, 0n]);
       expect(result.allocated).to.deep.equal([moduleAllocation, 0n]);
@@ -150,7 +150,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const module1Allocation = module1Config.depositable * DEFAULT_MEB;
       const module2Allocation = module2Config.depositable * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.totalAllocated).to.equal(module1Allocation + module2Allocation);
       expect(result.newAllocations).to.deep.equal([module1Allocation, module2Allocation]);
       expect(result.allocated).to.deep.equal([module1Allocation, module2Allocation]);
@@ -178,7 +178,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const module1Allocation = 100n * DEFAULT_MEB;
       const module2Allocation = 80n * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.totalAllocated).to.equal(module1Allocation + module2Allocation);
       expect(result.newAllocations).to.deep.equal([module1Allocation, module2Allocation]);
     });
@@ -212,7 +212,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const module1Allocation = 160n * DEFAULT_MEB;
       const module2Allocation = 40n * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.totalAllocated).to.equal(module1Allocation + module2Allocation);
       expect(result.newAllocations).to.deep.equal([module1Allocation, module2Allocation]);
       expect(result.allocated).to.deep.equal([module1Allocation, module2Allocation]);
@@ -249,7 +249,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const module1Delta = 100n * DEFAULT_MEB;
       const module2Delta = 10n * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.totalAllocated).to.equal(module1Delta + module2Delta);
       expect(result.newAllocations).to.deep.equal([150n * DEFAULT_MEB, 60n * DEFAULT_MEB]);
       expect(result.allocated).to.deep.equal([module1Delta, module2Delta]);
@@ -263,7 +263,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
       await setupModule(ctx, config);
 
-      const result = await stakingRouter.getDepositAllocations(0n, false);
+      const result = await stakingRouter.getDepositAllocations(0n);
       expect(result.totalAllocated).to.equal(0n);
       expect(result.allocated).to.deep.equal([0n]);
       // newAllocations should reflect current allocation state (no deposited = 0)
@@ -271,38 +271,37 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
     });
   });
 
-  context("getDepositAllocations with _isTopUp = true (top-up deposits)", () => {
-    it("Returns empty arrays when there are no modules registered", async () => {
-      const result = await stakingRouter.getDepositAllocations(100n, true);
-      expect(result.totalAllocated).to.equal(0n);
-      expect(result.allocated).to.deep.equal([]);
-      expect(result.newAllocations).to.deep.equal([]);
+  context("getStakingModuleTopUpAllocation", () => {
+    it("Reverts for an unregistered module", async () => {
+      await expect(stakingRouter.getStakingModuleTopUpAllocation(1n, 100n)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "StakingModuleUnregistered",
+      );
     });
 
-    it("Returns all allocations to a single module if there is only one", async () => {
-      // For top-up 0x02 modules, capacity = activeValidators * maxEBType2 / maxEBType1
+    it("Returns 0 for a 0x01 module", async () => {
+      const [, id] = await setupModule(ctx, { ...DEFAULT_CONFIG, deposited: 10n, depositable: 50n });
+
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id, 100n * DEFAULT_MEB)).to.equal(0n);
+    });
+
+    it("Returns the whole room of a single 0x02 module", async () => {
+      // capacity = activeValidators * maxEBType2 / maxEBType1
       // We need deposited validators with initial balance (32 ETH each) to create top-up room
       const deposited = 10n;
-      const config = {
+      const [, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
         validatorsBalanceGwei: deposited * 32n * ONE_GWEI, // each validator at initial 32 ETH
-      };
-
-      await setupModule(ctx, config);
+      });
 
       // capacity_equiv = 10 * 2048/32 = 640, current_equiv = 10, room = 630
       const ethToDeposit = 631n * DEFAULT_MEB;
-      const moduleAllocation = 630n * DEFAULT_MEB;
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-      expect(result.totalAllocated).to.equal(moduleAllocation);
-      expect(result.newAllocations).to.deep.equal([(deposited + 630n) * DEFAULT_MEB]);
-      expect(result.allocated).to.deep.equal([moduleAllocation]);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id, ethToDeposit)).to.equal(630n * DEFAULT_MEB);
     });
 
-    it("Allocates evenly if target shares are equal and capacities allow for that", async () => {
+    it("Gives each of two equal modules the same allocation when it is the one topped up", async () => {
       const deposited = 1n;
       const config = {
         ...DEFAULT_CONFIG,
@@ -313,20 +312,17 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(ctx, config);
-      await setupModule(ctx, config);
+      const [, id1] = await setupModule(ctx, config);
+      const [, id2] = await setupModule(ctx, config);
 
       // capacity_equiv = 1 * 2048/32 = 64, current_equiv = 1, room = 63
+      // total = 1 + 1 + 50 = 52, target = 26: the topped-up module grows from 1 to 26
       const ethToDeposit = 50n * DEFAULT_MEB;
-      const moduleAllocation = 25n * DEFAULT_MEB;
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-      expect(result.totalAllocated).to.equal(moduleAllocation * 2n);
-      expect(result.newAllocations).to.deep.equal([(deposited + 25n) * DEFAULT_MEB, (deposited + 25n) * DEFAULT_MEB]);
-      expect(result.allocated).to.deep.equal([moduleAllocation, moduleAllocation]);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id1, ethToDeposit)).to.equal(25n * DEFAULT_MEB);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id2, ethToDeposit)).to.equal(25n * DEFAULT_MEB);
     });
 
-    it("Does not allocate to non-Active modules", async () => {
+    it("Returns 0 for a non-Active module", async () => {
       const deposited = 1n;
       const config = {
         ...DEFAULT_CONFIG,
@@ -337,20 +333,16 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(ctx, config);
-      await setupModule(ctx, { ...config, status: StakingModuleStatus.DepositsPaused });
+      const [, id1] = await setupModule(ctx, config);
+      const [, id2] = await setupModule(ctx, { ...config, status: StakingModuleStatus.DepositsPaused });
 
       // Module 1: capacity_equiv = 1 * 2048/32 = 64, current_equiv = 1, room = 63
       const ethToDeposit = 200n * DEFAULT_MEB;
-      const moduleAllocation = deposited * 63n * DEFAULT_MEB; // all to module 1 since module 2 is paused
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-      expect(result.totalAllocated).to.equal(moduleAllocation);
-      expect(result.newAllocations).to.deep.equal([(deposited + 63n) * DEFAULT_MEB, deposited * DEFAULT_MEB]);
-      expect(result.allocated).to.deep.equal([moduleAllocation, 0n]);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id1, ethToDeposit)).to.equal(63n * DEFAULT_MEB);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id2, ethToDeposit)).to.equal(0n);
     });
 
-    it("Allocates according to capacities at equal target shares", async () => {
+    it("Limits the allocation by the active keys capacity at equal target shares", async () => {
       // Module with more active validators has more top-up capacity
       const module1Config = {
         ...DEFAULT_CONFIG,
@@ -370,32 +362,18 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         validatorsBalanceGwei: 2n * 32n * ONE_GWEI,
       };
 
-      await setupModule(ctx, module1Config);
-      await setupModule(ctx, module2Config);
+      const [, id1] = await setupModule(ctx, module1Config);
+      const [, id2] = await setupModule(ctx, module2Config);
 
-      // Module 1: capacity_equiv = 10 * 2048/32 = 640, current_equiv = 10, room = 630
-      // Module 2: capacity_equiv = 2 * 2048/32 = 128, current_equiv = 2, room = 126
-      //
-      // cap1_raw = 10*64=640, cap2_raw = 2*64=128
       // total = 10+2+1000 = 1012, target = 506 each
-      // cap1 = min(506, 640)=506, cap2 = min(506, 128)=128
-      // MinFirst: [10,2] caps [506,128]
-      //   fill 2→10: +8, remaining 992
-      //   fill equally to 128: each +118, remaining 756
-      //   module 2 at cap, module 1 gets min(756, 506-128)=378
-      //   total = 8+236+378 = 622
-      // module1 delta = 496, module2 delta = 126
+      // Module 1 topped up: capacity = min(506, 10*64) = 506, module 2 stays at 2, delta = 496
+      // Module 2 topped up: capacity = min(506, 2*64) = 128, module 1 stays at 10, delta = 126
       const ethToDeposit = 1000n * DEFAULT_MEB;
-      const module1Allocation = 496n * DEFAULT_MEB;
-      const module2Allocation = 126n * DEFAULT_MEB;
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-      expect(result.totalAllocated).to.equal(module1Allocation + module2Allocation);
-      expect(result.newAllocations).to.deep.equal([506n * DEFAULT_MEB, 128n * DEFAULT_MEB]);
-      expect(result.allocated).to.deep.equal([module1Allocation, module2Allocation]);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id1, ethToDeposit)).to.equal(496n * DEFAULT_MEB);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id2, ethToDeposit)).to.equal(126n * DEFAULT_MEB);
     });
 
-    it("Allocates according to target shares", async () => {
+    it("Limits the allocation by the target share", async () => {
       // Same deposited count, different share limits → allocation driven by target shares
       const deposited = 10n;
       const module1Config = {
@@ -416,26 +394,18 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(ctx, module1Config);
-      await setupModule(ctx, module2Config);
+      const [, id1] = await setupModule(ctx, module1Config);
+      const [, id2] = await setupModule(ctx, module2Config);
 
-      // total = 10+10+80 = 100
-      // target1 = 60, target2 = 40, cap_raw = 10*64=640 each
-      // cap1 = min(60,640)=60, cap2 = min(40,640)=40
-      // MinFirst: [10,10] caps [60,40]
-      //   fill equally to 40: each +30, remaining 20
-      //   module 2 at cap, module 1 gets 20
-      //   total = 80
+      // total = 10+10+80 = 100, target1 = 60, target2 = 40
+      // Module 1 topped up: grows from 10 to 60, delta = 50
+      // Module 2 topped up: grows from 10 to 40, delta = 30
       const ethToDeposit = 80n * DEFAULT_MEB;
-      const module1Allocation = 50n * DEFAULT_MEB;
-      const module2Allocation = 30n * DEFAULT_MEB;
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-      expect(result.totalAllocated).to.equal(module1Allocation + module2Allocation);
-      expect(result.newAllocations).to.deep.equal([60n * DEFAULT_MEB, 40n * DEFAULT_MEB]);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id1, ethToDeposit)).to.equal(50n * DEFAULT_MEB);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id2, ethToDeposit)).to.equal(30n * DEFAULT_MEB);
     });
 
-    it("Allocates with unlimited (100%) and 20% limited share modules for top-up", async () => {
+    it("Gives the unlimited (100%) module the whole buffer while the 20% module has no seed demand", async () => {
       const deposited = 10n;
       const module1Config = {
         ...DEFAULT_CONFIG,
@@ -455,29 +425,19 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(ctx, module1Config);
-      await setupModule(ctx, module2Config);
+      const [, id1] = await setupModule(ctx, module1Config);
+      const [, id2] = await setupModule(ctx, module2Config);
 
-      // Each module: cap_raw = 10 * 2048/32 = 640 equiv validators
-      // Current: 10 equiv each
       // totalValidators = 10 + 10 + 100 = 120
-      // Module 1 target: (10000 * 120) / 10000 = 120, cap = min(120, 640) = 120
-      // Module 2 target: (2000 * 120) / 10000 = 24, cap = min(24, 640) = 24
-      // MinFirst: [10,10] caps [120,24]
-      //   fill both to 24: cost 28, remaining 72
-      //   module 2 at cap, module 1 gets min(72, 96) = 72
-      //   result: [96, 24], total allocated = 100
+      // Module 1 topped up: capacity = min(120, 640) = 120; module 2 has no seed demand and stays at 10,
+      //   so module 1 takes all 100
+      // Module 2 topped up: capacity = min(24, 640) = 24, grows from 10 to 24
       const ethToDeposit = 100n * DEFAULT_MEB;
-      const module1Delta = 86n * DEFAULT_MEB;
-      const module2Delta = 14n * DEFAULT_MEB;
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-      expect(result.totalAllocated).to.equal(module1Delta + module2Delta);
-      expect(result.newAllocations).to.deep.equal([96n * DEFAULT_MEB, 24n * DEFAULT_MEB]);
-      expect(result.allocated).to.deep.equal([module1Delta, module2Delta]);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id1, ethToDeposit)).to.equal(100n * DEFAULT_MEB);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id2, ethToDeposit)).to.equal(14n * DEFAULT_MEB);
     });
 
-    it("Unlimited module absorbs excess when 20% module has fewer active validators for top-up", async () => {
+    it("Limits the 20% module by its active keys when it has fewer of them", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
         stakeShareLimit: 100_00n,
@@ -496,36 +456,39 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         validatorsBalanceGwei: 1n * 32n * ONE_GWEI,
       };
 
-      await setupModule(ctx, module1Config);
-      await setupModule(ctx, module2Config);
+      const [, id1] = await setupModule(ctx, module1Config);
+      const [, id2] = await setupModule(ctx, module2Config);
 
       // Module 1: cap_raw = 10 * 64 = 640, current = 10
       // Module 2: cap_raw = 1 * 64 = 64, current = 1
       // totalValidators = 10 + 1 + 600 = 611
-      // Module 1 target: (10000 * 611) / 10000 = 611, cap = min(611, 640) = 611
-      // Module 2 target: (2000 * 611) / 10000 = 122, cap = min(122, 64) = 64
+      // Module 1 topped up: cap = min(611, 640) = 611; module 2 stays at 1, so module 1 takes all 600
+      // Module 2 topped up: cap = min(122, 64) = 64, grows from 1 to 64
       const ethToDeposit = 600n * DEFAULT_MEB;
-      const module1Delta = 537n * DEFAULT_MEB;
-      const module2Delta = 63n * DEFAULT_MEB;
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-      expect(result.totalAllocated).to.equal(module1Delta + module2Delta);
-      expect(result.newAllocations).to.deep.equal([547n * DEFAULT_MEB, 64n * DEFAULT_MEB]);
-      expect(result.allocated).to.deep.equal([module1Delta, module2Delta]);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id1, ethToDeposit)).to.equal(600n * DEFAULT_MEB);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id2, ethToDeposit)).to.equal(63n * DEFAULT_MEB);
     });
 
-    it("Returns zero allocated array when deposit amount is zero", async () => {
-      const config = {
+    it("Returns 0 when deposit amount is zero", async () => {
+      const [, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
-        depositable: 50n,
+        deposited: 10n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-      };
+        validatorsBalanceGwei: 10n * 32n * ONE_GWEI,
+      });
 
-      await setupModule(ctx, config);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id, 0n)).to.equal(0n);
+    });
 
-      const result = await stakingRouter.getDepositAllocations(0n, true);
-      expect(result.totalAllocated).to.equal(0n);
-      expect(result.allocated).to.deep.equal([0n]);
+    it("Returns 0 when the deposit amount is below one unit", async () => {
+      const [, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 10n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        validatorsBalanceGwei: 10n * 32n * ONE_GWEI,
+      });
+
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id, DEFAULT_MEB - 1n)).to.equal(0n);
     });
   });
 
@@ -606,35 +569,29 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       });
     }
 
-    it("Returns zero new allocation when 0x01 modules have no depositable keys and 0x02 module is at share limit", async () => {
+    const MODULE_4_ID = 4n;
+
+    it("Returns zero top-up allocation when the 0x02 module is at its share limit", async () => {
       await setupModules();
 
-      // allocations - is array containing new allocation per module + already allocated amount of Eth
-      // allocated - is a total new sum of deposits
-      // this test expect 0 new allocated Eth
-      const result = await stakingRouter.getDepositAllocations(BUFFER, true);
-      expect(result.totalAllocated).to.equal(0n, "totalAllocated should be 0 — no capacity in any modules");
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(MODULE_4_ID, BUFFER)).to.equal(0n);
 
-      // newAllocations array returns per-module new total allocations (including existing),
-      // verify it has an entry per module
-      expect(result.newAllocations.length).to.equal(4);
+      // seed allocation is zero as well: 0x01 modules have no depositable keys
+      const seed = await stakingRouter.getDepositAllocations(BUFFER);
+      expect(seed.totalAllocated).to.equal(0n, "totalAllocated should be 0 — no capacity in any modules");
+      expect(seed.newAllocations.length).to.equal(4);
 
       const ETH32 = 32n * 10n ** 18n;
       // for type2 modules: newAllocations[i] = ceilDiv(totalModuleStake, 32 ETH) * 32 ETH
       const toValidatorETH = (balance: bigint) => ((balance + ETH32 - 1n) / ETH32) * ETH32;
 
-      expect(result.newAllocations[0]).to.equal(30n * ETH32);
-      expect(result.newAllocations[1]).to.equal(0n);
-      expect(result.newAllocations[2]).to.equal(50n * ETH32);
-      expect(result.newAllocations[3]).to.equal(toValidatorETH(MODULE_4_BALANCE_GWEI * ONE_GWEI));
-
-      // all allocated deltas should be 0
-      for (const a of result.allocated) {
-        expect(a).to.equal(0n);
-      }
+      expect(seed.newAllocations[0]).to.equal(30n * ETH32);
+      expect(seed.newAllocations[1]).to.equal(0n);
+      expect(seed.newAllocations[2]).to.equal(50n * ETH32);
+      expect(seed.newAllocations[3]).to.equal(toValidatorETH(MODULE_4_BALANCE_GWEI * ONE_GWEI));
     });
 
-    it("Allocates to 0x02 module when buffer is large enough to push target above current allocation", async () => {
+    it("Allocates to the 0x02 module when the buffer pushes its target above its current allocation", async () => {
       await setupModules();
 
       // to make some top up in 4 module -> it should have 64 validators
@@ -645,32 +602,84 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
       const INCREASED_BUFFER = 5670n * 10n ** 18n;
 
-      // Snapshot current state for comparison
-      const resultBefore = await stakingRouter.getDepositAllocations(BUFFER, true);
-      expect(resultBefore.totalAllocated).to.equal(0n, "sanity check: original buffer gives 0");
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(MODULE_4_ID, BUFFER)).to.equal(
+        0n,
+        "sanity check: original buffer gives 0",
+      );
 
-      const result = await stakingRouter.getDepositAllocations(INCREASED_BUFFER, true);
+      const allocation = await stakingRouter.getStakingModuleTopUpAllocation(MODULE_4_ID, INCREASED_BUFFER);
+      expect(allocation).to.be.gt(32n, "allocation should be > 0 with larger buffer");
 
-      // Module 4 (0x02) now has capacity — new ETH is allocated
-      expect(result.totalAllocated).to.be.gt(32n, "totalAllocated should be > 0 with larger buffer");
+      // the whole allocation is one validator unit above the current level: 64 - 63 = 1
+      const ETH32 = 32n * 10n ** 18n;
+      expect(allocation).to.equal(ETH32);
+    });
+  });
 
-      // Modules 1-3 didn't change (0x01, no depositable keys — capacity == current)
-      expect(result.newAllocations[0]).to.equal(resultBefore.newAllocations[0], "module 1 unchanged");
-      expect(result.newAllocations[1]).to.equal(resultBefore.newAllocations[1], "module 2 unchanged");
-      expect(result.newAllocations[2]).to.equal(resultBefore.newAllocations[2], "module 3 unchanged");
+  context("top-up with another 0x02 module whose keys wait for activation", () => {
+    const ETH32 = 32n * 10n ** 18n;
+    const BUFFER = 50n * ETH32; // 1600 ETH
 
-      // Module 4 grew
-      expect(result.newAllocations[3]).to.be.gt(resultBefore.newAllocations[3], "module 4 allocation increased");
+    // Module 1: 0x01, 100 validators, `module1Depositable` new keys.
+    // Module 2: large 0x02 module (CMv2-like), 20 keys holding 10 000 ETH in total.
+    // Module 3: new 0x02 module (0x02 CSM-like), 16 seeded keys that are not active on CL yet,
+    //           its top-up queue is full, so it reports 0 depositable keys.
+    const LARGE_ID = 2n;
+    const NEW_ID = 3n;
 
-      // Delta for module 4 = newAllocation - currentAllocation = totalAllocated (since only module 4 grew)
-      const module4Delta = result.newAllocations[3] - resultBefore.newAllocations[3];
-      expect(module4Delta).to.equal(result.totalAllocated, "all new allocation went to module 4");
+    async function setupModules(module1Depositable: bigint) {
+      await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+        deposited: 100n,
+        depositable: module1Depositable,
+      });
+      await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        deposited: 20n,
+        totalModuleStake: 10_000n * 10n ** 18n,
+      });
+      await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        deposited: 16n,
+        depositable: 0n,
+        totalModuleStake: 16n * ETH32,
+      });
+    }
 
-      // Verify allocated array reflects the same delta
-      expect(result.allocated[0]).to.equal(0n, "module 1 delta is 0");
-      expect(result.allocated[1]).to.equal(0n, "module 2 delta is 0");
-      expect(result.allocated[2]).to.equal(0n, "module 3 delta is 0");
-      expect(result.allocated[3]).to.equal(module4Delta, "module 4 delta matches");
+    it("Gives the large 0x02 module its allocation", async () => {
+      await setupModules(0n);
+
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(LARGE_ID, BUFFER)).to.equal(BUFFER);
+    });
+
+    it("Keeps the priority of the least filled 0x02 module when it is topped up", async () => {
+      await setupModules(0n);
+
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(NEW_ID, BUFFER)).to.equal(BUFFER);
+    });
+
+    it("Leaves the seed demand of a less filled 0x01 module in the buffer", async () => {
+      await setupModules(30n);
+
+      // MinFirst raises module 1 from 100 to 130 validators first; module 2 gets the remaining 20.
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(LARGE_ID, BUFFER)).to.equal(20n * ETH32);
+    });
+
+    it("Works with three 0x02 modules", async () => {
+      await setupModules(0n);
+      // Module 4: another new 0x02 module with 8 keys waiting for activation
+      await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        deposited: 8n,
+        depositable: 0n,
+        totalModuleStake: 8n * ETH32,
+      });
+
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(LARGE_ID, BUFFER)).to.equal(BUFFER);
     });
   });
 
@@ -688,7 +697,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
       const ethToDeposit = 200n * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
 
       let allocatedSum = 0n;
       for (const a of result.allocated) {
@@ -717,7 +726,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
       const ethToDeposit = 200n * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
       expect(result.allocated.length).to.equal(2);
       expect(result.allocated[0]).to.equal(module1Config.depositable * DEFAULT_MEB);
       expect(result.allocated[1]).to.equal(0n);
@@ -734,7 +743,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
       const ethToDeposit = 50n * DEFAULT_MEB;
 
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, false);
+      const result = await stakingRouter.getDepositAllocations(ethToDeposit);
 
       // allocated[0] is the delta (new allocation)
       // newAllocations[0] includes existing validators + new
@@ -742,7 +751,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       expect(result.newAllocations[0]).to.be.equal(150n * DEFAULT_MEB); // 100 existing + 50 new = 150 total allocation after deposit
     });
 
-    it("Returns per-module deltas that sum to totalAllocated for top-up", async () => {
+    it("Returns 0 top-up allocation for 0x01 modules", async () => {
       const config = {
         ...DEFAULT_CONFIG,
         stakeShareLimit: 50_00n,
@@ -750,18 +759,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 50n,
       };
 
-      await setupModule(ctx, config);
-      await setupModule(ctx, config);
+      const [, id1] = await setupModule(ctx, config);
+      const [, id2] = await setupModule(ctx, config);
 
-      const ethToDeposit = 200n * DEFAULT_MEB;
-
-      const result = await stakingRouter.getDepositAllocations(ethToDeposit, true);
-
-      let allocatedSum = 0n;
-      for (const a of result.allocated) {
-        allocatedSum += a;
-      }
-      expect(allocatedSum).to.equal(result.totalAllocated);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id1, 200n * DEFAULT_MEB)).to.equal(0n);
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id2, 200n * DEFAULT_MEB)).to.equal(0n);
     });
   });
 });
