@@ -277,7 +277,7 @@ const prepareStakingModuleForTestDeposit = async (ctx: ProtocolContext, moduleId
       );
   }
 
-  const { allocated } = await stakingRouter.getDepositAllocations(depositableEther, false);
+  const { allocated } = await stakingRouter.getDepositAllocations(depositableEther);
   if ((allocated[moduleIndex] ?? 0n) < ethToDeposit) {
     throw new Error(`Not enough allocation for staking module ${moduleId} to deposit ${ethToDeposit}`);
   }
