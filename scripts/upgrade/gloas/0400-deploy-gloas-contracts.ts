@@ -3,8 +3,8 @@ import { readUpgradeParameters } from "scripts/utils/upgrade";
 import {
   ConsolidationBus__factory,
   ConsolidationGateway__factory,
-  LidoLocator,
-  LidoLocator__factory,
+  LidoLocatorGloas,
+  LidoLocatorGloas__factory,
   PredepositGuarantee__factory,
   TopUpGateway__factory,
   ValidatorExitDelayVerifier__factory,
@@ -51,7 +51,7 @@ export async function main() {
   const agentAddress = getAddress(Sk.appAgent, state);
   const lidoAddress = getAddress(Sk.appLido, state);
 
-  const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
+  const locator = await loadContract<LidoLocatorGloas>("LidoLocatorGloas", locatorAddress);
 
   // Everything the new implementations inherit from the live address book.
   const treasuryAddress = await locator.treasury();
@@ -153,7 +153,7 @@ export async function main() {
   //
   // Deploy the LidoLocator implementation carrying the two new addresses
   //
-  const locatorConfig: LidoLocator.ConfigStruct = {
+  const locatorConfig: LidoLocatorGloas.ConfigStruct = {
     accountingOracle: await locator.accountingOracle(),
     depositSecurityModule: await locator.depositSecurityModule(),
     elRewardsVault: await locator.elRewardsVault(),
@@ -180,11 +180,11 @@ export async function main() {
     topUpGateway: await locator.topUpGateway(),
   };
 
-  const lidoLocatorConstructorArgs: ConstructorArgs<LidoLocator__factory> = [locatorConfig];
+  const lidoLocatorConstructorArgs: ConstructorArgs<LidoLocatorGloas__factory> = [locatorConfig];
 
   logStartReview();
-  await logArgs("LidoLocator", lidoLocatorConstructorArgs);
+  await logArgs("LidoLocatorGloas", lidoLocatorConstructorArgs);
   await logConfirmReview();
 
-  await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, lidoLocatorConstructorArgs);
+  await deployImplementation(Sk.lidoLocator, "LidoLocatorGloas", deployer, lidoLocatorConstructorArgs);
 }

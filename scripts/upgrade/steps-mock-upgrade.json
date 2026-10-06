@@ -1,8 +1,8 @@
 {
   "steps": [
     "upgrade/steps/0000-check-env",
-    "upgrade/steps/0400-deploy-gloas-contracts",
-    "upgrade/steps/0410-deploy-gloas-vote-script",
-    "upgrade/steps/0500-mock-upgrade"
+    "upgrade/gloas/0400-deploy-gloas-contracts",
+    "upgrade/gloas/0410-deploy-gloas-vote-script",
+    "upgrade/gloas/0500-mock-upgrade"
   ]
 }

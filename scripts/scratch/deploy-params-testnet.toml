@@ -5,6 +5,7 @@
 # Ethereum consensus layer specifications - session specific values set via env vars
 slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum consensus
 secondsPerSlot = 12                   # Duration of each slot in seconds
+capellaSlot = 0                       # Capella fork slot for external staking modules (devnet: active from genesis)
 # genesisTime and depositContract are set via environment variables or deployment scripts
 
 # CircuitBreaker configuration for testnet deployment
@@ -153,19 +154,11 @@ name = "Lido: stETH Withdrawal NFT"   # NFT collection name
 symbol = "unstETH"                    # NFT collection symbol
 # baseUri is set to null for testnet deployment
 
-# Validator exit delay verifier configuration for managing validator exits
-[validatorExitDelayVerifier]
-firstSupportedSlot = 0                     # Devnet: full history supported from genesis
-gloasSlot = 36000                           # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
-capellaSlot = 0                            # Devnet: Capella active from genesis
-slotsPerHistoricalRoot = 8192              # Number of slots per historical root
-shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (2^8 * 32 * 12)
-
-# Triggerable withdrawals gateway for managing validator exit requests
+# Triggerable withdrawals gateway, the exit balance limit is in ETH
 [triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250          # Maximum number of exit requests that can be processed
-exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 240               # Duration of each processing frame in seconds
+maxExitBalanceEth = 358400            # Maximum exit balance, at least 2048 (weight of a full withdrawal)
+balancePerFrameEth = 32               # Exit balance restored per frame
+frameDurationInSec = 48               # Duration of each frame in seconds
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
