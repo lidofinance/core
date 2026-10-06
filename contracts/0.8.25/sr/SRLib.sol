@@ -557,27 +557,6 @@ library SRLib {
         }
     }
 
-    /// @notice Handles tracking and penalization logic for a node operator who failed to exit their validator within the defined exit window.
-    /// @dev This function is called to report the current exit-related status of a validator belonging to a specific node operator.
-    ///      It accepts a validator's public key, associated with the duration (in seconds) it was eligible to exit but has not exited.
-    ///      This data could be used to trigger penalties for the node operator if the validator has been non-exiting for too long.
-    /// @param _stakingModuleId The ID of the staking module.
-    /// @param _nodeOperatorId The ID of the node operator whose validator status is being delivered.
-    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
-    /// @param _publicKey The public key of the validator being reported.
-    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit after request but has not exited.
-    function _reportValidatorExitDelay(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes calldata _publicKey,
-        uint256 _eligibleToExitInSec
-    ) public {
-        SRUtils._requireModuleIdExists(_stakingModuleId);
-        _stakingModuleId.getIStakingModule()
-            .reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
-    }
-
     /// @notice Reports the minted rewards to the staking modules with the specified ids.
     /// @param _stakingModuleIds Ids of the staking modules.
     /// @param _totalShares Total shares minted for the staking modules.

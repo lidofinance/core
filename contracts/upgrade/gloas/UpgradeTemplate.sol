@@ -6,10 +6,10 @@ pragma solidity 0.8.25;
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 
 import {ICircuitBreaker} from "contracts/common/interfaces/ICircuitBreaker.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {ILidoLocatorGloas as ILidoLocator} from "./legacy/LidoLocatorGloas.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 
-import {IUpgradeTemplate} from "./interfaces/IUpgradeTemplate.sol";
+import {IUpgradeTemplate} from "../interfaces/IUpgradeTemplate.sol";
 import {UpgradeConfig} from "./UpgradeConfig.sol";
 import {
     UpgradeParameters,

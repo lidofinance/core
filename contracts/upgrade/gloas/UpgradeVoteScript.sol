@@ -12,9 +12,9 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {UpgradeConfig} from "./UpgradeConfig.sol";
 import {UpgradeTemplate} from "./UpgradeTemplate.sol";
 import {IWithdrawalsManagerProxy} from "./UpgradeTypes.sol";
-import {IForwarder} from "./interfaces/IForwarder.sol";
-import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
-import {OmnibusBase} from "./utils/OmnibusBase.sol";
+import {IForwarder} from "../interfaces/IForwarder.sol";
+import {CallsScriptBuilder} from "../utils/CallScriptBuilder.sol";
+import {OmnibusBase} from "../utils/OmnibusBase.sol";
 
 /// @title UpgradeVoteScript
 /// @notice Omnibus for the Gloas upgrade: swaps in the fork-aware verifiers and re-wires the
