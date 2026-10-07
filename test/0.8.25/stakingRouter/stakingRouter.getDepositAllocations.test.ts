@@ -490,6 +490,33 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
       expect(await stakingRouter.getStakingModuleTopUpAllocation(id, DEFAULT_MEB - 1n)).to.equal(0n);
     });
+
+    for (const { depositable, expectedTopUp } of [
+      { depositable: 30n, expectedTopUp: 20n * DEFAULT_MEB },
+      { depositable: 50n, expectedTopUp: 0n },
+    ]) {
+      it(`Reserves ${depositable} seed deposits for a less filled 0x02 module`, async () => {
+        const [, id] = await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+          deposited: 20n,
+          totalModuleStake: 10_000n * 10n ** 18n,
+        });
+        await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+          deposited: 16n,
+          depositable,
+          totalModuleStake: 16n * DEFAULT_MEB,
+        });
+
+        // The neighbour's seed capacity stays below the target's level of 313 units.
+        const buffer = 50n * DEFAULT_MEB;
+        const seed = await stakingRouter.getDepositAllocations(buffer);
+        expect(seed.allocated).to.deep.equal([0n, depositable * DEFAULT_MEB]);
+        expect(await stakingRouter.getStakingModuleTopUpAllocation(id, buffer)).to.equal(expectedTopUp);
+      });
+    }
   });
 
   context("multi-module top-up scenarios", () => {
