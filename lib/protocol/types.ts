@@ -167,6 +167,12 @@ export type StakingModuleContracts = {
 };
 
 export type StakingModules = {
+  all: Array<{
+    id: bigint;
+    name: string;
+    stakingModuleAddress: string;
+    type: string;
+  }>;
   nor: StakingModuleStructOutput;
   sdvt: StakingModuleStructOutput;
   csm?: StakingModuleStructOutput;

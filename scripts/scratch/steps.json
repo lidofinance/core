@@ -15,6 +15,7 @@
     "scratch/steps/0095-deploy-tooling",
     "scratch/steps/0100-deploy-circuit-breaker",
     "scratch/steps/0101-deploy-easytrack",
+    "scratch/steps/0102-deploy-execution-delegation-framework",
     "scratch/steps/0110-finalize-dao",
     "scratch/steps/0120-post-locator-initializers",
     "scratch/steps/0130-grant-roles",

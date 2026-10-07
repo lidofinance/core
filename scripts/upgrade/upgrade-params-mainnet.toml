@@ -1,148 +1,157 @@
-# Lido Protocol Upgrade Parameters - Mainnet Configuration
+# EDF / DSM v5 Mainnet release manifest.
 
-[easyTrack.newFactories]
-UpdateStakingModuleShareLimits = "0x0C6703F1d8D9DdfB6c6e5F57b4f7432a6500D6D8"
-AllowConsolidationPair = "0x29e23B1EF0c9fffAc8330F9abaCebDDD827E4b5C"
+chainId = 1
 
-SetMerkleGateTreeForCSM = "0xf3ec30B86c3dC1b8a1C754D885F9bE3160e15B4c"
-ReportWithdrawalsForSlashedValidatorsForCSM = "0xE330516a03bDdEBA4209b5591112f1aa3dd90F0A"
-SettleGeneralDelayedPenaltyForCSM = "0xB71755bE764abB4Ce26cb4dADf056Be57fB8880F"
+[executionDelegationFramework]
+repository = "https://github.com/lidofinance/execution-delegation-framework.git"
+ref = "557299104ad3eb1a74198933bd016328c490e276"
 
-SetMerkleGateTreeForCM = "0xa121667D1780a1D54EAEd67AE17ee13d0f872D60"
-ReportWithdrawalsForSlashedValidatorsForCM = "0x71862Abd99819597670007bb992A7a7562fE50f2"
-SettleGeneralDelayedPenaltyForCM = "0xfffEFC16231eDC6Dc9C93e364ff4D4E3f787f416"
-CreateOrUpdateOperatorGroupForCM = "0x2fC78638b77381e9D040163Bd6EB1cac967bDBdF"
+[executionDelegationFramework.factory]
+address = "0xD990770eB2B4b6062EDdB06892fF179C693b46e6"
+runtimeCodeHash = "0x0898ad72098301345c44103c8aca22cd8a0a02a339bffe222c6487ec25ff3591"
 
-[easyTrack.oldFactories]
-CSMSettleElStealingPenalty = "0xF6B6E7997338C48Ea3a8BCfa4BB64a315fDa76f4"
-CSMSetVettedGateTree = "0xBc5642bDD6F2a54b01A75605aAe9143525D97308"
+[guardians.lido-dev-team]
+currentAddress = "0x5fd0dDbC3351d009eb3f88DE7Cd081a614C519F1"
+delegationContract = "0x915F0Fa50E1af761B113b41c79ab33Bf4734C36E"
+owner = "0x2E6e175F57D7a18b3CA5490844034600FC18EF83"
+delegate = "0x5ecf14e7a3831D44e2F7d4542Ba98C6c96E47420"
+cooldown = 172800
 
-# Oracle report sanity checker configuration
-[oracleReportSanityChecker]
-exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
-appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
-maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
-maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
-maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
-maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
-consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
-exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
-externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
+[guardians.p2p]
+currentAddress = "0xa56b128Ea2Ea237052b0fA2a96a387C0E43157d8"
+delegationContract = "0xe387Ba1d5C9f6306eCe9ac949C7fB6233dD5411E"
+owner = "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A"
+delegate = "0xAEbd3E0c29111C02166FB2d560f7158a6ccE6841"
+cooldown = 172800
 
-[lido]
-depositsReserveTarget = "1500000000000000000000" # 1500 eth
+[guardians.staking-facilities]
+currentAddress = "0xf82D88217C249297C6037BA77CE34b3d8a90ab43"
+delegationContract = "0x35506190Ca6df385aA6Bc4a970646dd4f49426c1"
+owner = "0x3d49967d09637B83E465Cc32b1C5d968e3d34eA8"
+delegate = "0x06d6c4F26354aA1426c0Abd79A5f18A5d5fF684f"
+cooldown = 172800
 
-[withdrawalVault]
-# https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
-withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
-# https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#specification
-consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
+[guardians.blockscape]
+currentAddress = "0x7912Fa976BcDe9c2cf728e213e892AD7588E6AaF"
+delegationContract = "0xDc1579636686C082fc3b00B9EB25259A110D0C44"
+owner = "0xFcBC1BB96b3F521fe7BFD1E2E309eC032F078fDE"
+delegate = "0x6aF45f506fD171994D26d014Fc079137532Db219"
+cooldown = 172800
 
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250
-exitsPerFrame = 1
-frameDurationInSec = 240
+[guardians.stakefish]
+currentAddress = "0x4B87F16B8d32cb5a859a4C48a88edB5adBe3498E"
+delegationContract = "0x031E597BcF680f1f2293b119b4b2B14096B15497"
+owner = "0xaB61339Cb8A5BBED2dEaC4D2c6E71B912919aBdB"
+delegate = "0xA4512893C5B8BCD8E7AE1cAa56b8402951720D14"
+cooldown = 172800
 
-# Accounting oracle configuration
-[accountingOracle]
-consensusVersion = 6
+[guardians.stakely]
+# Replace Kiln's current DSM seat with the Stakely DelegationContract.
+currentAddress = "0x6d22aE126eB2c37F67a1391B37FF4f2863e61389"
+delegationContract = "0x6A22d74a816662078f2371A7138E7614874cd61d"
+owner = "0xce0F8F5019856D79840F9463b5D05c44c7d9B791"
+delegate = "0xc04c1979e37e53FD21E40bd089D311EEfFdb4E00"
+cooldown = 172800
 
-# Validators exit bus oracle configuration
-[validatorsExitBusOracle]
-maxValidatorsPerReport = 600
-maxExitBalanceEth = 358400
-balancePerFrameEth = 32
-frameDurationInSec = 48
-consensusVersion = 5
+# Instadapp
+[oracleMembers.oracle-member-01]
+currentAddress = "0x73181107c8D9ED4ce0bbeF7A0b4ccf3320C41d12"
+delegationContract = "0xE75A431A98487DC69A14Bdd13d858E3238e9C1b3"
+owner = "0x772E9D0387671Ce641f17FD1fCFB3a9cE8ED05fB"
+delegate = "0x5595033F304217aFDB8ffB35E42C22B72184730b"
+cooldown = 172800
+
+# Caliber
+[oracleMembers.oracle-member-02]
+currentAddress = "0x4118DAD7f348A4063bD15786c299De2f3B1333F3"
+delegationContract = "0xc77d0Bf3AA4778E36a89CDC8bbc9c34d8060637d"
+owner = "0x84225B558e224dc6C38f4eda1d3591fE6b5E34aa"
+delegate = "0x82A821E8a2585D1AC8f346BE7Da6995490d21Ca6"
+cooldown = 172800
+
+# Staking Facilities
+[oracleMembers.oracle-member-03]
+currentAddress = "0x404335BcE530400a5814375E7Ec1FB55fAff3eA2"
+delegationContract = "0xc7442d4d8F3FfEa0fA4a18Ad3062c8137cE21749"
+owner = "0x035AcCF7E230f32028a1134134A035dda567C86e"
+delegate = "0x7abC999C7E1f22a7E12b2A1024bC17676FE18b4b"
+cooldown = 172800
+
+# Chorus One(Bitwise)
+[oracleMembers.oracle-member-04]
+currentAddress = "0x8dB977C13CAA938BC58464bFD622DF0570564b78"
+delegationContract = "0x56B3eA8016Da18C6E8CD8135492d242F0dE0DBBC"
+owner = "0x6057526Da2Dc9Bd23a3C6F1b15C74De2D7593378"
+delegate = "0x5416CAAb6f37BF81cb2dc7ce0a363AfB9DD92d57"
+cooldown = 172800
+
+# p2p
+[oracleMembers.oracle-member-05]
+currentAddress = "0x007DE4a5F7bc37E2F26c0cb2E8A95006EE9B89b5"
+delegationContract = "0x4E3F2DEeb59eB9a205D82D17647b3e56422e0FEe"
+owner = "0x1E8518cd5835B6775F902e1451a3Dd7b02EB3e8A"
+delegate = "0x565F04cB319EC2295E1fcbBbe5F708687FFcCE75"
+cooldown = 172800
+
+# Chainlayer
+[oracleMembers.oracle-member-06]
+currentAddress = "0xc79F702202E3A6B0B6310B537E786B9ACAA19BAf"
+delegationContract = "0xd524101C3c40f71Fce7B9312D299603880a06Bdb"
+owner = "0x48D10eaec45e330003E62115e56d2A05F29eca70"
+delegate = "0x4D3aD7E8e591d389B612Fc063f53837E284d3F86"
+cooldown = 172800
+
+# bloXroute
+[oracleMembers.oracle-member-07]
+currentAddress = "0x61c91ECd902EB56e314bB2D5c5C07785444Ea1c8"
+delegationContract = "0x99Cd2EF33040879D40BBC77Df81863D97f13C64d"
+owner = "0x9462A9FfF5646d0b6517D8eac49de49277e89dB9"
+delegate = "0x375ABa35EA2011Af97b51bd395494C827d1C39BD"
+cooldown = 172800
+
+# MatrixedLink
+[oracleMembers.oracle-member-08]
+currentAddress = "0xe57B3792aDCc5da47EF4fF588883F0ee0c9835C9"
+delegationContract = "0xC4f2704273598d51A0ec76A31C12553ec8f5A891"
+owner = "0x60D78785B763374bd552F5cE270da77781C6066C"
+delegate = "0xC10258969442c7957351A0ddc8194D2685B2a2c2"
+cooldown = 172800
+
+# Stakefish
+[oracleMembers.oracle-member-09]
+currentAddress = "0x042a9e5acCfa17e28300F1b5967f20891E973922"
+delegationContract = "0x5e8Ed9f10307eD6FA793A347e4D0f407D00B9C6f"
+owner = "0x3F7c24Cc2C91E8BEb20498E61b51a696ffb2AbA5"
+delegate = "0x2aE828F10DfeE5b4c42f6E61D3d30033D4520753"
+cooldown = 172800
 
 [depositSecurityModule]
-maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
-pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
+maxOperatorsPerUnvetting = 200
+pauseIntentValidityPeriodBlocks = 6646
+quorum = 4
 
-[consolidationGateway]
-maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
-consolidationsPerFrame = 1            # Number of consolidations processed per frame
-frameDurationInSec = 30               # Duration of each processing frame in seconds
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
-pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+[oracleCommittees.accounting-oracle]
+consensusContract = "0xD624B08C83bAECF0807Dd2c6880C3154a5F0B288"
+quorum = 5
 
-[consolidationBus]
-initialBatchSize = 200                # Max number of requests in a batch
-initialMaxGroupsInBatch = 10          # Max source groups in a batch
-initialExecutionDelay = 86400         # Delay before pending batch execution
+[oracleCommittees.validators-exit-bus-oracle]
+consensusContract = "0x7FaDB6358950c5fAA66Cb5EB8eE5147De3df355a"
+quorum = 5
 
-[consolidationMigrator]
-sourceModuleId = 1                                                    # Source staking module ID
-targetModuleId = 4                                                    # Target staking module ID
-consolidationCommittee = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address https://research.lido.fi/t/proposal-transition-the-lnosg-into-the-cmc/11341/27
+[oracleCommittees.csm-fee-oracle]
+consensusContract = "0x71093efF8D8599b5fA340D665Ad60fA7C80688e4"
+quorum = 5
 
-# Frame duration in seconds
+[oracleCommittees.curated-module-fee-oracle]
+consensusContract = "0x902D64c93F6595339aA46105627a085591051aFb"
+quorum = 5
+
 [topUpGateway]
-maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process
-minBlockDistance = 75 # Minimum block distance between topUp calls
-maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove validator state
-targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
-minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
-# Generalized indices for validator/balance/pending state verification
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-# Pivot slot for fork-aware gIndex selection
-pivotSlot = 0
-depositor = "0xF82aC5937A20dC862F9bc0668779031E06000f17"
+address = "0x3FC2C71579D80790Aaa3fc7Be8B66ac39dC57374"
 
-[stakingRouter]
-maxEBType1 = "32000000000000000000"
-maxEBType2 = "2048000000000000000000"
-maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-up cap
-
-[csmUpgrade]
-csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
-csmImpl = "0x63992a86f009fcC796a8369feEfB68880aef4e3a"
-vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
-vettedGateImpl = "0x66ADb8b3F58d3DFdF6bAdB595E41f19e947E5c14"
-identifiedDVTClusterGate = "0xa12760721A72A7199aB38059DA6690b9Cd4ed7B8"
-identifiedDVTClusterCurveSetup = "0x711985E069f4d702e0457C0dACAde3D3894Ce4E3"
-identifiedDVTClusterBondCurveId = 3
-parametersRegistryImpl = "0x107d287F178cD54792614d7D63C47D8242240BeD"
-feeOracleImpl = "0xecE6e0Cde61078F76b66Ef0C338a6875E5D01F79"
-feeOracleConsensusVersion = 4
-accountingImpl = "0xe768572cc5aE5C698345C59288d871a949Ea8bd3"
-feeDistributorImpl = "0x936da7cDB7eed1084d294E23eA1d7Ad72DCcfE0E"
-exitPenaltiesImpl = "0xA5b9e96E951089E629Ab0834AEaF242a81394EA0"
-strikesImpl = "0xd25E7C3923d2e68c325980b0e15eD20d62B2691F"
-oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
-oldVerifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
-newVerifier = "0xfce7aB839e55de77730716D05b3553e45ab3A5Ba"
-newPermissionlessGate = "0xb8cd8F059Ad7a5dB8CAfDe34aAb007317F7156C8"
-newEjector = "0x610B517D380f287c239C93F8eF6FfBd567AA4bA5"
-csmCommittee = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
-
-[curatedModule]
-module = "0xDa5F930cE326EB5205085D66c72A4E79d60cB8C1"
-curatedGates = [
-    "0x6093EFA6B5E2FF3be54d1c895c9deA932805c49F",
-    "0x8c002c6eE10cf8adb78D1F9EB2e134FdaF8A7C1a",
-    "0x207798e6fD1aa7Ee8a63782A64c959cD6727b78C",
-    "0xeF273Ca4A21Ba7B414Ae3C9f9b443038cb133F72",
-    "0x3BbBb175f7F07954DE00052b20E1c5572223F24D",
-    "0x86A8d4E0db5938D21d98047544668FCCB1A9ADc8",
-    "0x773933F9db8964A17d62fb808f2EC7A2de4247CC"
-]
-verifier = "0xC392F457960f1B13Ebaf1aa6C065479dD507E1E3"
-circuitBreakerPauser = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address https://research.lido.fi/t/proposal-transition-the-lnosg-into-the-cmc/11341/27
-moduleName = "curated-onchain-v2"
-stakeShareLimit = 10000 # 100% (unlimited)
-priorityExitShareThreshold = 10000 # 100% (unlimited)
-stakingModuleFee = 400
-treasuryFee = 600
-maxDepositsPerBlock = 100
-minDepositBlockDistance = 75 # (15 minutes)
-feeOracleConsensusVersion = 4
-hashConsensusInitialEpoch = 467564
-
-[upgradeVoteScript]
-# Expiry timestamp after which the upgrade transaction will revert
-# Format: Unix timestamp (seconds since epoch)
-# The upgrade transaction must be executed before this deadline
-expiryTimestamp = 1786147199 # August 7, 2026 at 23:59:59 UTC (approx. 3 weeks after voting start)
+[topUpGateway.depositorContract]
+id = "depositor-bot"
+delegationContract = "0x6Aa249bA53A3abcaC52F91146583B3eE2Ee4C7F5"
+owner = "0x2E6e175F57D7a18b3CA5490844034600FC18EF83"
+delegate = "0x2df4013EF30b09100A027192E700114cD0D13900"
+cooldown = 172800

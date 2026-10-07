@@ -1,11 +1,13 @@
-import { solidityPackedKeccak256 } from "ethers";
+import { BigNumberish, concat, solidityPackedKeccak256, toBeHex } from "ethers";
 
 import { DepositSecurityModule } from "typechain-types";
 
-import { sign, toEip2098 } from "./ec";
+import { sign } from "./ec";
 
 class DSMMessage {
   static MESSAGE_PREFIX: string;
+
+  constructor(public readonly guardian: string) {}
 
   static setMessagePrefix(newMessagePrefix: string) {
     this.MESSAGE_PREFIX = newMessagePrefix;
@@ -23,20 +25,31 @@ class DSMMessage {
     throw new Error("Unimplemented");
   }
 
-  sign(signerPrivateKey: string): DepositSecurityModule.SignatureStruct {
-    return toEip2098(sign(this.hash, signerPrivateKey));
+  sign(signerPrivateKey: string): DepositSecurityModule.GuardianSignatureStruct {
+    const signature = sign(this.hash, signerPrivateKey);
+    return {
+      guardian: this.guardian,
+      signature: concat([signature.r, signature.s, toBeHex(signature.v, 1)]),
+    };
   }
 }
 
 export class DSMAttestMessage extends DSMMessage {
-  blockNumber: number;
+  blockNumber: BigNumberish;
   blockHash: string;
   depositRoot: string;
-  stakingModule: number;
-  nonce: number;
+  stakingModule: BigNumberish;
+  nonce: BigNumberish;
 
-  constructor(blockNumber: number, blockHash: string, depositRoot: string, stakingModule: number, nonce: number) {
-    super();
+  constructor(
+    guardian: string,
+    blockNumber: BigNumberish,
+    blockHash: string,
+    depositRoot: string,
+    stakingModule: BigNumberish,
+    nonce: BigNumberish,
+  ) {
+    super(guardian);
     this.blockNumber = blockNumber;
     this.blockHash = blockHash;
     this.depositRoot = depositRoot;
@@ -46,42 +59,54 @@ export class DSMAttestMessage extends DSMMessage {
 
   get hash() {
     return solidityPackedKeccak256(
-      ["bytes32", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
-      [this.messagePrefix, this.blockNumber, this.blockHash, this.depositRoot, this.stakingModule, this.nonce],
+      ["bytes32", "address", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
+      [
+        this.messagePrefix,
+        this.guardian,
+        this.blockNumber,
+        this.blockHash,
+        this.depositRoot,
+        this.stakingModule,
+        this.nonce,
+      ],
     );
   }
 }
 
 export class DSMPauseMessage extends DSMMessage {
-  blockNumber: number;
+  blockNumber: BigNumberish;
 
-  constructor(blockNumber: number) {
-    super();
+  constructor(guardian: string, blockNumber: BigNumberish) {
+    super(guardian);
     this.blockNumber = blockNumber;
   }
 
   get hash() {
-    return solidityPackedKeccak256(["bytes32", "uint256"], [this.messagePrefix, this.blockNumber]);
+    return solidityPackedKeccak256(
+      ["bytes32", "address", "uint256"],
+      [this.messagePrefix, this.guardian, this.blockNumber],
+    );
   }
 }
 
 export class DSMUnvetMessage extends DSMMessage {
-  blockNumber: number;
+  blockNumber: BigNumberish;
   blockHash: string;
-  stakingModule: number;
-  nonce: number;
+  stakingModule: BigNumberish;
+  nonce: BigNumberish;
   nodeOperatorIds: string;
   vettedSigningKeysCounts: string;
 
   constructor(
-    blockNumber: number,
+    guardian: string,
+    blockNumber: BigNumberish,
     blockHash: string,
-    stakingModule: number,
-    nonce: number,
+    stakingModule: BigNumberish,
+    nonce: BigNumberish,
     nodeOperatorIds: string,
     vettedSigningKeysCounts: string,
   ) {
-    super();
+    super(guardian);
     this.blockNumber = blockNumber;
     this.blockHash = blockHash;
     this.stakingModule = stakingModule;
@@ -92,9 +117,10 @@ export class DSMUnvetMessage extends DSMMessage {
 
   get hash() {
     return solidityPackedKeccak256(
-      ["bytes32", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
+      ["bytes32", "address", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
       [
         this.messagePrefix,
+        this.guardian,
         this.blockNumber,
         this.blockHash,
         this.stakingModule,
