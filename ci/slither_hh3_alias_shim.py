@@ -20,20 +20,21 @@ not contain `access/IAccessControl.sol`. That file lives under the yarn *alias*
 directory `node_modules/@openzeppelin/contracts-v5.2/` (`@openzeppelin/contracts-v5.2`
 is `npm:@openzeppelin/contracts@5.2.0`). Result: `InvalidCompilation: Unknown file`.
 Stripping the version also collapses this repo's three OZ versions (3.4.0 / 4.4.1 /
-5.2.0) onto one path.
+5.2.0) onto one path. It also maps @aragon/os 4.2.0, which is nested under
+`node_modules/@aragon/apps-*/node_modules/`, onto the files of @aragon/os 4.4.0.
 
-There is no released or unreleased crytic-compile (checked dev + master) that resolves
-version-aliased npm packages, so we patch it at runtime here.
+The upstream fix is https://github.com/crytic/crytic-compile/pull/706.
 
 What this does
 --------------
 Wraps `process_hardhat_v3_filename` so that for an `npm/<pkg>@<version>/<rest>` source
-it resolves <pkg>@<version> to the actual install directory in node_modules by matching
-each candidate's package.json `name` + `version`, and returns `<install_dir>/<rest>`
-(e.g. `@openzeppelin/contracts-v5.2/access/IAccessControl.sol`). That path exists on
-disk and keeps each OZ version distinct. If no exact name+version match is found, it
-falls back to the unmodified upstream function -- so behaviour is identical to stock
-crytic-compile except when we can positively resolve an aliased dependency.
+it returns `<install_dir>/<rest>`, with `<install_dir>` relative to node_modules (e.g.
+`@openzeppelin/contracts-v5.2/access/IAccessControl.sol`). Hardhat writes each import
+that it resolved as a solc remapping in the build-info, e.g.
+`project/:@openzeppelin/contracts-v5.2/=npm/@openzeppelin/contracts@5.2.0/`. The shim
+finds the remapping prefix from the importer's directory, as Node.js does, so nested
+packages resolve too. If no remapping resolves the package, it falls back to the
+unmodified upstream function.
 
 It also generalizes upstream's `project/contracts/...` handling to any `project/...`
 path (HH3 prefixes every local project source -- contracts/, test/, scripts/ -- with
@@ -47,8 +48,8 @@ The same normalization is applied in two places so both sides agree:
    by their raw HH3 name; upstream reimplements the normalization inline (version-strip,
    no alias), so we override it with the alias-aware version.
 
-Remove this shim (and go back to `slither .`) once crytic-compile handles aliased /
-multi-version npm dependencies upstream.
+Remove this shim (and go back to `slither .`) once a crytic-compile release includes
+the upstream fix.
 """
 
 import json
@@ -68,10 +69,10 @@ if _orig is None:
         "(process_hardhat_v3_filename missing); expected crytic-compile >=0.4.0."
     )
 
-# npm/<pkg>@<version>/<rest> -- <pkg> captured non-greedily so the version '@' is the
-# one immediately before the trailing '/<rest>' (works for scoped names like
-# @openzeppelin/contracts).
-_HH3_NPM = re.compile(r"npm/(.+?)@([^/]+)/(.+)")
+# Package root in a Hardhat 3 source name: npm/<pkg>@<version>/
+_HH3_NPM_PACKAGE = re.compile(r"npm/(?:@[^/]+/)?[^/@]+@[^/]+/")
+
+_BUILD_INFO_DIR = Path("artifacts", "build-info")
 
 # project/<rest> -- Hardhat 3 prefixes every local project source (contracts/, test/,
 # scripts/, ...) with "project/". Upstream only strips "project/contracts/", so paths
@@ -81,65 +82,71 @@ _HH3_NPM = re.compile(r"npm/(.+?)@([^/]+)/(.+)")
 _HH3_PROJECT = re.compile(r"project/(.+)")
 
 
-@lru_cache(maxsize=1)
-def _node_modules() -> Path | None:
-    """First node_modules found walking up from the working directory."""
-    cwd = Path.cwd()
-    for directory in (cwd, *cwd.parents):
-        candidate = directory / "node_modules"
+def _node_modules_lookup(package: str, directory: Path) -> Path | None:
+    """Find a package as Node.js does: in node_modules of the directory, then of each
+    parent directory."""
+    for parent in (directory, *directory.parents):
+        candidate = parent / "node_modules" / package
         if candidate.is_dir():
             return candidate
     return None
 
 
-def _pkg_identity(pkg_dir: Path) -> tuple[str | None, str | None]:
-    try:
-        data = json.loads((pkg_dir / "package.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None, None
-    return data.get("name"), data.get("version")
+@lru_cache(maxsize=1)
+def _package_dirs() -> dict[str, str]:
+    """npm/<pkg>@<version>/ -> install dir relative to node_modules.
 
-
-@lru_cache(maxsize=None)
-def _resolve_install_dir(package: str, version: str) -> str | None:
-    """node_modules-relative install dir for <package>@<version>, or None.
-
-    Handles yarn/npm aliases where a package is installed under a directory name that
-    differs from its declared name (e.g. `@openzeppelin/contracts-v5.2`).
+    The source is the remappings of all build-info files. Each remapping is
+    <context>:<prefix>=npm/<pkg>@<version>/. The context is `project/` or another
+    npm/<pkg>@<version>/, so repeat until a pass finds no new package. The order of
+    files and remappings is fixed, so a package installed twice always resolves to the
+    same directory.
     """
-    node_modules = _node_modules()
-    if node_modules is None:
-        return None
+    imports = []
+    for build_info in sorted(_BUILD_INFO_DIR.glob("*.json")):
+        if build_info.name.endswith(".output.json"):
+            continue
+        loaded = json.loads(build_info.read_text(encoding="utf-8"))
+        settings = loaded["input"]["settings"]
+        for remapping in settings.get("remappings", []):
+            context_and_prefix, _, target = remapping.partition("=")
+            context, _, prefix = context_and_prefix.rpartition(":")
+            if _HH3_NPM_PACKAGE.fullmatch(target):
+                imports.append((target, context, prefix.rstrip("/")))
 
-    # Fast path: the canonical install location (covers every non-aliased dependency).
-    canonical = node_modules.joinpath(*package.split("/"))
-    name, ver = _pkg_identity(canonical)
-    if name == package and ver == version:
-        return package
-
-    # Aliased: scan the package's scope dir (scoped) or node_modules root (unscoped)
-    # for a sibling whose package.json declares this exact name + version.
-    if package.startswith("@") and "/" in package:
-        search_root = node_modules / package.split("/", 1)[0]
-    else:
-        search_root = node_modules
-    if search_root.is_dir():
-        for candidate in search_root.iterdir():
-            if not candidate.is_dir():
+    root = Path.cwd()
+    dirs: dict[str, Path] = {}
+    found = True
+    while found:
+        found = False
+        for target, context, prefix in imports:
+            if target in dirs:
                 continue
-            name, ver = _pkg_identity(candidate)
-            if name == package and ver == version:
-                return candidate.relative_to(node_modules).as_posix()
-    return None
+            if _HH3_NPM_PACKAGE.fullmatch(context):
+                if context not in dirs:
+                    continue
+                base = dirs[context]
+            else:
+                base = root
+            package_dir = _node_modules_lookup(prefix, base)
+            if package_dir is not None:
+                dirs[target] = package_dir
+                found = True
+
+    node_modules = root / "node_modules"
+    return {
+        target: path.relative_to(node_modules).as_posix()
+        for target, path in dirs.items()
+    }
 
 
 def _patched_process_hardhat_v3_filename(filename: str) -> str:
-    npm = _HH3_NPM.match(filename)
+    npm = _HH3_NPM_PACKAGE.match(filename)
     if npm:
-        install_dir = _resolve_install_dir(npm.group(1), npm.group(2))
+        install_dir = _package_dirs().get(npm.group(0))
         if install_dir is not None:
-            return f"{install_dir}/{npm.group(3)}"
-        # Version not installed under a matching dir -- let upstream strip the version.
+            return f"{install_dir}/{filename[npm.end():]}"
+        # No remapping resolves this package -- let upstream strip the version.
         return _orig(filename)
 
     project = _HH3_PROJECT.match(filename)
