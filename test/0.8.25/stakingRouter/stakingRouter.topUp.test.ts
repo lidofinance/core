@@ -215,6 +215,79 @@ describe("StakingRouter.sol:topUp", () => {
       await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, totalTopUpWei);
     });
 
+    it("passes the budget to the module while another 0x02 module has only keys waiting for activation", async () => {
+      const ETH32 = 32n * 10n ** 18n;
+
+      // Large 0x02 module: 20 keys holding 10 000 ETH in total
+      const [stakingModule, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 20n,
+        totalModuleStake: 10_000n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+      // New 0x02 module: 16 seeded keys not active on CL yet, no depositable keys
+      await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 16n,
+        depositable: 0n,
+        totalModuleStake: 16n * ETH32,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const depositable = 50n * ETH32; // 1600 ETH
+      const topUpWei = [10n * 10n ** 18n];
+      await stakingModule.mock__allocateDeposits(topUpWei);
+      await lidoMock.setDepositableEther(depositable);
+      await lidoMock.fund({ value: topUpWei[0] });
+
+      const tx = await stakingRouter
+        .connect(topUpGatewaySigner)
+        .topUp(id, [0n], [0n], [randomString(48)], [100n * 10n ** 18n]);
+
+      const receipt = await tx.wait();
+      const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
+      expect(topUpEvents[0].args._amount).to.equal(depositable);
+      await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, topUpWei[0]);
+    });
+
+    it("leaves the seed budget of a less filled 0x02 module in Lido", async () => {
+      const ETH32 = 32n * 10n ** 18n;
+      const [stakingModule, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 20n,
+        totalModuleStake: 10_000n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+      await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 16n,
+        depositable: 30n,
+        totalModuleStake: 16n * ETH32,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const depositable = 50n * ETH32;
+      const seedBudget = 30n * ETH32;
+      const topUpBudget = 20n * ETH32;
+      await stakingModule.mock__allocateDeposits([topUpBudget]);
+      await lidoMock.setDepositableEther(depositable);
+      await lidoMock.fund({ value: depositable });
+
+      expect(await stakingRouter.getStakingModuleTopUpAllocation(id, depositable)).to.equal(topUpBudget);
+
+      const tx = await stakingRouter
+        .connect(topUpGatewaySigner)
+        .topUp(id, [0n], [0n], [randomString(48)], [topUpBudget]);
+
+      const receipt = await tx.wait();
+      const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
+      expect(topUpEvents[0].args._amount).to.equal(topUpBudget);
+      await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, topUpBudget);
+      await expect(tx).to.emit(lidoMock, "WithdrawDepositableEtherCalled").withArgs(topUpBudget, 0n);
+      expect(await lidoMock.getDepositableEther()).to.equal(seedBudget);
+      expect(await ethers.provider.getBalance(lidoMock)).to.equal(seedBudget);
+    });
+
     it("top up value limit by maxTopUpPerBlockGwei", async () => {
       const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
