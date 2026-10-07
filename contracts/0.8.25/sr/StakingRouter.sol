@@ -922,7 +922,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
     /// @notice Returns new deposits allocation after the distribution of the `_depositAmount` deposits.
     /// @param _depositAmount The maximum ETH amount of deposits to be allocated.
-    /// @param _isTopUp Whether the allocation is requested for top-up (true) or initial deposits (false).
+    /// @param _isTopUp Must be false. A top-up allocation depends on the module, see `getStakingModuleTopUpAllocation`.
     /// @return totalAllocated - amount actually allocated
     /// @return allocated - Array of newly allocated amounts for each module
     /// @return newAllocations - Array of new allocation amounts for each module
@@ -931,8 +931,23 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         view
         returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
     {
+        if (_isTopUp) revert TopUpAllocationNotSupported();
         (totalAllocated, allocated, newAllocations) =
-            SRLib._getDepositAllocations(_getConfig(), _depositAmount, _isTopUp);
+            SRLib._getDepositAllocations(_getConfig(), _depositAmount, false, 0);
+    }
+
+    /// @notice Returns the top-up allocation of the 0x02 staking module out of `_depositAmount`.
+    /// @param _stakingModuleId Id of the staking module to be topped up.
+    /// @param _depositAmount The maximum ETH amount of deposits to be allocated.
+    /// @return Top-up ETH amount for the module.
+    function getStakingModuleTopUpAllocation(uint256 _stakingModuleId, uint256 _depositAmount)
+        external
+        view
+        returns (uint256)
+    {
+        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
+        if (!WithdrawalCredentials.isType2(stateConfig.withdrawalCredentialsType)) return 0;
+        return _getModuleDepositAllocation(_stakingModuleId, _depositAmount, true);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.

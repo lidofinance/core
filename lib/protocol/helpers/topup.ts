@@ -209,14 +209,8 @@ export const topUpEnsureModuleAllocation = async (ctx: ProtocolContext, moduleId
   const { lido, stakingRouter } = ctx.contracts;
 
   const depositable = await lido.getDepositableEther();
-  const moduleIds = await stakingRouter.getStakingModuleIds();
-  const moduleIndex = moduleIds.findIndex((id) => id === moduleId);
-  if (moduleIndex === -1) throw new Error(`Staking module ${moduleId} is not registered`);
 
-  const allocationOf = async () => {
-    const { allocated } = await stakingRouter.getDepositAllocations(depositable, true);
-    return allocated[moduleIndex] ?? 0n;
-  };
+  const allocationOf = () => stakingRouter.getStakingModuleTopUpAllocation(moduleId, depositable);
 
   if ((await allocationOf()) >= minWei) return;
 
