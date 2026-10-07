@@ -1,21 +1,20 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, StakingVault } from "typechain-types";
+import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
-import { MAX_SANE_SETTLED_GROWTH } from "lib";
+import { MAX_SANE_SETTLED_GROWTH } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol";
-import { advanceChainTime } from "lib/time";
+} from "#lib/protocol";
+import { advanceChainTime } from "#lib/time.js";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault report", () => {
   let ctx: ProtocolContext;

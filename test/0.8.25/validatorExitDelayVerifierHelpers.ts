@@ -1,15 +1,15 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ethers, keccak256 } from "ethers";
+import { type ContractTransactionReceipt, ethers, keccak256 } from "ethers";
 
-import {
+import type {
   HistoricalHeaderWitnessStruct,
   ProvableBeaconBlockHeaderStruct,
   ValidatorWitnessStruct,
-} from "typechain-types/contracts/0.8.25/ValidatorExitDelayVerifier.sol/ValidatorExitDelayVerifier";
+} from "typechain-types/contracts/0.8.25/ValidatorExitDelayVerifier.sol/ValidatorExitDelayVerifier.js";
 
-import { de0x, findEventsWithInterfaces, numberToHex } from "lib";
+import { de0x, findEventsWithInterfaces, numberToHex } from "#lib";
 
-import { BlockHeader, ValidatorStateProof } from "./validatorState";
+import { type BlockHeader, type ValidatorStateProof } from "./validatorState.js";
 
 export interface ExitRequest {
   pubkey: string;

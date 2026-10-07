@@ -1,15 +1,14 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
-import { ExclusiveSuiteFunction, PendingSuiteFunction } from "mocha";
+import { type ExclusiveSuiteFunction, type PendingSuiteFunction } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ERC721, ERC721Receiver__Mock } from "typechain-types";
+import type { ERC721, ERC721Receiver__Mock } from "typechain-types/index.js";
 
-import { ERC165_INTERFACE_ID, ERC721_INTERFACE_ID, ERC721METADATA_INTERFACE_ID, INVALID_INTERFACE_ID } from "lib";
+import { ERC165_INTERFACE_ID, ERC721_INTERFACE_ID, ERC721METADATA_INTERFACE_ID, INVALID_INTERFACE_ID } from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 interface ERC721Deployment {
   token: ERC721;
@@ -127,7 +126,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       });
 
       it("Throws for queries about the zero address", async () => {
-        await expect(token.balanceOf(ZeroAddress)).to.be.reverted;
+        await expect(token.balanceOf(ZeroAddress)).to.revert(ethers);
       });
     });
 
@@ -191,23 +190,26 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       it("Throws if the sender does not own the token", async () => {
         await expect(
           token.connect(spender)["safeTransferFrom(address,address,uint256)"](stranger, eoaRecipient, holderTokenId),
-        ).to.be.reverted;
+        ).to.revert(ethers);
       });
 
       it("Throws if the sender does not own the token (with data)", async () => {
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](stranger, eoaRecipient, holderTokenId, new Uint8Array()),
-        ).to.be.reverted;
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              stranger,
+              eoaRecipient,
+              holderTokenId,
+              new Uint8Array(),
+            ),
+        ).to.revert(ethers);
       });
 
       it("Throws if the recipient is the zero address", async () => {
         await expect(
           token.connect(spender)["safeTransferFrom(address,address,uint256)"](holder, ZeroAddress, holderTokenId),
-        ).to.be.reverted;
+        ).to.revert(ethers);
       });
 
       it("Throws if the recipient is the zero address (with data)", async () => {
@@ -215,39 +217,45 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
           token
             .connect(spender)
             ["safeTransferFrom(address,address,uint256,bytes)"](holder, ZeroAddress, holderTokenId, new Uint8Array()),
-        ).to.be.reverted;
+        ).to.revert(ethers);
       });
 
       it("Throws if the token id is invalid", async () => {
         await expect(
           token.connect(spender)["safeTransferFrom(address,address,uint256)"](holder, eoaRecipient, holderTokenId + 1n),
-        ).to.be.reverted;
+        ).to.revert(ethers);
       });
 
       it("Throws if the token id is invalid (with data)", async () => {
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](holder, eoaRecipient, holderTokenId + 1n, new Uint8Array()),
-        ).to.be.reverted;
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              holder,
+              eoaRecipient,
+              holderTokenId + 1n,
+              new Uint8Array(),
+            ),
+        ).to.revert(ethers);
       });
 
       it("Throws if the recipient's `onERC721Received` hook does not return the hook selector", async () => {
         await expect(
           token.connect(spender)["safeTransferFrom(address,address,uint256)"](holder, contractRecipient, holderTokenId),
-        ).to.be.reverted;
+        ).to.revert(ethers);
       });
 
       it("Throws if the recipient's `onERC721Received` hook does not return the hook selector (with data)", async () => {
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](holder, contractRecipient, holderTokenId, new Uint8Array()),
-        ).to.be.reverted;
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              holder,
+              contractRecipient,
+              holderTokenId,
+              new Uint8Array(),
+            ),
+        ).to.revert(ethers);
       });
 
       it("Allows the holder to transfer the token to the IERC721 contract", async () => {
@@ -266,9 +274,12 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
         await expect(
           token
             .connect(spender)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](holder, contractRecipient, holderTokenId, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              holder,
+              contractRecipient,
+              holderTokenId,
+              new Uint8Array(),
+            ),
         )
           .to.emit(token, "Transfer")
           .withArgs(holder.address, await contractRecipient.getAddress(), holderTokenId);
@@ -299,15 +310,15 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       });
 
       it("Throws if the sender does not own the token", async () => {
-        await expect(token.connect(spender).transferFrom(stranger, eoaRecipient, holderTokenId)).to.be.reverted;
+        await expect(token.connect(spender).transferFrom(stranger, eoaRecipient, holderTokenId)).to.revert(ethers);
       });
 
       it("Throws if the recipient is the zero address", async () => {
-        await expect(token.connect(spender).transferFrom(holder, ZeroAddress, holderTokenId)).to.be.reverted;
+        await expect(token.connect(spender).transferFrom(holder, ZeroAddress, holderTokenId)).to.revert(ethers);
       });
 
       it("Throws if the token id is invalid", async () => {
-        await expect(token.connect(spender).transferFrom(holder, eoaRecipient, holderTokenId + 1n)).to.be.reverted;
+        await expect(token.connect(spender).transferFrom(holder, eoaRecipient, holderTokenId + 1n)).to.revert(ethers);
       });
     });
 
@@ -349,7 +360,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       });
 
       it("Throws if the sender is not the owner or the approved spender", async () => {
-        await expect(token.connect(stranger).approve(newSpender, holderTokenId)).to.be.reverted;
+        await expect(token.connect(stranger).approve(newSpender, holderTokenId)).to.revert(ethers);
       });
     });
 
@@ -411,7 +422,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       });
 
       it("Throws if the token id is not valid", async () => {
-        await expect(token.getApproved(holderTokenId + 1n)).to.be.reverted;
+        await expect(token.getApproved(holderTokenId + 1n)).to.revert(ethers);
       });
     });
 
@@ -434,7 +445,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
 testERC721Compliance.only = (target: ERC721Target) =>
   testERC721Compliance({
     ...target,
-    suiteFunction: describe.only, // eslint-disable-line no-only-tests/no-only-tests
+    suiteFunction: describe.only,
   });
 
 testERC721Compliance.skip = (target: ERC721Target) =>

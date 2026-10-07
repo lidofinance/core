@@ -1,14 +1,14 @@
-import { ether } from "lib";
+import { ether } from "#lib";
 
 import {
   DAY,
-  FormulaFixtureSet,
+  type FormulaFixtureSet,
   migrate,
-  MigrationStep,
-  OracleReportLimits,
-  ReportStep,
-  ReportStepInput,
-} from "../lib";
+  type MigrationStep,
+  type OracleReportLimits,
+  type ReportStep,
+  type ReportStepInput,
+} from "../lib.js";
 
 export { migrate };
 export type { OracleReportLimits };

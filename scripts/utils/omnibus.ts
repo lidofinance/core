@@ -1,4 +1,4 @@
-import { BigNumberish, BytesLike, dataLength, getAddress, solidityPacked, toBeHex } from "ethers";
+import { type BigNumberish, type BytesLike, dataLength, getAddress, solidityPacked, toBeHex } from "ethers";
 
 export type EvmScriptHex = `0x${string}`;
 

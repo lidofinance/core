@@ -7,6 +7,10 @@ declare namespace NodeJS {
      * Flags for changing the behavior of the Hardhat Network
      */
 
+    /* Solidity tests: select coverage or 10k-run certification settings; FUZZ_SEED pins the deep-run seed */
+    FUZZ_PROFILE?: "coverage" | "deep";
+    FUZZ_SEED?: string;
+
     /* Test execution mode: 'scratch' for fresh network, 'fork' for forked network */
     MODE?: "scratch" | "forking"; // default: "scratch"
 
@@ -107,10 +111,6 @@ declare namespace NodeJS {
 
     /* hardhat plugins options */
     SKIP_CONTRACT_SIZE?: boolean;
-    SKIP_GAS_REPORT?: boolean;
     SKIP_INTERFACES_CHECK?: boolean;
-
-    /* mocka parameters */
-    COVERAGE?: string;
   }
 }

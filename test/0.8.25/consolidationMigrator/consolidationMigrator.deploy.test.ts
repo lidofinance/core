@@ -1,12 +1,13 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
 import {
-  ConsolidationBus__MockForConsolidationMigrator,
-  StakingRouter__MockForConsolidationMigrator,
-} from "typechain-types";
+  type ConsolidationBus__MockForConsolidationMigrator,
+  type StakingRouter__MockForConsolidationMigrator,
+} from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "#lib/proxy.js";
+
+import { ethers } from "#test/suite";
 
 describe("ConsolidationMigrator.sol: deployment", () => {
   let stakingRouter: StakingRouter__MockForConsolidationMigrator;

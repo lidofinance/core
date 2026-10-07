@@ -1,16 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 import { describe } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { StakingVault__MockForVaultHub, VaultHub } from "typechain-types";
+import type { StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { ether } from "lib/units";
+import { ether } from "#lib/units.js";
 
-import { deployVaults } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployVaults } from "#test/deploy";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("VaultHub.sol:redemptions", () => {
   let vaultsContext: Awaited<ReturnType<typeof deployVaults>>;
@@ -156,7 +154,7 @@ describe("VaultHub.sol:redemptions", () => {
       // Simulate that the vault has no balance on EL
       const vaultAddress = await connectedVault.getAddress();
       const vaultBalanceBefore = await ethers.provider.getBalance(vaultAddress);
-      await setBalance(vaultAddress, 0);
+      await networkHelpers.setBalance(vaultAddress, 0);
 
       // Report the vault with some fees, mint shares and set redemption shares to simulate that the vault has obligations
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
@@ -172,7 +170,7 @@ describe("VaultHub.sol:redemptions", () => {
       expect(record.redemptionShares).to.equal(redemptionShares);
 
       // Return the balance to the vault
-      await setBalance(vaultAddress, vaultBalanceBefore);
+      await networkHelpers.setBalance(vaultAddress, vaultBalanceBefore);
 
       // Settle the obligations and check that the deposits are unpaused
       await expect(vaultHub.forceRebalance(connectedVault))

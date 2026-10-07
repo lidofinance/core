@@ -1,5 +1,5 @@
 import { bigintToHex } from "bigint-conversion";
-import { BigNumberish, BytesLike } from "ethers";
+import { type BigNumberish, type BytesLike } from "ethers";
 
 export function toLittleEndian64(value: BigNumberish): BytesLike {
   const bytes = bigintToHex(BigInt(value), false, 8);

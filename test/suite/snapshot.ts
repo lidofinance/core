@@ -1,16 +1,12 @@
-import { ethers } from "hardhat";
-
-import { HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/internal/hardhat-ethers-provider";
+import { ethers } from "./network.js";
 
 export class Snapshot {
-  private static provider: HardhatEthersProvider = ethers.provider;
-
   public static async take() {
-    return Snapshot.provider.send("evm_snapshot", []);
+    return ethers.provider.send("evm_snapshot", []);
   }
 
   public static async restore(snapshot: string) {
-    const result = await Snapshot.provider.send("evm_revert", [snapshot]);
+    const result = await ethers.provider.send("evm_revert", [snapshot]);
     if (!result) {
       throw new Error("`evm_revert` failed.");
     }

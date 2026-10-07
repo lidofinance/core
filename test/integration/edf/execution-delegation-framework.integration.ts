@@ -1,14 +1,13 @@
 import { expect } from "chai";
-import { Contract, Log, LogDescription } from "ethers";
-import { ethers } from "hardhat";
+import { Contract, type Log, type LogDescription } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { findEventsWithInterfaces } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { readNetworkState, Sk } from "lib/state-file";
+import { findEventsWithInterfaces } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
+import { readNetworkState, Sk } from "#lib/state-file.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const DELEGATION_FACTORY_ABI = [
   "function deploy(address owner, address delegate, uint256 cooldown) returns (address instance)",
@@ -102,7 +101,7 @@ describe("Integration: Execution Delegation Framework", () => {
 
     await (await oracleDaemonConfig.connect(agent).grantRole(role, delegationAddress)).wait();
 
-    await expect(oracleDaemonConfig.connect(delegate).set(key, value)).to.be.reverted;
+    await expect(oracleDaemonConfig.connect(delegate).set(key, value)).to.revert(ethers);
 
     const data = oracleDaemonConfig.interface.encodeFunctionData("set", [key, value]);
     const tx = await connectSigner(delegation, delegate).execute(oracleDaemonConfig.address, data);

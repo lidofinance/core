@@ -1,16 +1,19 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { zeroPadValue } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import type { TopUpGateway__Harness } from "typechain-types";
-import { Lido__MockForTopUpGateway, LidoLocator, StakingRouter__MockForTopUpGateway } from "typechain-types";
+import type { TopUpGateway__Harness } from "typechain-types/index.js";
+import {
+  type Lido__MockForTopUpGateway,
+  type LidoLocator,
+  type StakingRouter__MockForTopUpGateway,
+} from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "#lib/proxy.js";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("TopUpGateway.sol", () => {
   let admin: HardhatEthersSigner;
@@ -32,7 +35,7 @@ describe("TopUpGateway.sol", () => {
   const DEFAULT_MAX_VALIDATORS = 5n;
   const DEFAULT_MIN_BLOCK_DISTANCE = 1n;
   const DEFAULT_MAX_ROOT_AGE = 300n;
-  const G_INDEX = ethers.zeroPadValue("0x01", 32);
+  const G_INDEX = zeroPadValue("0x01", 32);
   const ZERO_BYTES_31 = "00".repeat(31);
   const WC_TYPE_02 = `0x02${ZERO_BYTES_31}`;
   const WC_TYPE_01 = `0x01${ZERO_BYTES_31}`;
@@ -105,7 +108,7 @@ describe("TopUpGateway.sol", () => {
   });
 
   const buildTopUpData = async (): Promise<TopUpData> => {
-    const timestamp = BigInt(await time.latest());
+    const timestamp = BigInt(await networkHelpers.time.latest());
 
     return {
       moduleId: MODULE_ID,
@@ -399,8 +402,8 @@ describe("TopUpGateway.sol", () => {
     });
 
     it("reverts when beacon data is too old", async () => {
-      await time.increase(400);
-      const now = BigInt(await time.latest());
+      await networkHelpers.time.increase(400);
+      const now = BigInt(await networkHelpers.time.latest());
       const data = await buildTopUpData();
       data.beaconRootData.childBlockTimestamp = now - 400n;
 
@@ -411,7 +414,7 @@ describe("TopUpGateway.sol", () => {
     });
 
     it("reverts when root precedes last top up", async () => {
-      const timestamp = BigInt(await time.latest());
+      const timestamp = BigInt(await networkHelpers.time.latest());
       await topUpGateway.harness_setLastTopUpTimestamp(timestamp);
       const data = await buildTopUpData();
       data.beaconRootData.childBlockTimestamp = timestamp;
@@ -576,7 +579,7 @@ describe("TopUpGateway.sol", () => {
       // the previous no-op did not consume the rate-limit window.
       const data2 = await buildTopUpData();
       // ensure the witness is fresh w.r.t. lastTopUpTimestamp (still 0)
-      data2.beaconRootData.childBlockTimestamp = BigInt(await time.latest()) + 1n;
+      data2.beaconRootData.childBlockTimestamp = BigInt(await networkHelpers.time.latest()) + 1n;
       await expect(topUpGateway.connect(topUpOperator).topUp(data2))
         .to.emit(stakingRouter, "TopUpCalled")
         .and.to.emit(topUpGateway, "LastTopUpChanged");
@@ -671,11 +674,11 @@ describe("TopUpGateway.sol", () => {
         await topUpGateway.connect(admin).pauseFor(duration);
 
         // at the very last second of the pause window — still paused
-        await time.increase(Number(duration) - 1);
+        await networkHelpers.time.increase(Number(duration) - 1);
         expect(await topUpGateway.isPaused()).to.equal(true);
 
         // one second past the window — auto-resumed
-        await time.increase(1);
+        await networkHelpers.time.increase(1);
         expect(await topUpGateway.isPaused()).to.equal(false);
       });
 
@@ -752,7 +755,7 @@ describe("TopUpGateway.sol", () => {
 
         expect(await topUpGateway.isPaused()).to.equal(true);
 
-        await time.increase(1_000_000_000);
+        await networkHelpers.time.increase(1_000_000_000);
 
         expect(await topUpGateway.isPaused()).to.equal(true);
       });
@@ -761,7 +764,7 @@ describe("TopUpGateway.sol", () => {
         await topUpGateway.connect(admin).pauseFor(100n);
         expect(await topUpGateway.isPaused()).to.equal(true);
 
-        await time.increase(101);
+        await networkHelpers.time.increase(101);
 
         expect(await topUpGateway.isPaused()).to.equal(false);
       });
@@ -769,14 +772,14 @@ describe("TopUpGateway.sol", () => {
 
     describe("pauseUntil", () => {
       it("should revert if the sender does not have the PAUSE_ROLE", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
         await expect(topUpGateway.connect(stranger).pauseUntil(timestamp + 1000n))
           .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
           .withArgs(stranger.address, pauseRole);
       });
 
       it("should revert if the contract is already paused", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
         await topUpGateway.connect(admin).pauseFor(1000n);
 
         await expect(topUpGateway.connect(admin).pauseUntil(timestamp + 1000n)).to.be.revertedWithCustomError(
@@ -786,7 +789,7 @@ describe("TopUpGateway.sol", () => {
       });
 
       it("should revert if timestamp is in the past", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
 
         await expect(topUpGateway.connect(admin).pauseUntil(timestamp - 1000n)).to.be.revertedWithCustomError(
           topUpGateway,
@@ -795,7 +798,7 @@ describe("TopUpGateway.sol", () => {
       });
 
       it("should pause the contract until the specified timestamp and emit Paused event", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
         const pauseUntil = timestamp + 1000n;
 
         await expect(topUpGateway.connect(admin).pauseUntil(pauseUntil))
@@ -814,19 +817,19 @@ describe("TopUpGateway.sol", () => {
 
         expect(await topUpGateway.isPaused()).to.equal(true);
 
-        await time.increase(1_000_000_000);
+        await networkHelpers.time.increase(1_000_000_000);
 
         expect(await topUpGateway.isPaused()).to.equal(true);
       });
 
       it("should automatically resume after the pause timestamp passes", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
         const pauseUntil = timestamp + 100n;
 
         await topUpGateway.connect(admin).pauseUntil(pauseUntil);
         expect(await topUpGateway.isPaused()).to.equal(true);
 
-        await time.increase(101);
+        await networkHelpers.time.increase(101);
 
         expect(await topUpGateway.isPaused()).to.equal(false);
       });
@@ -844,7 +847,7 @@ describe("TopUpGateway.sol", () => {
       });
 
       it("pauseUntil: should prevent topUp immediately after pausing", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
         const data = await buildTopUpData();
 
         await topUpGateway.connect(admin).pauseUntil(timestamp + 1000n);
@@ -864,7 +867,7 @@ describe("TopUpGateway.sol", () => {
       });
 
       it("pauseUntil: should allow topUp immediately after resuming", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
 
         await topUpGateway.connect(admin).pauseUntil(timestamp + 1000n);
         await topUpGateway.connect(admin).resume();
@@ -876,18 +879,18 @@ describe("TopUpGateway.sol", () => {
       it("pauseFor: should allow topUp after pause duration automatically expires", async () => {
         await topUpGateway.connect(admin).pauseFor(100n);
 
-        await time.increase(101);
+        await networkHelpers.time.increase(101);
 
         const data = await buildTopUpData();
         await topUpGateway.connect(topUpOperator).topUp(data);
       });
 
       it("pauseUntil: should allow topUp after pause duration automatically expires", async () => {
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
 
         await topUpGateway.connect(admin).pauseUntil(timestamp + 100n);
 
-        await time.increase(101);
+        await networkHelpers.time.increase(101);
 
         const data = await buildTopUpData();
         await topUpGateway.connect(topUpOperator).topUp(data);

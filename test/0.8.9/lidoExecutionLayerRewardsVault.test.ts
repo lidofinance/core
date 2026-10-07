@@ -1,19 +1,18 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   ERC721__Harness,
   Lido__MockForElRewardsVault,
   LidoExecutionLayerRewardsVault,
   StETH__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { batch, certainAddress, ether, impersonate } from "lib";
+import { batch, certainAddress, ether, impersonate } from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("LidoExecutionLayerRewardsVault.sol", () => {
   let deployer: HardhatEthersSigner;

@@ -1,9 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { StakingRouter__MockForTWG, WithdrawalVault__MockForTWG } from "typechain-types";
+import type { StakingRouter__MockForTWG, WithdrawalVault__MockForTWG } from "typechain-types/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
+import { ethers } from "#test/suite";
+
+import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator.js";
 
 describe("TriggerableWithdrawalsGateway.sol: deployment", () => {
   let withdrawalVault: WithdrawalVault__MockForTWG;

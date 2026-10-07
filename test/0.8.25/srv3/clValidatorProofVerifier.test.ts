@@ -1,10 +1,11 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain-types";
+import { type CLValidatorVerifier__Harness, type SSZValidatorsMerkleTree } from "typechain-types/index.js";
 
-import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "lib/pdg";
-import { prepareLocalMerkleTree } from "lib/top-ups";
+import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "#lib/pdg.js";
+import { prepareLocalMerkleTree } from "#lib/top-ups.js";
+
+import { ethers } from "#test/suite";
 
 const STATIC_VALIDATOR = {
   blockRoot: "0xbe928e3a9fa76b916df79d78a8b67237f9b133269bb421f37490b7624abad452",
@@ -233,8 +234,9 @@ describe("CLTopUpProofVerifier", () => {
 
     // 5) Negative: wrong WC must fail
     const wrongWC = "0x" + "11".repeat(32);
-    await expect(verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, wrongWC)).to.be
-      .reverted;
+    await expect(verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, wrongWC)).to.be.revert(
+      ethers,
+    );
   });
 
   it("don't revert with ValidatorIsSlashed when slashed = true", async () => {
@@ -476,7 +478,7 @@ describe("CLTopUpProofVerifier", () => {
     };
 
     const wrongWC = "0x" + "11".repeat(32);
-    await expect(staticVerifier.TEST_verifyValidator(beaconRootData, v.witness, v.index, wrongWC)).to.be.reverted;
+    await expect(staticVerifier.TEST_verifyValidator(beaconRootData, v.witness, v.index, wrongWC)).to.be.revert(ethers);
   });
 
   it("should reject static validator with fake proof", async () => {
@@ -507,7 +509,7 @@ describe("CLTopUpProofVerifier", () => {
         v.index,
         "0x010000000000000000000000ddc6ed6e6a9c1e55c87b155b9a40bac4721a6dac",
       ),
-    ).to.be.reverted;
+    ).to.be.revert(ethers);
   });
 
   it("should change gIndex on pivot slot", async () => {

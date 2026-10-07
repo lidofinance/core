@@ -1,6 +1,6 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { log } from "./log";
+import { log } from "./log.js";
 
 const CONNECTION_CLOSED_RETRY_ATTEMPTS = 3;
 const CONNECTION_CLOSED_RETRY_DELAY_MS = 250;
@@ -34,6 +34,8 @@ async function sleep(ms: number) {
 }
 
 export async function warmUpJsonRpcProvider() {
+  const { ethers } = await hre.network.getOrCreate();
+
   for (let attempt = 1; attempt <= CONNECTION_CLOSED_RETRY_ATTEMPTS; attempt++) {
     try {
       await ethers.provider.getBlockNumber();

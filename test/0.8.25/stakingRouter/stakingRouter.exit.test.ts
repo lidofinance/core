@@ -1,9 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { LidoLocator, StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
+import {
+  type LidoLocator,
+  type StakingModule__MockForTriggerableWithdrawals,
+  type StakingRouter__Harness,
+} from "typechain-types/index.js";
 
 import {
   certainAddress,
@@ -12,12 +15,12 @@ import {
   randomString,
   randomWCType1,
   WithdrawalCredentialsType,
-} from "lib";
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
-import { deployStakingRouter } from "../../deploy/stakingRouter";
+import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 
 describe("StakingRouter.sol:exit", () => {
   let deployer: HardhatEthersSigner;
@@ -121,7 +124,7 @@ describe("StakingRouter.sol:exit", () => {
     it("calls reportValidatorExitDelay on the staking module", async () => {
       await expect(
         stakingModule.reportValidatorExitDelay(NODE_OPERATOR_ID, proofSlotTimestamp, publicKey, eligibleToExitInSec),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
 
       await expect(
         stakingRouter
@@ -133,7 +136,7 @@ describe("StakingRouter.sol:exit", () => {
             publicKey,
             eligibleToExitInSec,
           ),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
     });
 
     it("reverts when called by unauthorized user", async () => {
@@ -169,7 +172,7 @@ describe("StakingRouter.sol:exit", () => {
 
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
     });
 
     it("emits StakingModuleExitNotificationFailed when staking module reverts", async () => {

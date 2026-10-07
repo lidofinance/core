@@ -1,11 +1,11 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { impersonate, log } from "lib";
+import { impersonate, log } from "#lib";
 
-import { ProtocolContext } from "../types";
+import type { ProtocolContext } from "../types.js";
 
-import { deployDelegationContract } from "./edf";
+import { deployDelegationContract } from "./edf.js";
 
 /**
  * Ensures that the DSM has the required number of guardians and quorum.
@@ -25,6 +25,7 @@ export const ensureDsmGuardians = async (ctx: ProtocolContext, minGuardiansCount
     return;
   }
 
+  const { ethers } = await hre.network.getOrCreate();
   const ownerSigner = await impersonate(await dsm.getOwner());
   const [delegationOwner, ...delegates] = await ethers.getSigners();
   if (delegates.length === 0) throw new Error("No test signers are available for DSM guardians");

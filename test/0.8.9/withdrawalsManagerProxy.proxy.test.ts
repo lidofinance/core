@@ -1,16 +1,14 @@
 import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { hexlify, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { getStorageAt } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Proxy__Harness, WithdrawalsManagerProxy__Mock } from "typechain-types";
+import type { Proxy__Harness, WithdrawalsManagerProxy__Mock } from "typechain-types/index.js";
 
-import { ether } from "lib";
+import { ether } from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 // This is a test suite for a low-level OZ contract located in
 // contracts/0.8.9/WithdrawalsManagerProxy.sol:Proxy
@@ -63,7 +61,7 @@ describe("WithdrawalsManagerProxy.sol:proxy", () => {
         data: impl.interface.encodeFunctionData("writeToStorage", [slot, value]),
       });
 
-      expect(await getStorageAt(await proxy.getAddress(), slot)).to.equal(value);
+      expect(await networkHelpers.getStorageAt(await proxy.getAddress(), slot)).to.equal(value);
     });
   });
 
@@ -78,7 +76,7 @@ describe("WithdrawalsManagerProxy.sol:proxy", () => {
           to: proxy,
           value,
         }),
-      ).to.changeEtherBalances([sender, proxy], [-value, value]);
+      ).to.changeEtherBalances(ethers, [sender, proxy], [-value, value]);
     });
   });
 });

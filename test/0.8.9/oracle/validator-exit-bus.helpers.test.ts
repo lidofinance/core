@@ -1,15 +1,14 @@
 import { expect } from "chai";
 import { keccak256 } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ValidatorsExitBus__Harness } from "typechain-types";
+import type { ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
-import { de0x, numberToHex } from "lib";
+import { de0x, numberToHex } from "#lib";
 
-import { deployVEBO, initVEBO } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployVEBO, initVEBO } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -188,7 +187,7 @@ describe.skip("ValidatorsExitBusOracle.sol:helpers", () => {
 
       await oracle.storeNewHashRequestStatus(hash, contractVersion, timestamp);
 
-      await expect(oracle.updateRequestStatus(hash)).to.not.be.reverted;
+      await expect(oracle.updateRequestStatus(hash)).to.not.revert(ethers);
 
       const requestStatus = await oracle.getRequestStatus(hash);
       expect(requestStatus.deliveredExitDataTimestamp).to.equal(await oracle.getTime());

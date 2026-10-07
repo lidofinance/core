@@ -1,13 +1,12 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { HexString } from "ethers/lib.commonjs/utils/data";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { OracleDaemonConfig, OracleDaemonConfig__factory } from "typechain-types";
+import type { OracleDaemonConfig } from "typechain-types/index.js";
+import { OracleDaemonConfig__factory } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("OracleDaemonConfig.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -21,7 +20,7 @@ describe("OracleDaemonConfig.sol", () => {
   let originalState: string;
 
   const defaultKey: string = "key1";
-  const defaultValue: HexString = "0xbec001";
+  const defaultValue: `0x${string}` = "0xbec001";
 
   before(async () => {
     [deployer, admin, stranger, configPrimaryManager, configSecondaryManager] = await ethers.getSigners();

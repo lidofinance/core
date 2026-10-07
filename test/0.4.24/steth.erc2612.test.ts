@@ -1,8 +1,8 @@
-import { ethers } from "hardhat";
+import { ether, stethDomain } from "#lib";
 
-import { ether, stethDomain } from "lib";
+import { ethers } from "#test/suite";
 
-import { testERC2612Compliance } from "../common/erc2612.test";
+import { testERC2612Compliance } from "../common/erc2612.test.js";
 
 testERC2612Compliance({
   tokenName: "stETH",

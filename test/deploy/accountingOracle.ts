@@ -1,7 +1,6 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
+import type { AccountingOracle, HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
 import {
   AO_CONSENSUS_VERSION,
@@ -13,14 +12,16 @@ import {
   GENESIS_TIME,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "lib";
+} from "#lib";
 
-import { deployHashConsensus } from "./hashConsensus";
-import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
+import { ethers } from "#test/suite";
+
+import { deployHashConsensus } from "./hashConsensus.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator.js";
 import {
   MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
   MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-} from "./validatorExitBusOracle";
+} from "./validatorExitBusOracle.js";
 
 export const ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
 export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;

@@ -1,8 +1,8 @@
-import { BigNumberish, concat, solidityPackedKeccak256, toBeHex } from "ethers";
+import { type BigNumberish, concat, solidityPackedKeccak256, toBeHex } from "ethers";
 
-import { DepositSecurityModule } from "typechain-types";
+import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { sign } from "./ec";
+import { sign } from "./ec.js";
 
 class DSMMessage {
   static MESSAGE_PREFIX: string;

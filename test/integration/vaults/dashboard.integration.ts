@@ -1,11 +1,18 @@
 import { expect } from "chai";
 import { hexlify, MaxUint256, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, Lido, PredepositGuarantee, SSZBLSHelpers, StakingVault, VaultHub, WstETH } from "typechain-types";
+import type {
+  Dashboard,
+  Lido,
+  PredepositGuarantee,
+  SSZBLSHelpers,
+  StakingVault,
+  VaultHub,
+  WstETH,
+} from "typechain-types/index.js";
 
 import {
   advanceChainTime,
@@ -13,14 +20,14 @@ import {
   ether,
   generateDepositStruct,
   generateValidator,
-  LocalMerkleTree,
+  type LocalMerkleTree,
   mEqual,
   PDGPolicy,
   prepareLocalMerkleTree,
   randomAddress,
   randomValidatorPubkey,
   TOTAL_BASIS_POINTS,
-} from "lib";
+} from "#lib";
 import {
   autofillRoles,
   calculateLockedValue,
@@ -28,13 +35,13 @@ import {
   ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getPubkeys,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
-} from "lib/protocol";
+  type VaultRoles,
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 // EIP-7528 ETH address
 const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";

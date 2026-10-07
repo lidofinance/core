@@ -1,13 +1,15 @@
-import { BaseContract } from "ethers";
-import { ethers } from "hardhat";
+import { type BaseContract } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Kernel, LidoLocator } from "typechain-types";
+import type { Kernel } from "typechain-types/@aragon/os/contracts/kernel/Kernel.js";
+import type { LidoLocator } from "typechain-types/index.js";
 
-import { DEPOSITS_RESERVE_TARGET, ether, findEvents, streccak } from "lib";
+import { DEPOSITS_RESERVE_TARGET, ether, findEvents, streccak } from "#lib";
 
-import { deployLidoLocator } from "./locator";
+import { ethers } from "#test/suite";
+
+import { deployLidoLocator } from "./locator.js";
 
 interface CreateAddAppArgs {
   dao: Kernel;

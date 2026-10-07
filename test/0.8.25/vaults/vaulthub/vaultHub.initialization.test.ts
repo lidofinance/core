@@ -1,16 +1,15 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types";
+import type { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types/index.js";
 
-import { ether, randomAddress } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { ether, randomAddress } from "#lib";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { deployLidoLocator } from "#test/deploy";
+import { ethers, Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 describe("VaultHub.sol:initialization", () => {
   let admin: HardhatEthersSigner;

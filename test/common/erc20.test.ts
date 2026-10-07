@@ -1,14 +1,14 @@
 import { expect } from "chai";
 import { parseUnits } from "ethers";
-import { ExclusiveSuiteFunction, PendingSuiteFunction } from "mocha";
+import { type ExclusiveSuiteFunction, type PendingSuiteFunction } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/ERC20";
+import type { ERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/ERC20.js";
 
-import { batch } from "lib";
+import { batch } from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 interface ERC20Target {
   tokenName: string;
@@ -159,7 +159,7 @@ export function testERC20Compliance({ tokenName, deploy, suiteFunction = describ
         expect(after.recipientBalance).to.equal(before.recipientBalance + transferAmount);
       });
 
-      it("SHOULD throw if the message caller’s account balance does not have enough tokens to spend", async () => {
+      it("SHOULD throw if the message caller's account balance does not have enough tokens to spend", async () => {
         const before = await batch({
           holderBalance: token.balanceOf(holder),
         });
@@ -168,7 +168,7 @@ export function testERC20Compliance({ tokenName, deploy, suiteFunction = describ
         // due to the stETH 1-2 stWei error margin, which is why we exceed by 3
         const transferAmount = before.holderBalance + 3n;
 
-        await expect(token.transfer(recipient, transferAmount)).to.be.reverted;
+        await expect(token.transfer(recipient, transferAmount)).to.revert(ethers);
       });
 
       it("Returns `true` if the transfer succeeds", async () => {
@@ -239,12 +239,13 @@ export function testERC20Compliance({ tokenName, deploy, suiteFunction = describ
           expect(after.spenderAllowance).to.equal(before.spenderAllowance - transferAmount);
         });
 
-        it("SHOULD throw if the message caller’s account balance does not have enough tokens to spend", async () => {
+        it("SHOULD throw if the message caller's account balance does not have enough tokens to spend", async () => {
           const transferAmount = await token.allowance(holder, spender);
           const insufficientTransferAmount = transferAmount + 1n;
 
-          await expect(token.connect(spender).transferFrom(holder, recipient, insufficientTransferAmount)).to.be
-            .reverted;
+          await expect(token.connect(spender).transferFrom(holder, recipient, insufficientTransferAmount)).to.revert(
+            ethers,
+          );
         });
 
         it("Returns `true` if the transfer succeeds", async () => {
@@ -315,7 +316,7 @@ export function testERC20Compliance({ tokenName, deploy, suiteFunction = describ
 testERC20Compliance.only = (target: ERC20Target) =>
   testERC20Compliance({
     ...target,
-    suiteFunction: describe.only, // eslint-disable-line no-only-tests/no-only-tests
+    suiteFunction: describe.only,
   });
 
 testERC20Compliance.skip = (target: ERC20Target) =>

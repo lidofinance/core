@@ -1,7 +1,10 @@
 import { task } from "hardhat/config";
 
-task("protocol:get-addresses", "Get deployed protocol contract addresses").setAction(async () => {
-  const { readNetworkState } = await import("lib/state-file");
-  const state = readNetworkState();
-  console.log(JSON.stringify(state, null, 2));
-});
+export const protocolGetAddressesTask = task("protocol:get-addresses", "Get deployed protocol contract addresses")
+  .setInlineAction(async () => {
+    // Lazy import: lib/state-file.js imports hardhat, cyclic with hardhat.config.ts
+    const { readNetworkState } = await import("#lib/state-file.js");
+    const state = readNetworkState();
+    console.log(JSON.stringify(state, null, 2));
+  })
+  .build();

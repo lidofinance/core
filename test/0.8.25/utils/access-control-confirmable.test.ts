@@ -1,11 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { AccessControlConfirmable__Harness } from "typechain-types";
+import type { AccessControlConfirmable__Harness } from "typechain-types/index.js";
 
-import { advanceChainTime, days, getNextBlockTimestamp, hours } from "lib";
+import { advanceChainTime, days, getNextBlockTimestamp, hours } from "#lib";
+
+import { ethers, Snapshot } from "#test/suite";
 
 describe("AccessControlConfirmable.sol", () => {
   let harness: AccessControlConfirmable__Harness;
@@ -13,6 +14,8 @@ describe("AccessControlConfirmable.sol", () => {
   let role1Member: HardhatEthersSigner;
   let role2Member: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+
+  let originalState: string;
 
   before(async () => {
     [admin, stranger, role1Member, role2Member] = await ethers.getSigners();
@@ -27,6 +30,10 @@ describe("AccessControlConfirmable.sol", () => {
     expect(await harness.hasRole(await harness.ROLE_2(), role2Member)).to.be.true;
     expect(await harness.getRoleMemberCount(await harness.ROLE_2())).to.equal(1);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
     it("sets the default admin", async () => {

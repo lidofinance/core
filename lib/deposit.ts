@@ -1,7 +1,7 @@
 import { bigintToHex } from "bigint-conversion";
-import { BytesLike, getBytes, sha256, zeroPadBytes } from "ethers";
+import { type BytesLike, getBytes, sha256, zeroPadBytes } from "ethers";
 
-import { GENESIS_FORK_VERSION, ONE_GWEI } from "./constants";
+import { GENESIS_FORK_VERSION, ONE_GWEI } from "./constants.js";
 
 let sszCached: unknown;
 

@@ -1,8 +1,9 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { bl, getDeployerSigner, gr, log } from "lib";
+import { bl, getDeployerSigner, gr, log } from "#lib";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await getDeployerSigner()).address;
   log(`Using deployer: ${bl(deployer)}`);
 

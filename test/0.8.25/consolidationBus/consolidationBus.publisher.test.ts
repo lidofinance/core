@@ -1,15 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types";
+import { type ConsolidationBus, type ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "#lib/proxy.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
-import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers.js";
 
 describe("ConsolidationBus.sol: publisher", () => {
   let consolidationBus: ConsolidationBus;
@@ -138,7 +137,7 @@ describe("ConsolidationBus.sol: publisher", () => {
     it("should allow batch at exact limit", async () => {
       const groups = Array(10).fill({ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] });
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.reverted;
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.revert(ethers);
     });
 
     it("should revert if groups count exceeds max groups in batch", async () => {
@@ -159,7 +158,7 @@ describe("ConsolidationBus.sol: publisher", () => {
 
       const groups = Array(3).fill({ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] });
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.reverted;
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.revert(ethers);
     });
 
     it("should check both batch size and max groups limits independently", async () => {

@@ -1,15 +1,15 @@
 import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
 import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
 
-import { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types";
-import {
+import type {
   BLS12_381,
   PredepositGuarantee,
-} from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+} from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.js";
+import type { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types/index.js";
 
-import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
+import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "#lib";
 
 export type Validator = { container: SSZBLSHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 
@@ -236,6 +236,7 @@ export interface LocalMerkleTree {
 export const prepareLocalMerkleTree = async (
   gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028",
 ): Promise<LocalMerkleTree> => {
+  const { ethers } = await hre.network.getOrCreate();
   const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [gIndex], {});
   const firstValidator = generateValidator();
 

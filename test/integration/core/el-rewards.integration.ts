@@ -1,13 +1,12 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ether } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 describe("Scenario: EL rewards distribution", () => {
   let ctx: ProtocolContext;
@@ -58,7 +57,7 @@ describe("Scenario: EL rewards distribution", () => {
     const { lido, locator } = ctx.contracts;
 
     expect(await locator.elRewardsVault()).to.not.equal(stranger.address);
-    await expect(lido.connect(stranger).receiveELRewards({ value: REWARD_AMOUNT })).to.be.reverted;
+    await expect(lido.connect(stranger).receiveELRewards({ value: REWARD_AMOUNT })).to.revert(ethers);
   });
 
   it("receiveELRewards called by EL Rewards Vault moves rewards to Lido", async () => {

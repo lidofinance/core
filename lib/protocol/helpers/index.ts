@@ -5,11 +5,11 @@ export {
   seedProtocolPendingBaseline,
   getStakingModuleBalances,
   unpauseStaking,
-} from "./staking";
+} from "./staking.js";
 
-export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
+export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal.js";
 
-export { setMaxPositiveTokenRebase, updateOracleReportLimits } from "./sanity-checker";
+export { setMaxPositiveTokenRebase, updateOracleReportLimits } from "./sanity-checker.js";
 
 export {
   calcReportDataHash,
@@ -22,8 +22,6 @@ export {
   ensureFirstPostMigrationReport,
   waitNextAvailableReportTime,
   handleOracleReport,
-  OracleReportParams,
-  OracleReportSubmitParams,
   report,
   reportWithEffectiveClDiff,
   reportWithoutClActivation,
@@ -32,10 +30,11 @@ export {
   submitReportDataWithConsensusAndEmptyExtraData,
   getDepositedSinceLastReport,
   normalizeWithdrawalVaultBaseline,
-} from "./accounting";
+} from "./accounting.js";
+export type { OracleReportParams, OracleReportSubmitParams } from "./accounting.js";
 
-export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm";
-export { deployDelegationContract, getDelegationFactory } from "./edf";
+export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm.js";
+export { deployDelegationContract, getDelegationFactory } from "./edf.js";
 export {
   norEnsureDepositedOperatorKeys,
   norSdvtEnsureOperators,
@@ -43,8 +42,8 @@ export {
   norSdvtAddOperatorKeys,
   norSdvtCapOtherOperatorsToDeposited,
   norSdvtSetOperatorStakingLimit,
-} from "./nor-sdvt";
-export type { NorOperatorKeys } from "./nor-sdvt";
+} from "./nor-sdvt.js";
+export type { NorOperatorKeys } from "./nor-sdvt.js";
 export {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
@@ -52,8 +51,8 @@ export {
   ensureBatchNotPending,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
-} from "./consolidation";
-export type { ConsolidationPubkeyGroup, ConsolidationTargetWitness, ConsolidationWitnessSet } from "./consolidation";
+} from "./consolidation.js";
+export type { ConsolidationPubkeyGroup, ConsolidationTargetWitness, ConsolidationWitnessSet } from "./consolidation.js";
 export {
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
@@ -62,9 +61,9 @@ export {
   cmv2SuiteEnabled,
   getCMv2ModuleId,
   getCMv2SigningKeys,
-} from "./cmv2";
-export type { CMv2OperatorKeys } from "./cmv2";
-export { ensurePredepositGuaranteeUnpaused } from "./pdg";
+} from "./cmv2.js";
+export type { CMv2OperatorKeys } from "./cmv2.js";
+export { ensurePredepositGuaranteeUnpaused } from "./pdg.js";
 export {
   buildTopUpData,
   depositEventAmountWei,
@@ -74,15 +73,13 @@ export {
   prepareTopUpWitnesses,
   topUpEnsureDepositableEther,
   topUpEnsureModuleAllocation,
-} from "./topup";
-export type { TopUpValidatorState, TopUpWitnessBundle } from "./topup";
-export { calcNodeOperatorRewards } from "./staking-module";
+} from "./topup.js";
+export type { TopUpValidatorState, TopUpWitnessBundle } from "./topup.js";
+export { calcNodeOperatorRewards } from "./staking-module.js";
 
-export * from "./vaults";
-export * from "./operatorGrid";
+export * from "./vaults.js";
+export * from "./operatorGrid.js";
 
-export * from "./share-rate";
+export * from "./share-rate.js";
 
-export * from "./operatorGrid";
-
-export * from "./staking";
+export * from "./staking.js";

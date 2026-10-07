@@ -1,25 +1,25 @@
 import { expect } from "chai";
 import { getBigInt } from "ethers";
 
-import { ether, ONE_GWEI } from "lib";
+import { ether, ONE_GWEI } from "#lib";
 import {
   buildModuleAccountingReportParams,
   depositValidatorsWithoutReport,
   getNextReportContext,
   getProtocolContext,
   norSdvtEnsureOperators,
-  ProtocolContext,
+  type ProtocolContext,
   report,
   reportWithoutClActivation,
   seedProtocolPendingBaseline,
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
-} from "lib/protocol";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
+} from "#lib/protocol";
+import { adjustReportModuleBalances } from "#lib/protocol/helpers/accounting.js";
+import { NOR_MODULE_ID } from "#lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
 const ONE_VALIDATOR_BALANCE_ETH = 32n;
@@ -161,7 +161,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       clPendingBalanceGwei: 0n,
     });
 
-    await expect(submitReportDataWithConsensus(ctx, data)).to.not.be.reverted;
+    await expect(submitReportDataWithConsensus(ctx, data)).to.not.be.revert(ethers);
   });
 
   it("should reject a report whose module validators balances do not add up to the reported CL validators total", async () => {

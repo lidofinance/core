@@ -45,9 +45,10 @@ the [Lido Research Forum](https://research.lido.fi/).
 
 ### Requirements
 
-- [Node.js](https://nodejs.org/en) version 22 (LTS) with `corepack` enabled
+- [Node.js](https://nodejs.org/en) version 24 (LTS) with `corepack` enabled
 - [Yarn](https://yarnpkg.com/) installed via corepack (see below)
-- [Foundry](https://book.getfoundry.sh/) latest available version
+- [Foundry](https://book.getfoundry.sh/) for scratch deployments only: `anvil`, `cast` and `forge script` deploy the
+  external CircuitBreaker and staking modules; the tests do not need it
 
 > [!TIP]
 > On macOS with Homebrew, it is recommended to install Node.js using [`n`](https://github.com/tj/n) or
@@ -103,10 +104,10 @@ Solidity v0.4.24. Common interfaces and libraries shared by contracts of differe
 
 ### Tests
 
-This repository uses both Hardhat and Foundry for testing:
+Tests run under Hardhat 3 in two flavours:
 
-- Hardhat offers greater flexibility for writing complex tests.
-- Foundry's fuzzing capabilities provide better coverage of edge cases.
+- TypeScript tests on mocha for complex scenarios.
+- Solidity tests on Hardhat's Solidity test runner (`forge-std` from npm) for fuzzing and invariants.
 
 All tests are located in `/tests` at the root of the project. Each subdirectory name corresponds to the version of the
 contract being tested, mirroring the `/contracts` directory structure. Integration, regression, and other non-unit tests
@@ -138,9 +139,7 @@ Solidity version of the contracts being tested.
 Use the naming convention `*.test.ts` for unit test files (e.g., `myContract.test.ts`) to ensure consistent
 organization and easy identification of test files.
 
-> [!NOTE]
-> The project uses the `hardhat-coverage` plugin to generate coverage reports. Note that Foundry-based tests are not
-> included in these coverage calculations.
+> [!NOTE] > `yarn test:coverage` runs Hardhat's built-in coverage over both the TypeScript and the Solidity tests.
 
 #### Integration Tests
 
@@ -154,17 +153,18 @@ integration tests follows the `*.integration.ts` postfix, for example, `myScenar
 
 #### Fuzzing and Invariant Tests
 
-Foundry's Solidity tests are specifically used for fuzzing library contracts or functions that perform complex
-calculations or byte manipulation. These Solidity tests are located under `/tests` and organized into appropriate
-subdirectories. The naming conventions follow
-Foundry's [documentation](https://book.getfoundry.sh/guides/best-practices#general-test-guidance):
+Solidity tests fuzz library contracts and functions that perform complex calculations or byte manipulation. They run
+through `yarn test:solidity` and live under `/tests` next to the TypeScript tests. The naming follows
+Foundry's [conventions](https://book.getfoundry.sh/guides/best-practices#general-test-guidance):
 
 - For tests, use the `.t.sol` postfix (e.g., `MyContract.t.sol`).
 - For scripts, use the `.s.sol` postfix (e.g., `MyScript.s.sol`).
 - For helpers, use the `.h.sol` postfix (e.g., `MyHelper.h.sol`).
 
-It is crucial to follow these naming conventions to distinguish Hardhat test files from Foundry-related files, ensuring
-the proper execution of Hardhat tests.
+Hardhat picks Solidity tests by the `.t.sol` suffix. Inline `forge-config:` comments apply to every run, including
+`FUZZ_PROFILE=deep`, which only raises the run counts for certification (see `hardhat.config.ts`). The coverage CI job
+removes per-test iteration overrides and uses reduced fuzz and invariant settings; regular and deep jobs retain the
+inline values.
 
 #### Mocking and Harnessing Contracts
 
@@ -195,7 +195,7 @@ If you encounter issues with your IDE not properly indexing this directory and c
 solutions:
 
 - Open the `/typechain-types/index.ts` file to prompt the IDE to index it.
-- Delete the `/typechain-types` directory and recompile the project using `yarn hardhat compile --force`.
+- Delete the `/typechain-types` directory and rebuild the project using `yarn hardhat build --force`.
 
 ### Configuration Files
 
@@ -215,7 +215,7 @@ All contributions must adhere to the following established conventions.
 
 ### TypeScript Code
 
-- Must be auto-formatted using ESLint
+- Must be auto-formatted using Biome
 - Follow patterns and conventions established in the existing codebase for tests and scripts
 
 ### Commit Messages
@@ -237,8 +237,7 @@ All contributions must adhere to the following established conventions.
 - Write appropriate tests (unit tests, integration tests, and fuzzing tests) for new features or bug fixes
 - Ensure all tests pass before submitting a pull request
 
-Distinguishing Hardhat test files from Foundry-related files is crucial for proper test execution and maintaining code
-consistency. For any questions, contact the maintainers.
+For any questions, contact the maintainers.
 
 ## Branches
 
@@ -263,33 +262,15 @@ guide provides detailed steps for setting up and deploying the project in a loca
 
 ### Tracing
 
-During Hardhat tests, the `hardhat-tracer` tool can trace contract calls and state changes, which is helpful for
-debugging and analyzing contract interactions. However, full-scale transaction tracing is disabled by default to
-maintain optimal test performance.
+Hardhat 3 prints call traces through its verbosity flag: `-vvv` traces failing calls, `-vvvv` traces every call, and
+`-vvvvv` also traces `eth_call` and gas estimation. `yarn test:trace` runs with `-vvv`, `yarn test:fulltrace` with
+`-vvvvv`. Hardhat 3 does not trace storage operations. Tracing slows the tests down, so it is off by default.
+`LOG_LEVEL=debug` adds a line per sent transaction with the decoded call.
 
 > [!NOTE]
-> The tracing examples below apply to unit tests. For integration tests, pass `--trace` (calls) or `--fulltrace`
-> (calls and storage) when starting the Hardhat node. Traces appear in the node terminal; the test commands do not
-> configure tracing on an external node. See [Running Integration Tests](#running-integration-tests).
-
-To enable tracing:
-
-- Wrap the code you want to trace with `Tracing.enable()` and `Tracing.disable()` functions.
-- Run the tests with the appropriate command that enables tracing (e.g., `yarn test:trace`).
-
-Here's an example:
-
-```typescript
-import { Tracing } from "test/suite";
-
-describe("MyContract", () => {
-  it("should do something", async () => {
-    Tracing.enable();
-    // code to trace
-    Tracing.disable();
-  });
-});
-```
+> The tracing commands above apply to unit tests. For integration tests, pass the verbosity flag when starting the
+> Hardhat node. Traces appear in the node terminal; the test commands do not configure tracing on an external node.
+> See [Running Integration Tests](#running-integration-tests).
 
 ### Running Unit Tests
 
@@ -299,20 +280,16 @@ Unit tests can be run in multiple ways, depending on your needs:
 # Run all unit tests in parallel
 yarn test
 
-# Run all unit tests sequentially
+# Run all unit tests sequentially with gas statistics
 yarn test:sequential
 
-# Run all unit tests with trace logging (calls only)
+# Run all unit tests with traces of failing calls
 yarn test:trace
 
-# Run all unit tests with full trace logging (calls and storage operations)
+# Run all unit tests with traces of every call, including eth_call and gas estimation
 yarn test:fulltrace
 
-# Run all unit tests in watch mode (useful during development)
-# Supports tracing; use .only in your test files to focus on specific tests
-yarn test:watch
-
-# Run all unit tests and generate a coverage report
+# Run all tests and generate a coverage report
 yarn test:coverage
 ```
 
@@ -326,7 +303,8 @@ Fuzzing and invariant tests help ensure that your contracts behave correctly und
 conditions. These tests are crucial for catching edge cases and potential vulnerabilities.
 
 ```bash
-yarn test:forge         # Run all Foundry-based fuzzing and invariant tests
+yarn test:solidity                    # Run the Solidity fuzzing and invariant tests
+FUZZ_PROFILE=deep yarn test:solidity  # Certification profile with 10k runs
 ```
 
 ### Running Integration Tests
@@ -342,8 +320,8 @@ This is the most common method for running integration tests. It uses an instanc
 mainnet environment, allowing you to run integration tests with trace logging.
 
 > [!NOTE]
-> Start the fork with `HARDHAT_CHAIN_ID=1 yarn hardhat node --fork "<MAINNET_RPC_URL>" --trace`.
-> Use `--fulltrace` in place of `--trace` to include storage operations in the node's output.
+> Start the fork with `yarn hardhat node --fork "<MAINNET_RPC_URL>" --chain-id 1 -vvvv`.
+> Use `-vvv` to trace only failing calls, or `-vvvvv` to also trace `eth_call` and gas estimation.
 > In the test terminal, run `export NETWORK=mainnet RPC_URL=http://127.0.0.1:8545` to connect to that fork.
 
 ```bash
@@ -371,8 +349,8 @@ This method allows you to run integration tests against a scratch deployment on 
 will be automatically executed.
 
 > [!NOTE]
-> Install `just` on the host and start an empty node with `MODE=scratch yarn hardhat node --trace`.
-> Use `--fulltrace` to include storage operations. For a Docker node without tracing, use `yarn test:node:docker:scratch`.
+> Install `just` on the host and start an empty node with `yarn hardhat node -vvvv`.
+> Use `-vvv` to trace only failing calls. For a Docker node without tracing, use `yarn test:node:docker:scratch`.
 > In the test terminal, run `export NETWORK=local RPC_URL=http://127.0.0.1:8545`.
 > Ensure that `DEPLOYER`, `GENESIS_TIME`, `GAS_PRIORITY_FEE`, and `GAS_MAX_FEE` are set in the `.env` file.
 
@@ -423,7 +401,7 @@ jobs:
 
     services:
       mainnet-fork:
-        image: hardhat/hardhat:2.23.0 # note: this is an example image, choose the appropriate one for your needs
+        image: ghcr.io/lidofinance/hardhat-node:3.18.1
         ports:
           - 8545:8545
         env:

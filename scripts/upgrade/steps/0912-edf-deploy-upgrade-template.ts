@@ -1,17 +1,16 @@
-import { ethers, network as hardhatNetwork } from "hardhat";
-import { getResolvedDelegationContractAddress, StoredDelegationContract } from "scripts/utils/edf-upgrade";
-import { readEDFUpgradeParameters } from "scripts/utils/upgrade";
+import { ethers } from "ethers";
+import hre from "hardhat";
 
 import {
   DepositSecurityModule__factory,
-  EDFUpgradeTemplate__factory,
-  LidoLocator,
+  type EDFUpgradeTemplate__factory,
+  type LidoLocator,
   OssifiableProxy__factory,
-} from "typechain-types";
-import { EDFUpgradeParametersStruct } from "typechain-types/contracts/upgrade/EDFUpgradeTemplate";
+} from "typechain-types/index.js";
+import type { EDFUpgradeParametersStruct } from "typechain-types/contracts/upgrade/EDFUpgradeTemplate.js";
 
 import {
-  ConstructorArgs,
+  type ConstructorArgs,
   deployWithoutProxy,
   getAddress,
   getContractPath,
@@ -24,7 +23,10 @@ import {
   readNetworkState,
   Sk,
   updateObjectInState,
-} from "lib";
+} from "#lib";
+
+import { getResolvedDelegationContractAddress, type StoredDelegationContract } from "#scripts/utils/edf-upgrade.js";
+import { readEDFUpgradeParameters } from "#scripts/utils/upgrade.js";
 
 const LOCAL_TEST_EXPIRY_SECONDS = 30 * 24 * 60 * 60;
 
@@ -34,11 +36,12 @@ type ResolvedStoredDelegationContract = StoredDelegationContract & {
 
 async function resolveExpiryTimestamp(configuredExpiry: number | undefined): Promise<number> {
   if (configuredExpiry !== undefined) return configuredExpiry;
-  if (hardhatNetwork.name !== "local" && hardhatNetwork.name !== "local-devnet") {
+  const { ethers: hardhatEthers, networkName } = await hre.network.getOrCreate();
+  if (networkName !== "local" && networkName !== "local-devnet") {
     throw new Error("EDF upgrade vote expiryTimestamp is required on this network");
   }
 
-  const latestBlock = await ethers.provider.getBlock("latest");
+  const latestBlock = await hardhatEthers.provider.getBlock("latest");
   if (!latestBlock) throw new Error("Failed to read the latest block for the local EDF test expiry");
   return latestBlock.timestamp + LOCAL_TEST_EXPIRY_SECONDS;
 }
@@ -75,7 +78,8 @@ export async function deployEDFUpgradeTemplate(dualGovernance?: string) {
   const oldDSM = DepositSecurityModule__factory.connect(oldDepositSecurityModule, deployerSigner);
 
   const factoryAddress = getAddress(Sk.delegationFactory, state);
-  const factoryCode = await ethers.provider.getCode(factoryAddress);
+  const { provider } = (await hre.network.getOrCreate()).ethers;
+  const factoryCode = await provider.getCode(factoryAddress);
   if (factoryCode === "0x") throw new Error(`DelegationFactory at ${factoryAddress} has no bytecode`);
   const factoryRuntimeCodeHash = ethers.keccak256(factoryCode);
   const storedFactoryCodeHash = state[Sk.delegationFactory]?.runtimeCodeHash as string | undefined;

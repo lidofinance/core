@@ -1,23 +1,21 @@
 import { expect } from "chai";
-import { BigNumberish, Contract, Wallet } from "ethers";
-import { ethers } from "hardhat";
+import { type BigNumberish, type Contract, Wallet } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { DepositSecurityModule } from "typechain-types";
+import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { BigIntMath, certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { setSingleGuardian } from "lib/protocol/helpers/dsm";
-import { deployDelegationContract } from "lib/protocol/helpers/edf";
+import { BigIntMath, certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
+import { setSingleGuardian } from "#lib/protocol/helpers/dsm.js";
+import { deployDelegationContract } from "#lib/protocol/helpers/edf.js";
 import {
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
-} from "lib/protocol/helpers/nor-sdvt";
+} from "#lib/protocol/helpers/nor-sdvt.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("Integration: DSM keys unvetting", () => {
   let ctx: ProtocolContext;
@@ -83,7 +81,7 @@ describe("Integration: DSM keys unvetting", () => {
   it("Should revert when stranger tries to unvet keys without valid guardian signature", async () => {
     const stakingModuleId = 1;
     const operatorId = 0n;
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
     const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
 
@@ -132,10 +130,9 @@ describe("Integration: DSM keys unvetting", () => {
     // Prepare unvet parameters
     const stakingModuleId = 1;
     const operatorId = 0n;
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
     // Get node operator state before unvetting
-    // eslint-disable-next-line prefer-const
     let { totalVettedValidators, totalDepositedValidators, totalAddedValidators } = await nor.getNodeOperator(
       operatorId,
       true,
@@ -206,7 +203,6 @@ describe("Integration: DSM keys unvetting", () => {
     const operatorId = 0n;
 
     // Get node operator state before unvetting
-    // eslint-disable-next-line prefer-const
     let { totalDepositedValidators, totalVettedValidators, totalAddedValidators } = await nor.getNodeOperator(
       operatorId,
       true,
@@ -227,7 +223,7 @@ describe("Integration: DSM keys unvetting", () => {
     // Prepare unvet parameters
     const stakingModuleId = 1;
     const vettedSigningKeysCount = totalVettedValidators - 3n;
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
     const nonce = await stakingRouter.getStakingModuleNonce(stakingModuleId);
 
@@ -287,7 +283,7 @@ describe("Integration: DSM keys unvetting", () => {
     });
 
     // Prepare unvet parameters
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
     const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
 

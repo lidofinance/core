@@ -22,7 +22,7 @@ postTokenRebaseReceiver=<PUT-YOU-VALUE> \
 GAS_MAX_FEE=100 GAS_PRIORITY_FEE=2 \
 DEPLOYER=<PUT-YOU-VALUE> \
 RPC_URL=<PUT-YOU-VALUE> \
-STEPS_FILE=scripts/upgrade/steps.json \
+STEPS_FILE=upgrade/steps.json \
 yarn hardhat --network sepolia run --no-compile scripts/utils/migrate.ts
 ```
 

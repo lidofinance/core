@@ -1,7 +1,7 @@
-import { deployOrReuseEDFDelegationContracts } from "scripts/utils/edf-upgrade";
-import { readEDFUpgradeParameters } from "scripts/utils/upgrade";
+import { getDeployerSigner, logScriptHeader, readNetworkState } from "#lib";
 
-import { getDeployerSigner, logScriptHeader, readNetworkState } from "lib";
+import { deployOrReuseEDFDelegationContracts } from "#scripts/utils/edf-upgrade.js";
+import { readEDFUpgradeParameters } from "#scripts/utils/upgrade.js";
 
 export async function main() {
   const state = readNetworkState();

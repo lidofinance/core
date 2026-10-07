@@ -1,7 +1,7 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { log } from "lib";
-import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file";
+import { log } from "#lib";
+import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "#lib/state-file.js";
 
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
@@ -13,6 +13,7 @@ function getEnvVariable(name: string, defaultValue?: string): string {
 }
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   // Retrieve environment variables
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
   const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
@@ -24,7 +25,7 @@ export async function main() {
   const consolidationMigratorSourceModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID", "");
   const consolidationMigratorTargetModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID", "");
 
-  await resetStateFileFromDeployParams();
+  resetStateFileFromDeployParams();
   const state = readNetworkState();
 
   // Update network-related information

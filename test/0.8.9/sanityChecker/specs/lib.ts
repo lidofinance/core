@@ -1,20 +1,19 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForStakingRouter,
-  Lido__HarnessForFinalizeUpgradeV4,
-  LidoLocator,
-  OracleReportSanityCheckerWrapper,
-} from "typechain-types";
+  type Accounting__MockForSanityChecker,
+  type AccountingOracle__MockForStakingRouter,
+  type Lido__HarnessForFinalizeUpgradeV4,
+  type LidoLocator,
+  type OracleReportSanityCheckerWrapper,
+} from "typechain-types/index.js";
 
-import { ether, impersonate, proxify, randomAddress } from "lib";
+import { ether, impersonate, proxify, randomAddress } from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/locator";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy/locator.js";
+import { ethers, networkHelpers } from "#test/suite";
 
 export const DAY = 86_400n;
 export const DEPOSIT_SIZE = ether("32");
@@ -264,8 +263,10 @@ export const migrateFinalizeUpgradeV4State = async (
     clValidators,
   );
 
-  await expect(fixture.lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET), `finalizeUpgrade_v4 for '${step.label}'`).not
-    .to.be.reverted;
+  await expect(
+    fixture.lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET),
+    `finalizeUpgrade_v4 for '${step.label}'`,
+  ).not.to.be.revert(ethers);
 
   const balanceStats = await fixture.lido.getBalanceStats();
   expect(balanceStats.clValidatorsBalanceAtLastReport, `${step.label}: migrated validators balance`).to.equal(
@@ -277,8 +278,8 @@ export const migrateFinalizeUpgradeV4State = async (
   );
   expect(balanceStats.depositedForCurrentReport, `${step.label}: migrated deposits for current report`).to.equal(0n);
 
-  await setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
-  await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
+  await networkHelpers.setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
+  await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.revert(ethers);
 
   return {
     clValidatorsBalanceAtLastReport: balanceStats.clValidatorsBalanceAtLastReport,

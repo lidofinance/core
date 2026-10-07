@@ -1,11 +1,10 @@
-import { ethers } from "hardhat";
-import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
+import { isAddress, ZeroAddress } from "ethers";
 
-import { UpgradeTemplate__factory } from "typechain-types";
-import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
+import { type UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig.js";
+import { UpgradeTemplate__factory } from "typechain-types/index.js";
 
 import {
-  ConstructorArgs,
+  type ConstructorArgs,
   deployWithoutProxy,
   getAddress,
   getContractPath,
@@ -17,14 +16,16 @@ import {
   readNetworkState,
   Sk,
   updateObjectInState,
-} from "lib";
+} from "#lib";
+
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "#scripts/utils/upgrade.js";
 
 /**
  * Validates that `value` is a non-zero address and returns it unchanged, throwing otherwise.
  * Mirrors `UpgradeConfig._nonZeroAddress` so misconfigured params fail fast before deployment.
  */
 function nonZeroAddress(value: unknown, name = "address"): string {
-  if (typeof value !== "string" || !ethers.isAddress(value) || value === ethers.ZeroAddress) {
+  if (typeof value !== "string" || !isAddress(value) || value === ZeroAddress) {
     throw new Error(`Expected non-zero ${name} but got: ${value}`);
   }
   return value;

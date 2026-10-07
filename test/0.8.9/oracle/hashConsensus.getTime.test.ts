@@ -1,8 +1,7 @@
 import { expect } from "chai";
-import { Signer } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer } from "ethers";
 
-import { HashConsensus } from "typechain-types";
+import type { HashConsensus } from "typechain-types/index.js";
 
 import {
   BASE_CONSENSUS_VERSION,
@@ -11,9 +10,10 @@ import {
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "lib";
+} from "#lib";
 
-import { DeployHashConsensusParams } from "test/deploy";
+import { type DeployHashConsensusParams } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 async function deployOriginalHashConsensus(
   admin: string,

@@ -1,18 +1,16 @@
 import { expect } from "chai";
-import { Contract, ContractTransactionResponse, Signer, Wallet } from "ethers";
-import { ethers } from "hardhat";
+import { type Contract, type ContractTransactionResponse, type Signer, Wallet } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { mine, setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { DepositSecurityModule } from "typechain-types";
+import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { DSMPauseMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { setSingleGuardian } from "lib/protocol/helpers/dsm";
-import { deployDelegationContract } from "lib/protocol/helpers/edf";
+import { DSMPauseMessage, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
+import { setSingleGuardian } from "#lib/protocol/helpers/dsm.js";
+import { deployDelegationContract } from "#lib/protocol/helpers/edf.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("Integration: DSM pause deposits", () => {
   let ctx: ProtocolContext;
@@ -98,7 +96,7 @@ describe("Integration: DSM pause deposits", () => {
   it("Should allow guardian to pause deposits and owner to unpause", async () => {
     const guardian = await deployGuardian();
 
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const tx = await pauseThroughGuardian(guardian.contract, BigInt(blockNumber));
     await assertDepositsPaused(tx, guardian.address);
     await ownerUnpauseDeposits();
@@ -111,7 +109,7 @@ describe("Integration: DSM pause deposits", () => {
     const guardian = await deployGuardian(guardianDelegate.address);
 
     // Generate signature
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const pauseMessage = new DSMPauseMessage(guardian.address, blockNumber);
     const sig = await pauseMessage.sign(guardianDelegate.privateKey);
 
@@ -124,7 +122,7 @@ describe("Integration: DSM pause deposits", () => {
     await deployGuardian();
 
     await expect(
-      dsm.connect(delegate).pauseDeposits(await time.latestBlock(), {
+      dsm.connect(delegate).pauseDeposits(await networkHelpers.time.latestBlock(), {
         guardian: ethers.ZeroAddress,
         signature: "0x",
       }),
@@ -141,8 +139,8 @@ describe("Integration: DSM pause deposits", () => {
     const ownerSigner = await impersonate(owner, ether("1"));
     await dsm.connect(ownerSigner).setPauseIntentValidityPeriodBlocks(pauseIntentValidityPeriodBlocks);
 
-    const expiredBlockNumber = await time.latestBlock();
-    await mine(Number(pauseIntentValidityPeriodBlocks) + 1);
+    const expiredBlockNumber = await networkHelpers.time.latestBlock();
+    await networkHelpers.mine(Number(pauseIntentValidityPeriodBlocks) + 1);
 
     await expect(pauseThroughGuardian(guardian.contract, BigInt(expiredBlockNumber))).to.be.revertedWithCustomError(
       dsm,
@@ -155,14 +153,14 @@ describe("Integration: DSM pause deposits", () => {
 
     // Try with empty signature
     await expect(
-      dsm.connect(stranger).pauseDeposits(await time.latestBlock(), {
+      dsm.connect(stranger).pauseDeposits(await networkHelpers.time.latestBlock(), {
         guardian: (await dsm.getGuardians())[0],
         signature: "0x",
       }),
     ).to.be.revertedWithCustomError(dsm, "InvalidSignature");
 
     // Try with non-guardian signature
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const nonGuardian = Wallet.createRandom();
     const pauseMessage = new DSMPauseMessage(stranger.address, blockNumber);
     const sig = pauseMessage.sign(nonGuardian.privateKey);
@@ -184,7 +182,7 @@ describe("Integration: DSM pause deposits", () => {
       await (guardian.contract.connect(delegationOwner) as Contract).nominateDelegate(nextDelegate.address)
     ).wait();
 
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const pauseMessage = new DSMPauseMessage(guardian.address, blockNumber);
     const currentSig = pauseMessage.sign(currentDelegate.privateKey);
     const nextSig = pauseMessage.sign(nextDelegate.privateKey);
@@ -206,9 +204,9 @@ describe("Integration: DSM pause deposits", () => {
     await (
       await (guardian.contract.connect(delegationOwner) as Contract).nominateDelegate(nextDelegate.address)
     ).wait();
-    await time.increase(cooldown);
+    await networkHelpers.time.increase(cooldown);
 
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const pauseMessage = new DSMPauseMessage(guardian.address, blockNumber);
     const oldSig = pauseMessage.sign(currentDelegate.privateKey);
     const newSig = pauseMessage.sign(nextDelegate.privateKey);
@@ -222,11 +220,11 @@ describe("Integration: DSM pause deposits", () => {
 
   it("Should invalidate guardian signatures after delegate revocation", async () => {
     const currentDelegate = Wallet.createRandom().connect(ethers.provider);
-    await setBalance(currentDelegate.address, ether("1"));
+    await networkHelpers.setBalance(currentDelegate.address, ether("1"));
     const guardian = await deployDelegationContract(delegationOwner, currentDelegate.address);
     await setSingleGuardian(ctx, guardian.address);
 
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const sig = new DSMPauseMessage(guardian.address, blockNumber).sign(currentDelegate.privateKey);
     await (await (guardian.contract.connect(delegationOwner) as Contract).revokeDelegate()).wait();
 
@@ -241,11 +239,11 @@ describe("Integration: DSM pause deposits", () => {
 
   it("Should invalidate guardian signatures after termination", async () => {
     const currentDelegate = Wallet.createRandom().connect(ethers.provider);
-    await setBalance(currentDelegate.address, ether("1"));
+    await networkHelpers.setBalance(currentDelegate.address, ether("1"));
     const guardian = await deployDelegationContract(delegationOwner, currentDelegate.address);
     await setSingleGuardian(ctx, guardian.address);
 
-    const blockNumber = await time.latestBlock();
+    const blockNumber = await networkHelpers.time.latestBlock();
     const sig = new DSMPauseMessage(guardian.address, blockNumber).sign(currentDelegate.privateKey);
     await (await (guardian.contract.connect(delegationOwner) as Contract).terminate()).wait();
 

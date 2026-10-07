@@ -1,20 +1,19 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { StakingVault, VaultHub } from "typechain-types";
+import type { StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ether } from "lib";
+import { ether } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub enumeration functions", () => {
   let ctx: ProtocolContext;
@@ -118,8 +117,8 @@ describe("Integration: VaultHub enumeration functions", () => {
 
       await dashboard.connect(owner1).fund({ value: ether("1") });
 
-      await expect(vaultHub.vaultByIndex(baseVaultsCount + 2n)).to.be.reverted;
-      await expect(vaultHub.vaultByIndex(baseVaultsCount + 1000n)).to.be.reverted;
+      await expect(vaultHub.vaultByIndex(baseVaultsCount + 2n)).to.revert(ethers);
+      await expect(vaultHub.vaultByIndex(baseVaultsCount + 1000n)).to.revert(ethers);
     });
 
     it("returns correct vault address by index", async () => {

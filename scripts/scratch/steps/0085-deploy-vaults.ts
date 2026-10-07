@@ -1,14 +1,11 @@
-import { ethers } from "hardhat";
+import type { VaultHub } from "typechain-types/index.js";
 
-import { VaultHub } from "typechain-types";
-
-import { ether, loadContract, makeTx } from "lib";
-import { deployBehindOssifiableProxy, deployWithoutProxy } from "lib/deploy";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { ether, loadContract, makeTx } from "#lib";
+import { deployBehindOssifiableProxy, deployWithoutProxy, getDeployerState } from "#lib/deploy.js";
+import { Sk, updateObjectInState } from "#lib/state-file.js";
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const { ethers, deployer, state } = await getDeployerState();
 
   const stethAddress = state[Sk.appLido].proxy.address;
   const wstethAddress = state[Sk.wstETH].address;

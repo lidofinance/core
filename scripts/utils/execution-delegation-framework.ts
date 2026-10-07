@@ -1,12 +1,13 @@
 import { execFileSync } from "child_process";
-import { HDNodeWallet } from "ethers";
+import { getAddress, HDNodeWallet, keccak256, Mnemonic, ZeroAddress } from "ethers";
 import fs from "fs";
-import { ethers, network as hardhatNetwork } from "hardhat";
+import hre from "hardhat";
+import type { ResolvedConfigurationVariable } from "hardhat/types/config";
 import os from "os";
 import path from "path";
 
-import { cy, log, warmUpJsonRpcProvider } from "lib";
-import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
+import { cy, log, warmUpJsonRpcProvider } from "#lib";
+import { type DeploymentState, Sk, updateObjectInState } from "#lib/state-file.js";
 
 export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
 // Pinned commit of lidofinance/execution-delegation-framework `main` (2026-08-10).
@@ -20,26 +21,27 @@ type ExternalDeployArtifact = {
   "git-ref"?: string;
 };
 
-function getRpcUrl() {
-  const networkConfig = hardhatNetwork.config;
-  const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
+async function getRpcUrl() {
+  const { networkConfig } = await hre.network.getOrCreate();
+  const rpcUrl = "url" in networkConfig ? await networkConfig.url.get() : process.env.RPC_URL;
   if (!rpcUrl) throw new Error("RPC URL is not available");
   return rpcUrl;
 }
 
-function getPrivateKey() {
-  const accounts = hardhatNetwork.config.accounts;
+async function getPrivateKey() {
+  const { networkConfig } = await hre.network.getOrCreate();
+  const accounts = networkConfig.accounts;
   if (Array.isArray(accounts) && accounts.length > 0) {
-    return accounts[0] as string;
+    return await (accounts[0] as ResolvedConfigurationVariable).get();
   }
 
   if (typeof accounts === "object" && "mnemonic" in accounts) {
-    const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
+    const wallet = HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(await accounts.mnemonic.get()), `m/44'/60'/0'/0/0`);
     return wallet.privateKey;
   }
 
   const wallet = HDNodeWallet.fromMnemonic(
-    ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
+    Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
     `m/44'/60'/0'/0/0`,
   );
   return wallet.privateKey;
@@ -79,12 +81,13 @@ type EDFDeploymentOptions = {
 };
 
 async function validateFactory(address: string, expectedRuntimeCodeHash?: string): Promise<string> {
-  const normalizedAddress = ethers.getAddress(address);
+  const { ethers } = await hre.network.getOrCreate();
+  const normalizedAddress = getAddress(address);
   const code = await ethers.provider.getCode(normalizedAddress);
   if (code === "0x") {
     throw new Error(`DelegationFactory at ${normalizedAddress} has no bytecode`);
   }
-  const runtimeCodeHash = ethers.keccak256(code);
+  const runtimeCodeHash = keccak256(code);
   if (expectedRuntimeCodeHash && runtimeCodeHash.toLowerCase() !== expectedRuntimeCodeHash.toLowerCase()) {
     throw new Error(
       `DelegationFactory runtime code hash mismatch: expected ${expectedRuntimeCodeHash}, got ${runtimeCodeHash}`,
@@ -97,15 +100,16 @@ export async function deployExecutionDelegationFramework(
   state: DeploymentState,
   options: EDFDeploymentOptions = {},
 ): Promise<string> {
+  const { ethers, networkName } = await hre.network.getOrCreate();
   const existingAddress = state[Sk.delegationFactory]?.address;
-  const expectedAddress = options.expectedAddress ? ethers.getAddress(options.expectedAddress) : undefined;
-  if (existingAddress && expectedAddress && ethers.getAddress(existingAddress) !== expectedAddress) {
+  const expectedAddress = options.expectedAddress ? getAddress(options.expectedAddress) : undefined;
+  if (existingAddress && expectedAddress && getAddress(existingAddress) !== expectedAddress) {
     throw new Error(`DelegationFactory address mismatch: state ${existingAddress}, manifest ${expectedAddress}`);
   }
 
   const reusableAddress = existingAddress ?? expectedAddress;
   if (reusableAddress) {
-    const normalizedAddress = ethers.getAddress(reusableAddress);
+    const normalizedAddress = getAddress(reusableAddress);
     const runtimeCodeHash = await validateFactory(normalizedAddress, options.expectedRuntimeCodeHash);
     updateObjectInState(Sk.delegationFactory, {
       address: normalizedAddress,
@@ -122,14 +126,14 @@ export async function deployExecutionDelegationFramework(
     throw new Error("DelegationFactory is missing and deployment is disabled for this network");
   }
 
-  if (hardhatNetwork.name === "hardhat") {
+  if (networkName === "default") {
     throw new Error(
       "EDF requires an external scratch RPC for its Foundry deploy. Run integration tests with NETWORK=local.",
     );
   }
 
-  const rpcUrl = getRpcUrl();
-  const privateKey = getPrivateKey();
+  const rpcUrl = await getRpcUrl();
+  const privateKey = await getPrivateKey();
   const { chainId } = await ethers.provider.getNetwork();
   const artifactsDir = "./artifacts/local/";
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "execution-delegation-framework-"));
@@ -164,11 +168,11 @@ export async function deployExecutionDelegationFramework(
     }
 
     const factoryAddress = artifact.DelegationFactory;
-    if (!factoryAddress || ethers.getAddress(factoryAddress) === ethers.ZeroAddress) {
+    if (!factoryAddress || getAddress(factoryAddress) === ZeroAddress) {
       throw new Error("EDF deploy artifact does not contain a valid DelegationFactory address");
     }
 
-    const normalizedFactoryAddress = ethers.getAddress(factoryAddress);
+    const normalizedFactoryAddress = getAddress(factoryAddress);
     const runtimeCodeHash = await validateFactory(normalizedFactoryAddress, options.expectedRuntimeCodeHash);
 
     updateObjectInState(Sk.delegationFactory, {

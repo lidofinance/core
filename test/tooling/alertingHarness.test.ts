@@ -1,22 +1,21 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   AlertingHarness,
   LazyOracle__MockForVaultHub,
   Lido,
   LidoLocator,
   StakingVault__MockForVaultHub,
   VaultHub,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ether } from "lib";
+import { ether } from "#lib";
 
-import { deployVaults } from "test/deploy/vaults";
-import { Snapshot } from "test/suite";
+import { deployVaults } from "#test/deploy/vaults.js";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("AlertingHarness.sol", () => {
   let deployer: HardhatEthersSigner;

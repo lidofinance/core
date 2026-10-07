@@ -1,8 +1,7 @@
 import { ContractTransactionReceipt, EventLog, Interface, Log, LogDescription } from "ethers";
 
-import { LogDescriptionExtended } from "lib/protocol/types";
-
-import { log } from "./log";
+import { log } from "./log.js";
+import type { LogDescriptionExtended } from "./protocol/types.js";
 
 const parseEventLog = (entry: EventLog): LogDescription | null => {
   try {

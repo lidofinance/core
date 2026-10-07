@@ -1,16 +1,15 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types";
+import { type ConsolidationBus, type ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
-import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
-import { proxify } from "lib/proxy";
+import { advanceChainTime, getCurrentBlockTimestamp } from "#lib";
+import { proxify } from "#lib/proxy.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
-import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers.js";
 
 describe("ConsolidationBus.sol: execution delay", () => {
   let consolidationBus: ConsolidationBus;
@@ -92,7 +91,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
     });
 
     it("should revert without MANAGE_ROLE", async () => {
-      await expect(consolidationBus.connect(stranger).setExecutionDelay(100)).to.be.reverted;
+      await expect(consolidationBus.connect(stranger).setExecutionDelay(100)).to.be.revert(ethers);
     });
   });
 

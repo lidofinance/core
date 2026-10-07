@@ -1,24 +1,23 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { days, ether, impersonate, PDGPolicy } from "lib";
+import { days, ether, impersonate, PDGPolicy } from "#lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   setupLidoForVaults,
   testMethod,
-  VaultRoles,
-} from "lib/protocol";
+  type VaultRoles,
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub Roles and Access Control", () => {
   let ctx: ProtocolContext;

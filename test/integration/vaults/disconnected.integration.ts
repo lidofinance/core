@@ -1,10 +1,9 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
-import { Dashboard, DepositContract, StakingVault } from "typechain-types";
+import type { Dashboard, DepositContract, StakingVault } from "typechain-types/index.js";
 
 import {
   addressToWC,
@@ -19,19 +18,19 @@ import {
   toGwei,
   toLittleEndian64,
   ValidatorStage,
-} from "lib";
+} from "#lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getPubkeys,
   mockProof,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Actions with vault disconnected from hub", () => {
   let ctx: ProtocolContext;
@@ -254,7 +253,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         const tx = stakingVault
           .connect(owner)
           .triggerValidatorWithdrawals(keys.stringified, [], owner, { value: value * 2n });
-        await expect(tx).to.changeEtherBalance(owner, -value);
+        await expect(tx).to.changeEtherBalance(ethers, owner, -value);
         await expect(tx)
           .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
           .withArgs(keys.stringified, [], value, owner);
@@ -266,7 +265,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         const tx = stakingVault
           .connect(nodeOperator)
           .ejectValidators(keys.stringified, nodeOperator, { value: value * 2n });
-        await expect(tx).to.changeEtherBalance(nodeOperator, -value);
+        await expect(tx).to.changeEtherBalance(ethers, nodeOperator, -value);
         await expect(tx)
           .to.emit(stakingVault, "ValidatorEjectionsTriggered")
           .withArgs(keys.stringified, value, nodeOperator);

@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { Signer, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer, ZeroAddress } from "ethers";
 
-import { HashConsensus__Harness } from "typechain-types";
+import type { HashConsensus__Harness } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION } from "lib";
+import { BASE_CONSENSUS_VERSION } from "#lib";
 
-import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy";
+import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 // TODO: This is a very heavy test, need to speed it up using proper Snapshot strategy
 describe("HashConsensus.sol:members", function () {

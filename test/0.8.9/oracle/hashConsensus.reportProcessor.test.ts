@@ -1,13 +1,12 @@
 import { expect } from "chai";
-import { Signer, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer, ZeroAddress } from "ethers";
 
-import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
+import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, streccak } from "lib";
+import { BASE_CONSENSUS_VERSION, streccak } from "#lib";
 
-import { deployHashConsensus, HASH_1, HASH_2 } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployHashConsensus, HASH_1, HASH_2 } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 const manageReportProcessorRoleKeccak256 = streccak("MANAGE_REPORT_PROCESSOR_ROLE");
 

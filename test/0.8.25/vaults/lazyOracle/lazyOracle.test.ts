@@ -1,9 +1,8 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   LazyOracle,
   Lido__MockForLazyOracle,
   LidoLocator,
@@ -11,7 +10,7 @@ import {
   PredepositGuarantee__MockForLazyOracle,
   VaultHub,
   VaultHub__MockForLazyOracle,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
   advanceChainTime,
@@ -21,11 +20,11 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
   randomAddress,
-} from "lib";
-import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
+} from "#lib";
+import { createVaultsReportTree, type VaultReportItem } from "#lib/protocol/helpers/vaults.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, ZERO_BYTES32 } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers, Snapshot, ZERO_BYTES32 } from "#test/suite";
 
 const QUARANTINE_PERIOD = days(3n);
 const MAX_REWARD_RATIO_BP = 350n;
@@ -293,7 +292,7 @@ describe("LazyOracle.sol", () => {
       const nonExistentVault = randomAddress();
 
       // The contract will revert with VaultNotConnected error for non-connected vaults
-      await expect(lazyOracle.vaultInfo(nonExistentVault)).to.be.reverted;
+      await expect(lazyOracle.vaultInfo(nonExistentVault)).to.revert(ethers);
     });
   });
 
@@ -340,7 +339,7 @@ describe("LazyOracle.sol", () => {
         .withArgs(deployer.address, await lazyOracle.UPDATE_SANITY_PARAMS_ROLE());
 
       await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
-      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n)).to.not.reverted;
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n)).to.not.revert(ethers);
       expect(await lazyOracle.quarantinePeriod()).to.equal(250000n);
       expect(await lazyOracle.maxRewardRatioBP()).to.equal(1000n);
       expect(await lazyOracle.maxLidoFeeRatePerSecond()).to.equal(2000n);
@@ -381,7 +380,9 @@ describe("LazyOracle.sol", () => {
 
     it("accepts report data from Accounting contract", async () => {
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("1"));
-      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, 0n, ethers.ZeroHash, "")).to.not.reverted;
+      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, 0n, ethers.ZeroHash, "")).to.not.revert(
+        ethers,
+      );
     });
 
     it("returns latest report data correctly", async () => {
@@ -390,7 +391,7 @@ describe("LazyOracle.sol", () => {
       const refSlot = 42n;
       await expect(
         lazyOracle.connect(accountingAddress).updateReportData(reportTimestamp, refSlot, ethers.ZeroHash, "test_cid"),
-      ).to.not.reverted;
+      ).to.not.revert(ethers);
 
       const lastReportData = await lazyOracle.latestReportData();
       expect(lastReportData.timestamp).to.equal(reportTimestamp);
@@ -405,7 +406,9 @@ describe("LazyOracle.sol", () => {
 
     it("reverts on invalid proof", async () => {
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("1"));
-      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, 0n, ethers.ZeroHash, "")).to.not.reverted;
+      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, 0n, ethers.ZeroHash, "")).to.not.revert(
+        ethers,
+      );
       await vaultHub.mock__addVault("0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60");
 
       await expect(

@@ -1,14 +1,11 @@
 import { expect } from "chai";
-import { Signature, Signer, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type Signature, type Signer, ZeroAddress } from "ethers";
 
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import type { StETHPermit__HarnessWithEip712Initialization } from "typechain-types/index.js";
 
-import { StETHPermit__HarnessWithEip712Initialization } from "typechain-types";
+import { certainAddress, days, ether, type Permit, signPermit, stethDomain } from "#lib";
 
-import { certainAddress, days, ether, Permit, signPermit, stethDomain } from "lib";
-
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 describe("StETHPermit.sol", () => {
   let deployer: Signer;
@@ -35,7 +32,7 @@ describe("StETHPermit.sol", () => {
       spender: certainAddress("spender"),
       value: holderBalance,
       nonce: await steth.nonces(signer),
-      deadline: BigInt(await time.latest()) + days(7n),
+      deadline: BigInt(await networkHelpers.time.latest()) + days(7n),
     };
 
     signature = await signPermit(await stethDomain(steth), permit, signer);
@@ -75,11 +72,11 @@ describe("StETHPermit.sol", () => {
       const { owner, spender, deadline, value } = permit;
       const { v, r, s } = signature;
 
-      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).to.be.reverted;
+      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).to.revert(ethers);
     });
 
     it("eip712Domain() reverts", async () => {
-      await expect(steth.eip712Domain()).to.be.revertedWithoutReason();
+      await expect(steth.eip712Domain()).to.be.revertedWithoutReason(ethers);
     });
   });
 
@@ -93,7 +90,7 @@ describe("StETHPermit.sol", () => {
       const { owner, spender, deadline, value } = permit;
       const { v, r, s } = signature;
 
-      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).not.to.be.reverted;
+      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).not.to.revert(ethers);
     });
 
     it("eip712Domain() returns the EIP-712 domain", async () => {

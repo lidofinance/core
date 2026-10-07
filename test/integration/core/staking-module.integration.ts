@@ -1,14 +1,13 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { certainAddress, ether, impersonate } from "lib";
-import { LoadedContract } from "lib/contract";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-module";
+import { certainAddress, ether, impersonate } from "#lib";
+import { type LoadedContract } from "#lib/contract.js";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
+import { randomPubkeys, randomSignatures } from "#lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Staking module", () => {
   let ctx: ProtocolContext;

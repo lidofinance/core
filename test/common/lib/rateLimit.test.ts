@@ -1,5 +1,6 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+
+import { ethers } from "#test/suite";
 
 interface LimitData {
   maxLimit: bigint;
@@ -10,9 +11,9 @@ interface LimitData {
 }
 
 describe("RateLimit.sol", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Harness types are generated at runtime.
   let rateLimitStorage: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Harness types are generated at runtime.
   let rateLimit: any;
 
   before(async () => {

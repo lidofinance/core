@@ -1,4 +1,4 @@
-import { execSync, SpawnSyncReturns } from "child_process";
+import { execSync, type SpawnSyncReturns } from "child_process";
 import { task } from "hardhat/config";
 
 interface RuleOverride {
@@ -171,6 +171,8 @@ async function runSolhintLinting(): Promise<void> {
   }
 }
 
-task("lint-solidity", "Lint Solidity files with custom rule filtering").setAction(async () => {
-  await runSolhintLinting();
-});
+export const lintSolidityTask = task("lint-solidity", "Lint Solidity files with custom rule filtering")
+  .setInlineAction(async () => {
+    await runSolhintLinting();
+  })
+  .build();

@@ -1,15 +1,17 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ZeroAddress } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   StakingRouter__MockForTWG,
   TriggerableWithdrawalsGateway__Harness,
   WithdrawalVault__MockForTWG,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
+import { ethers } from "#test/suite";
+
+import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator.js";
 
 interface ExitRequest {
   moduleId: number;
@@ -30,7 +32,7 @@ const exitRequests = [
   { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
 ];
 
-const ZERO_ADDRESS = ethers.ZeroAddress;
+const ZERO_ADDRESS = ZeroAddress;
 
 describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway__Harness;

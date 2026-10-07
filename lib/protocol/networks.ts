@@ -1,32 +1,20 @@
 import * as process from "node:process";
 
-import hre from "hardhat";
+import { log } from "#lib";
 
-import { log } from "lib";
-import { readNetworkState, Sk } from "lib/state-file";
-
-import { getMode } from "../../hardhat.helpers";
+import { getMode } from "../../hardhat.helpers.js";
+import { readNetworkState, Sk } from "../state-file.js";
 
 import {
   MAINNET_AGENT_ADDRESS,
   MAINNET_EASY_TRACK_EXECUTOR_ADDRESS,
   MAINNET_LOCATOR_ADDRESS,
   MAINNET_VOTING_ADDRESS,
-} from "./mainnet";
-import { ProtocolNetworkItems } from "./types";
-
-export function isNonForkingHardhatNetwork() {
-  const networkName = hre.network.name;
-  if (networkName === "hardhat") {
-    const networkConfig = hre.config.networks[networkName];
-    return !networkConfig.forking?.enabled;
-  }
-  return false;
-}
+} from "./mainnet.js";
+import type { ProtocolNetworkItems } from "./types.js";
 
 export async function parseDeploymentJson(name: string) {
   try {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore - file is missing out of the box, that's why we need to catch the error
     return await import(`../../deployed-${name}.json`);
   } catch (e) {
@@ -153,7 +141,7 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
 
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
   switch (network) {
-    case "hardhat":
+    case "default":
     case "localhost":
       if (getMode() === "scratch") {
         return getLocalNetworkConfig(network, "scratch");

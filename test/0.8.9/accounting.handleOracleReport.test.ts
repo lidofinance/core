@@ -1,32 +1,34 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver.js";
+import type {
   Accounting,
   Burner__MockForAccounting,
-  Burner__MockForAccounting__factory,
   IPostTokenRebaseReceiver,
   Lido__MockForAccounting,
-  Lido__MockForAccounting__factory,
   LidoLocator,
   OracleReportSanityChecker__MockForAccounting,
+  StakingRouter__MockForLidoAccounting,
+  VaultHub__MockForAccountingReport,
+  WithdrawalQueue__MockForAccounting,
+} from "typechain-types/index.js";
+import {
+  Burner__MockForAccounting__factory,
+  Lido__MockForAccounting__factory,
   OracleReportSanityChecker__MockForAccounting__factory,
   PostTokenRebaseReceiver__MockForAccounting__factory,
-  StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
-  VaultHub__MockForAccountingReport,
   VaultHub__MockForAccountingReport__factory,
-  WithdrawalQueue__MockForAccounting,
   WithdrawalQueue__MockForAccounting__factory,
-} from "typechain-types";
-import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver";
+} from "typechain-types/index.js";
 
-import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "lib";
+import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { ethers } from "#test/suite";
 
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
@@ -199,7 +201,7 @@ describe("Accounting.sol:report", () => {
       await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
       await withdrawalQueue.mock__isPaused(true);
 
-      await expect(accounting.handleOracleReport(report())).not.to.be.reverted;
+      await expect(accounting.handleOracleReport(report())).not.to.revert(ethers);
     });
 
     /// NOTE: This test is not applicable to the current implementation (Accounting's _checkAccountingOracleReport() checks for checkWithdrawalQueueOracleReport()

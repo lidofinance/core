@@ -1,19 +1,18 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { SecondOpinionOracle__Mock } from "typechain-types";
+import type { SecondOpinionOracle__Mock } from "typechain-types/index.js";
 
-import { ether, log, ONE_GWEI } from "lib";
+import { ether, log, ONE_GWEI } from "#lib";
 import {
   depositValidatorsWithoutReport,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   report,
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
-} from "lib/protocol";
+} from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 const AMOUNT = ether("100");
 const INITIAL_REPORTED_BALANCE = ether("32") * 3n; // 32 ETH * 3 validators

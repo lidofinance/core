@@ -1,9 +1,8 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { AccessControl__Harness } from "typechain-types";
+import type { AccessControl__Harness } from "typechain-types/index.js";
 
 import {
   DEFAULT_ADMIN_ROLE,
@@ -11,9 +10,9 @@ import {
   INVALID_INTERFACE_ID,
   OZ_ACCESS_CONTROL_INTERFACE_ID,
   streccak,
-} from "lib";
+} from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, Snapshot } from "#test/suite";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 const TEST_ADMIN_ROLE = streccak("TEST_ADMIN_ROLE");
@@ -51,7 +50,7 @@ describe("AccessControl.sol", () => {
       });
 
       it("Does not revert if caller has the role", async () => {
-        await expect(contract.connect(owner).modifierOnlyRole(DEFAULT_ADMIN_ROLE)).to.not.be.reverted;
+        await expect(contract.connect(owner).modifierOnlyRole(DEFAULT_ADMIN_ROLE)).to.not.revert(ethers);
       });
     });
   });

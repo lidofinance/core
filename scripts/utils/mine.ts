@@ -1,4 +1,9 @@
-import { advanceChainTime, log } from "lib";
+import { fileURLToPath } from "node:url";
+
+import { advanceChainTime } from "#lib";
+import { log } from "#lib/log.js";
+
+const __filename = fileURLToPath(import.meta.url);
 
 async function main() {
   log.scriptStart(__filename);

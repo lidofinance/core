@@ -1,15 +1,14 @@
 import { expect } from "chai";
 import { ZeroHash } from "ethers";
-import { ethers } from "hardhat";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
-import {
+import type {
   Accounting__MockForAccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
   AO_CONSENSUS_VERSION,
@@ -21,13 +20,13 @@ import {
   EXTRA_DATA_FORMAT_LIST,
   getReportDataItems,
   ONE_GWEI,
-  OracleReport,
+  type OracleReport,
   packExtraDataList,
-  ReportAsArray,
-} from "lib";
+  type ReportAsArray,
+} from "#lib";
 
-import { deployAndConfigureAccountingOracle } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployAndConfigureAccountingOracle } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("AccountingOracle.sol:accessControl", () => {
   let consensus: HashConsensus__Harness;

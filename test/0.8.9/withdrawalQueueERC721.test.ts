@@ -1,18 +1,16 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   ERC721Receiver__Mock,
   NFTDescriptor__MockForWithdrawalQueue,
   Receiver__MockForWithdrawalQueueBase,
   StETH__HarnessForWithdrawalQueue,
   WithdrawalQueueERC721,
   WstETH__MockForWithdrawalQueue,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
   ERC165_INTERFACE_ID,
@@ -29,9 +27,9 @@ import {
   streccak,
   WITHDRAWAL_QUEUE_NAME,
   WITHDRAWAL_QUEUE_SYMBOL,
-} from "lib";
+} from "#lib";
 
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 const MANAGE_TOKEN_URI_ROLE = streccak("MANAGE_TOKEN_URI_ROLE");
 
@@ -407,7 +405,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Reverts when token is already claimed", async () => {
-      await setBalance(queueAddress, ether("10.00"));
+      await networkHelpers.setBalance(queueAddress, ether("10.00"));
 
       await queue.connect(user).requestWithdrawals([ether("25.00")], user);
       await queue.connect(finalizer).finalize(1, shareRate(300n), { value: ether("25.00") });
@@ -566,9 +564,12 @@ describe("WithdrawalQueueERC721.sol", () => {
         await expect(
           queue
             .connect(user)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              user,
+              erc721ReceiverContractAddress,
+              1,
+              new Uint8Array(),
+            ),
         ).revertedWith("ERC721_NOT_ACCEPT_TOKENS");
       });
 
@@ -579,9 +580,12 @@ describe("WithdrawalQueueERC721.sol", () => {
         await expect(
           queue
             .connect(user)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              user,
+              erc721ReceiverContractAddress,
+              1,
+              new Uint8Array(),
+            ),
         )
           .revertedWithCustomError(queue, "TransferToNonIERC721Receiver")
           .withArgs(erc721ReceiverContractAddress);
@@ -594,9 +598,12 @@ describe("WithdrawalQueueERC721.sol", () => {
         await expect(
           queue
             .connect(user)
-            [
-              "safeTransferFrom(address,address,uint256,bytes)"
-            ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
+            ["safeTransferFrom(address,address,uint256,bytes)"](
+              user,
+              erc721ReceiverContractAddress,
+              1,
+              new Uint8Array(),
+            ),
         )
           .to.emit(queue, "Transfer")
           .withArgs(user.address, erc721ReceiverContractAddress, 1);
@@ -641,7 +648,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Reverts if request is already claimed", async () => {
-      await setBalance(queueAddress, ether("10.00"));
+      await networkHelpers.setBalance(queueAddress, ether("10.00"));
 
       await queue.connect(user).requestWithdrawals([ether("25.00")], user);
       await queue.connect(finalizer).finalize(1, shareRate(300n), { value: ether("25.00") });

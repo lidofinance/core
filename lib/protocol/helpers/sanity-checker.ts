@@ -1,4 +1,4 @@
-import { ProtocolContext } from "../types";
+import type { ProtocolContext } from "../types.js";
 
 export const setMaxPositiveTokenRebase = async (ctx: ProtocolContext, maxPositiveTokenRebase: bigint) => {
   const { oracleReportSanityChecker: sanityChecker } = ctx.contracts;

@@ -1,22 +1,21 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { TokenRateNotifier, TokenRatePusher__Mock, TokenRatePusherWithArgs__Mock } from "typechain-types";
+import type { TokenRateNotifier, TokenRatePusher__Mock, TokenRatePusherWithArgs__Mock } from "typechain-types/index.js";
 
-import { ether } from "lib";
+import { ether } from "#lib";
 import {
   ensureFirstPostMigrationReport,
   getProtocolContext,
   normalizeWithdrawalVaultBaseline,
-  ProtocolContext,
+  type ProtocolContext,
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
-} from "lib/protocol";
+} from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, ethers, Snapshot } from "#test/suite";
 
 // End-to-end coverage for the TokenRateNotifier as wired into the live protocol: a real oracle
 // report flows through `Accounting.handleOracleReport` → `postTokenRebaseReceiver` (this notifier)

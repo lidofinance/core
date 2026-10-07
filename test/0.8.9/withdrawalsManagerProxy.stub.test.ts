@@ -1,11 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { WithdrawalsManagerStub } from "typechain-types";
+import type { WithdrawalsManagerStub } from "typechain-types/index.js";
 
-import { ether } from "lib";
+import { ether } from "#lib";
+
+import { ethers } from "#test/suite";
 
 describe("WithdrawalsManagerProxy.sol:stub", () => {
   let deployer: HardhatEthersSigner;

@@ -1,14 +1,15 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
-import { ethers } from "hardhat";
+import { ContractTransactionReceipt, ContractTransactionResponse, Interface } from "ethers";
 
-import { EIP7002WithdrawalRequest__Mock } from "typechain-types";
+import type { EIP7002WithdrawalRequest__Mock } from "typechain-types/index.js";
 
-import { EIP7002_ADDRESS, findEventsWithInterfaces } from "lib";
+import { EIP7002_ADDRESS, findEventsWithInterfaces } from "#lib";
+
+import { ethers } from "#test/suite";
 
 const eventName = "RequestAdded__Mock";
 const eip7002MockEventABI = [`event ${eventName}(bytes request, uint256 fee)`];
-const eip7002MockInterface = new ethers.Interface(eip7002MockEventABI);
+const eip7002MockInterface = new Interface(eip7002MockEventABI);
 
 export const deployEIP7002WithdrawalRequestContractMock = async (
   fee: bigint,

@@ -1,30 +1,31 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import {
+import type {
   ConsolidationBus,
   ConsolidationGateway,
   ConsolidationMigrator,
   StakingRouter,
   TopUpGateway,
   TriggerableWithdrawalsGateway,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib";
-import { encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
+import { MAX_TOP_UP_PER_BLOCK_GWEI } from "#lib";
+import type { InitializeArgs } from "#lib/contract.js";
+import { encodeFunctionCall, getContractPath, loadContract } from "#lib/contract.js";
 import {
   deployBehindOssifiableProxy,
   deployContract,
   deployImplementation,
   deployWithoutProxy,
   makeTx,
-} from "lib/deploy";
-import { EIP7002_ADDRESS } from "lib/eips/eip7002";
-import { EIP7251_ADDRESS } from "lib/eips/eip7251";
-import { log } from "lib/log";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
-import { en0x } from "lib/string";
+} from "#lib/deploy.js";
+import { EIP7002_ADDRESS } from "#lib/eips/eip7002.js";
+import { EIP7251_ADDRESS } from "#lib/eips/eip7251.js";
+import { log } from "#lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "#lib/state-file.js";
+import { en0x } from "#lib/string.js";
 
-import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
+import { ACTIVE_VALIDATOR_PROOF } from "#test/0.8.25/validatorState.js";
 
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 
@@ -35,6 +36,7 @@ export const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
 export const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
   let state = readNetworkState({ deployer });
 

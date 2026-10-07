@@ -1,18 +1,15 @@
 import { expect } from "chai";
-import { Contract, Wallet } from "ethers";
-import { ethers } from "hardhat";
+import { type Contract, Wallet } from "ethers";
 
-import { mine } from "@nomicfoundation/hardhat-network-helpers";
+import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { DepositSecurityModule } from "typechain-types";
+import { certainAddress, DSMAttestMessage, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
+import { setGuardians } from "#lib/protocol/helpers/dsm.js";
+import { deployDelegationContract, type DeployedDelegationContract } from "#lib/protocol/helpers/edf.js";
+import { ensureSubmitFitsStakeLimit, prepareStakingModuleForTestDeposit } from "#lib/protocol/helpers/staking.js";
 
-import { certainAddress, DSMAttestMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { setGuardians } from "lib/protocol/helpers/dsm";
-import { deployDelegationContract, DeployedDelegationContract } from "lib/protocol/helpers/edf";
-import { ensureSubmitFitsStakeLimit, prepareStakingModuleForTestDeposit } from "lib/protocol/helpers/staking";
-
-import { Snapshot } from "test/suite";
+import { ethers, networkHelpers, Snapshot } from "#test/suite";
 
 const DEPOSIT_CONTRACT_ABI = ["function get_deposit_root() view returns (bytes32)"];
 
@@ -68,7 +65,7 @@ describe("Integration: DSM buffered ether deposit", () => {
 
     if (!(await dsm.isMinDepositDistancePassed(stakingModuleId))) {
       const distance = await stakingRouter.getStakingModuleMinDepositBlockDistance(stakingModuleId);
-      await mine(Number(distance) + 1);
+      await networkHelpers.mine(Number(distance) + 1);
     }
 
     const latestBlock = await ethers.provider.getBlock("latest");

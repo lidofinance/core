@@ -1,19 +1,18 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  HashConsensus__Harness,
-  OracleReportSanityChecker,
-  StakingModule__MockForKeyVerification,
-  ValidatorsExitBus__Harness,
-} from "typechain-types";
+  type HashConsensus__Harness,
+  type OracleReportSanityChecker,
+  type StakingModule__MockForKeyVerification,
+  type ValidatorsExitBus__Harness,
+} from "typechain-types/index.js";
 
-import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "#lib";
 
-import { DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -198,7 +197,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
       // Should not revert - balance is within limit
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.revert(ethers);
     });
 
     it("should pass sanity check for MaxEB validators (Format 2)", async () => {
@@ -214,7 +213,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
       // Should not revert - balance is within limit
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.revert(ethers);
     });
 
     it("should pass sanity check for mixed validators (Format 2)", async () => {
@@ -234,7 +233,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
       // Should not revert - balance is within limit
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.revert(ethers);
     });
   });
 });

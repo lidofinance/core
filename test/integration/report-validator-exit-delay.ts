@@ -1,19 +1,18 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
 import {
   encodeExitRequestsDataListWithFormat,
   toHistoricalHeaderWitness,
   toProvableBeaconBlockHeader,
   toValidatorWitness,
-} from "test/0.8.25/validatorExitDelayVerifierHelpers";
-import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
-import { Snapshot } from "test/suite";
+} from "#test/0.8.25/validatorExitDelayVerifierHelpers.js";
+import { ACTIVE_VALIDATOR_PROOF } from "#test/0.8.25/validatorState.js";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Integration: Report Validator Exit Delay", () => {
   let ctx: ProtocolContext;
@@ -128,7 +127,7 @@ describe("Integration: Report Validator Exit Delay", () => {
       encodedExitRequests,
     );
 
-    await expect(tx).to.not.be.reverted;
+    await expect(tx).to.not.revert(ethers);
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
@@ -199,7 +198,7 @@ describe("Integration: Report Validator Exit Delay", () => {
       encodedExitRequests,
     );
 
-    await expect(tx).to.not.be.reverted;
+    await expect(tx).to.not.revert(ethers);
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
@@ -239,7 +238,7 @@ describe("Integration: Report Validator Exit Delay", () => {
       encodedExitRequests,
     );
 
-    await expect(tx).to.not.be.reverted;
+    await expect(tx).to.not.revert(ethers);
     await expect(tx).to.emit(nor, "ValidatorExitStatusUpdated");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
@@ -251,7 +250,7 @@ describe("Integration: Report Validator Exit Delay", () => {
       encodedExitRequests,
     );
 
-    await expect(tx2).to.not.be.reverted;
+    await expect(tx2).to.not.revert(ethers);
     await expect(tx2).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 

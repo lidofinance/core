@@ -1,33 +1,33 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForSanityChecker,
-  Lido__MockForSanityChecker,
-  OracleReportSanityCheckerWrapper,
-  StakingRouter__MockForAccountingOracle,
-} from "typechain-types";
+  type Accounting__MockForSanityChecker,
+  type AccountingOracle__MockForSanityChecker,
+  type Lido__MockForSanityChecker,
+  type OracleReportSanityCheckerWrapper,
+  type StakingRouter__MockForAccountingOracle,
+} from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib";
+import { ether, impersonate, randomAddress } from "#lib";
 
-import { getMigrationCLValidatorsBalance } from "../lib";
+import { ethers, networkHelpers } from "#test/suite";
 
-import { moduleBalanceFixtureSets } from "./fixtures/index";
+import { getMigrationCLValidatorsBalance } from "../lib.js";
+
+import { moduleBalanceFixtureSets } from "./fixtures/index.js";
 import {
   calcModuleBalanceFormula,
   getPostCLValidatorsBalance,
   getPreCLValidatorsBalance,
-  ModuleAccountingState,
-  ModuleBalanceCase,
-  ModuleBalanceReport,
-  ModuleBalanceStepFixture,
-  OracleReportLimits,
+  type ModuleAccountingState,
+  type ModuleBalanceCase,
+  type ModuleBalanceReport,
+  type ModuleBalanceStepFixture,
+  type OracleReportLimits,
   toGwei,
-} from "./lib";
+} from "./lib.js";
 
 describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
   const deployChecker = async (
@@ -178,11 +178,11 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
     state: ScenarioState,
     step: Exclude<ModuleBalanceStepFixture, ModuleBalanceReport>,
   ) => {
-    await setBalance(withdrawalVaultAddress, step.withdrawalVaultBalance);
+    await networkHelpers.setBalance(withdrawalVaultAddress, step.withdrawalVaultBalance);
     await lido.mock__setContractVersion(4n);
     await lido.mock__setBalanceStats(getMigrationCLValidatorsBalance(step), 0n, 0n, 0n);
 
-    await expect(checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
+    await expect(checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.revert(ethers);
     state.lastVaultBalanceAfterTransfer = step.withdrawalVaultBalance;
     state.postMigrationFirstReportDone = false;
   };
@@ -258,14 +258,16 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
     if (state.postMigrationFirstReportDone) {
       expectReportMatchesModuleAccountingState(state, report, title);
     }
-    await expect(callModuleReport(checker, report), `${title}: module report '${report.label}'`).not.to.be.reverted;
+    await expect(callModuleReport(checker, report), `${title}: module report '${report.label}'`).not.to.be.revert(
+      ethers,
+    );
 
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
-    await setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
+    await networkHelpers.setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
     await expect(
       callAccountingReport(checker, accountingSigner, state, report),
       `${title}: accounting report '${report.label}'`,
-    ).not.to.be.reverted;
+    ).not.to.be.revert(ethers);
 
     state.lastVaultBalanceAfterTransfer =
       withdrawalVaultBalance - (report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals);

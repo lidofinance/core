@@ -1,16 +1,29 @@
-import { ContractFactory, ContractTransactionReceipt, Signer } from "ethers";
-import { ethers } from "hardhat";
-import { FactoryOptions } from "hardhat/types";
+import {
+  type ContractFactory,
+  type ContractTransactionReceipt,
+  formatUnits,
+  getAddress,
+  parseUnits,
+  type Signer,
+} from "ethers";
+import hre from "hardhat";
 
-import { LidoLocator } from "typechain-types";
+import type { FactoryOptions } from "@nomicfoundation/hardhat-ethers/types";
 
-import { addContractHelperFields, DeployedContract, getContractPath, loadContract, LoadedContract } from "lib/contract";
-import { bl, ConvertibleToString, cy, log, yl } from "lib/log";
-import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
+import type { LidoLocator } from "typechain-types/index.js";
 
-import { getDeployerSigner } from "./account";
-import { keysOf } from "./protocol/types";
-import { toBool } from "./string";
+import { getDeployerSigner } from "./account.js";
+import {
+  addContractHelperFields,
+  type DeployedContract,
+  getContractPath,
+  loadContract,
+  type LoadedContract,
+} from "./contract.js";
+import { bl, type ConvertibleToString, cy, log, yl } from "./log.js";
+import { keysOf } from "./protocol/types.js";
+import { incrementGasUsed, readNetworkState, Sk, updateObjectInState } from "./state-file.js";
+import { toBool } from "./string.js";
 
 const PROXY_CONTRACT_NAME = "OssifiableProxy";
 
@@ -53,6 +66,13 @@ function withDefaultSigner(
   return signerOrOptions;
 }
 
+// The default signer of the connected network and the state file checked against it
+export async function getDeployerState() {
+  const { ethers } = await hre.network.getOrCreate();
+  const deployer = (await ethers.provider.getSigner()).address;
+  return { ethers, deployer, state: readNetworkState({ deployer }) };
+}
+
 export async function makeTx(
   contract: LoadedContract,
   funcName: string,
@@ -74,7 +94,7 @@ export async function makeTx(
 
 async function getDeploySigner(deployer: string): Promise<Signer> {
   const deployerSigner = await getDeployerSigner();
-  if (ethers.getAddress(deployer) !== ethers.getAddress(deployerSigner.address)) {
+  if (getAddress(deployer) !== getAddress(deployerSigner.address)) {
     throw new Error(`Deployer address mismatch: env DEPLOYER=${deployerSigner.address}, deployer=${deployer}`);
   }
 
@@ -84,13 +104,14 @@ async function getDeploySigner(deployer: string): Promise<Signer> {
 async function getDeployTxParams(): Promise<DeployTxParams> {
   const gasLimit = process.env.GAS_LIMIT || null;
   if (toBool(process.env.AUTO_FEE)) {
+    const { ethers } = await hre.network.getOrCreate();
     const { maxPriorityFeePerGas, maxFeePerGas } = await ethers.provider.getFeeData();
     if (maxPriorityFeePerGas === null || maxFeePerGas === null) {
       throw new Error("AUTO_FEE requires EIP-1559 fee data from the provider");
     }
     log.withArguments("Automatic deployment fees (gwei)", [
-      `maxPriorityFeePerGas=${ethers.formatUnits(maxPriorityFeePerGas, "gwei")}`,
-      `maxFeePerGas=${ethers.formatUnits(maxFeePerGas, "gwei")}`,
+      `maxPriorityFeePerGas=${formatUnits(maxPriorityFeePerGas, "gwei")}`,
+      `maxFeePerGas=${formatUnits(maxFeePerGas, "gwei")}`,
     ]);
     return { type: 2, maxPriorityFeePerGas, maxFeePerGas, gasLimit };
   }
@@ -100,8 +121,8 @@ async function getDeployTxParams(): Promise<DeployTxParams> {
   if (gasPriorityFee !== null && gasMaxFee !== null) {
     return {
       type: 2,
-      maxPriorityFeePerGas: ethers.parseUnits(gasPriorityFee, "gwei"),
-      maxFeePerGas: ethers.parseUnits(gasMaxFee, "gwei"),
+      maxPriorityFeePerGas: parseUnits(gasPriorityFee, "gwei"),
+      maxFeePerGas: parseUnits(gasMaxFee, "gwei"),
       gasLimit,
     };
   } else {
@@ -116,6 +137,7 @@ export async function deployContract(
   withStateFile = true,
   signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
+  const { ethers } = await hre.network.getOrCreate();
   const txParams = await getDeployTxParams();
   const deployerSigner = await getDeploySigner(deployer);
   const factory = (await ethers.getContractFactory(
@@ -273,6 +295,7 @@ export async function updateProxyImplementation(
 }
 
 async function getLocatorConfig(locatorAddress: string) {
+  const { ethers } = await hre.network.getOrCreate();
   const locator = await ethers.getContractAt("LidoLocator", locatorAddress);
 
   const locatorKeys = keysOf<LidoLocator.ConfigStruct>()([

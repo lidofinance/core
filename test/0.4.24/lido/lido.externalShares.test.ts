@@ -1,16 +1,16 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ACL, Lido, LidoLocator } from "typechain-types";
+import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
+import { type Lido, type LidoLocator } from "typechain-types/index.js";
 
-import { advanceChainTime, ether, impersonate, MAX_UINT256 } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { advanceChainTime, ether, impersonate, MAX_UINT256 } from "#lib";
+import { TOTAL_BASIS_POINTS } from "#lib/constants.js";
 
-import { deployLidoDao } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoDao } from "#test/deploy";
+import { ethers, Snapshot } from "#test/suite";
 
 describe("Lido.sol:externalShares", () => {
   let deployer: HardhatEthersSigner;
@@ -88,11 +88,11 @@ describe("Lido.sol:externalShares", () => {
     });
 
     it("Accepts max external ratio of 0", async () => {
-      await expect(lido.setMaxExternalRatioBP(0n)).to.not.be.reverted;
+      await expect(lido.setMaxExternalRatioBP(0n)).to.not.revert(ethers);
     });
 
     it("Sets to max allowed value", async () => {
-      await expect(lido.setMaxExternalRatioBP(TOTAL_BASIS_POINTS)).to.not.be.reverted;
+      await expect(lido.setMaxExternalRatioBP(TOTAL_BASIS_POINTS)).to.not.revert(ethers);
 
       expect(await lido.getMaxExternalRatioBP()).to.equal(TOTAL_BASIS_POINTS);
     });
@@ -501,7 +501,7 @@ describe("Lido.sol:externalShares", () => {
       await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 1n); // 3 wei
       await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 1n); // 4 wei
 
-      await expect(lido.connect(vaultHubSigner).burnExternalShares(4n)).not.to.be.reverted; // 4 * 1.5 = 6 wei
+      await expect(lido.connect(vaultHubSigner).burnExternalShares(4n)).not.to.revert(ethers); // 4 * 1.5 = 6 wei
       expect(await lido.getExternalEther()).to.equal(0n);
       expect(await lido.getExternalShares()).to.equal(0n);
       expect(await lido.sharesOf(vaultHubSigner)).to.equal(0n);
