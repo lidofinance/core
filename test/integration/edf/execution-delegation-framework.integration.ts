@@ -101,7 +101,7 @@ describe("Integration: Execution Delegation Framework", () => {
 
     await (await oracleDaemonConfig.connect(agent).grantRole(role, delegationAddress)).wait();
 
-    await expect(oracleDaemonConfig.connect(delegate).set(key, value)).to.be.reverted;
+    await expect(oracleDaemonConfig.connect(delegate).set(key, value)).to.revert(ethers);
 
     const data = oracleDaemonConfig.interface.encodeFunctionData("set", [key, value]);
     const tx = await connectSigner(delegation, delegate).execute(oracleDaemonConfig.address, data);
