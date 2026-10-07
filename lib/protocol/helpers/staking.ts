@@ -221,7 +221,11 @@ const getTotalDepositedValidators = async (ctx: ProtocolContext) => {
  * It does not choose a concrete node operator inside NOR/SDVT. Those modules
  * decide operator allocation themselves.
  */
-const prepareStakingModuleForTestDeposit = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
+export const prepareStakingModuleForTestDeposit = async (
+  ctx: ProtocolContext,
+  moduleId: bigint,
+  depositsCount: bigint,
+) => {
   const { lido, stakingRouter } = ctx.contracts;
   const managerSigner = await getStakingModuleManagerSigner(ctx);
   if (!managerSigner) {

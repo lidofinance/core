@@ -1,5 +1,11 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, LogDescription, TransactionResponse, ZeroAddress } from "ethers";
+import {
+  ContractTransactionReceipt,
+  encodeBytes32String,
+  LogDescription,
+  TransactionResponse,
+  ZeroAddress,
+} from "ethers";
 import { ethers } from "hardhat";
 
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
@@ -223,7 +229,7 @@ describe("Integration: Accounting", () => {
     reportTxReceipt: ContractTransactionReceipt,
     noRewards: boolean = false,
   ): Promise<bigint> {
-    const { stakingRouter, csm, cmv2 } = ctx.contracts;
+    const { stakingRouter } = ctx.contracts;
 
     const { amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
     const hasWithdrawals = amountOfETHLocked !== 0n;
@@ -232,19 +238,17 @@ describe("Integration: Accounting", () => {
     let expectedRewardsDistributionEventsCount = 0n;
 
     if (!noRewards) {
-      expectedRewardsDistributionEventsCount = BigInt(await stakingRouter.getStakingModulesCount()) + 2n; // +1 initial mint, +1 for the treasury
-      if (csm !== undefined) {
-        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
-          // +1 for the CSM internal transfer
-          expectedRewardsDistributionEventsCount += 1n;
-        } else {
-          // no reward transfer to modules with 0 validators balance
-          expectedRewardsDistributionEventsCount -= 1n;
+      const stakingModules = ctx.modules.all;
+      expectedRewardsDistributionEventsCount = BigInt(stakingModules.length) + 2n; // +1 initial mint, +1 for the treasury
+      for (const { id, type } of stakingModules) {
+        if (
+          type !== encodeBytes32String("community-onchain-v1") &&
+          type !== encodeBytes32String("curated-onchain-v2")
+        ) {
+          continue;
         }
-      }
-      if (cmv2 !== undefined) {
-        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
-          // +1 for the CSM internal transfer
+        // Each CSM or CMv2 sends its rewards to a fee distributor.
+        if ((await stakingRouter.getModuleValidatorsBalance(id)) > 0) {
           expectedRewardsDistributionEventsCount += 1n;
         } else {
           // no reward transfer to modules with 0 validators balance

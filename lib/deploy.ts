@@ -10,10 +10,7 @@ import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
 import { getDeployerSigner } from "./account";
 import { keysOf } from "./protocol/types";
-
-const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
-const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;
-const GAS_LIMIT = process.env.GAS_LIMIT || null;
+import { toBool } from "./string";
 
 const PROXY_CONTRACT_NAME = "OssifiableProxy";
 
@@ -84,13 +81,28 @@ async function getDeploySigner(deployer: string): Promise<Signer> {
   return deployerSigner;
 }
 
-function getDeployTxParams(): DeployTxParams {
-  if (GAS_PRIORITY_FEE !== null && GAS_MAX_FEE !== null) {
+async function getDeployTxParams(): Promise<DeployTxParams> {
+  const gasLimit = process.env.GAS_LIMIT || null;
+  if (toBool(process.env.AUTO_FEE)) {
+    const { maxPriorityFeePerGas, maxFeePerGas } = await ethers.provider.getFeeData();
+    if (maxPriorityFeePerGas === null || maxFeePerGas === null) {
+      throw new Error("AUTO_FEE requires EIP-1559 fee data from the provider");
+    }
+    log.withArguments("Automatic deployment fees (gwei)", [
+      `maxPriorityFeePerGas=${ethers.formatUnits(maxPriorityFeePerGas, "gwei")}`,
+      `maxFeePerGas=${ethers.formatUnits(maxFeePerGas, "gwei")}`,
+    ]);
+    return { type: 2, maxPriorityFeePerGas, maxFeePerGas, gasLimit };
+  }
+
+  const gasPriorityFee = process.env.GAS_PRIORITY_FEE || null;
+  const gasMaxFee = process.env.GAS_MAX_FEE || null;
+  if (gasPriorityFee !== null && gasMaxFee !== null) {
     return {
       type: 2,
-      maxPriorityFeePerGas: ethers.parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
-      maxFeePerGas: ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
-      gasLimit: GAS_LIMIT,
+      maxPriorityFeePerGas: ethers.parseUnits(gasPriorityFee, "gwei"),
+      maxFeePerGas: ethers.parseUnits(gasMaxFee, "gwei"),
+      gasLimit,
     };
   } else {
     throw new Error('Must specify gas ENV vars: "GAS_PRIORITY_FEE" and "GAS_MAX_FEE" in gwei (like just "3")');
@@ -104,7 +116,7 @@ export async function deployContract(
   withStateFile = true,
   signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
-  const txParams = getDeployTxParams();
+  const txParams = await getDeployTxParams();
   const deployerSigner = await getDeploySigner(deployer);
   const factory = (await ethers.getContractFactory(
     artifactName,

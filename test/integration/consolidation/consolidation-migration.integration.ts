@@ -256,6 +256,10 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       // holds when the limit is at max, so per-frame replenishment cannot interfere
       const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
       await consolidationGateway.connect(agentSigner).grantRole(EXIT_LIMIT_MANAGER_ROLE, agentSigner.address);
+      // setLimits keeps the remaining limit when the new max is not lower than it, so live
+      // consumption on the fork would survive a plain raise. Drop the limit to zero first:
+      // raising it from the unlimited state resets the remaining limit to the new max
+      await consolidationGateway.connect(agentSigner).setConsolidationRequestLimit(0, 0, 86400);
       await consolidationGateway.connect(agentSigner).setConsolidationRequestLimit(100, 100, 86400);
 
       const initialLimit = (await consolidationGateway.getConsolidationRequestLimitFullInfo())

@@ -4,6 +4,8 @@ import { task } from "hardhat/config";
 import * as toml from "@iarna/toml";
 
 import {
+  EDFUpgradeParameters,
+  safeValidateEDFUpgradeParameters,
   safeValidateScratchParameters,
   safeValidateUpgradeParameters,
   ScratchParameters,
@@ -14,14 +16,17 @@ import {
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
 const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
 
-function readUpgradeParameters(): UpgradeParameters {
+function readUpgradeParameters(): UpgradeParameters | EDFUpgradeParameters {
   if (!fs.existsSync(UPGRADE_PARAMETERS_FILE)) {
     throw new Error(`Upgrade parameters file not found: ${UPGRADE_PARAMETERS_FILE}`);
   }
 
   const content = fs.readFileSync(UPGRADE_PARAMETERS_FILE, "utf8");
   const parsedData = toml.parse(content);
-  const result = safeValidateUpgradeParameters(parsedData);
+  const result =
+    "executionDelegationFramework" in parsedData
+      ? safeValidateEDFUpgradeParameters(parsedData)
+      : safeValidateUpgradeParameters(parsedData);
 
   if (!result.success) {
     throw new Error(`Invalid upgrade parameters: ${result.error.message}`);
@@ -201,7 +206,7 @@ function validateParameterConsistency(): {
   matchCount: number;
   totalChecked: number;
 } {
-  let upgradeParams: UpgradeParameters;
+  let upgradeParams: UpgradeParameters | EDFUpgradeParameters;
   let scratchParams: ScratchParameters;
 
   try {
@@ -209,6 +214,16 @@ function validateParameterConsistency(): {
   } catch (error) {
     console.error("❌ Failed to read upgrade parameters:", (error as Error).message);
     process.exit(1);
+  }
+
+  if ("executionDelegationFramework" in upgradeParams) {
+    return {
+      results: [],
+      missingInScratch: [],
+      expectedMissingInScratch: [],
+      matchCount: 0,
+      totalChecked: 0,
+    };
   }
 
   try {

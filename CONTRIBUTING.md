@@ -268,8 +268,9 @@ debugging and analyzing contract interactions. However, full-scale transaction t
 maintain optimal test performance.
 
 > [!NOTE]
-> Tracing is supported only in Hardhat unit and integration tests using the Hardhat mainnet fork (see below for
-> details).
+> The tracing examples below apply to unit tests. For integration tests, pass `--trace` (calls) or `--fulltrace`
+> (calls and storage) when starting the Hardhat node. Traces appear in the node terminal; the test commands do not
+> configure tracing on an external node. See [Running Integration Tests](#running-integration-tests).
 
 To enable tracing:
 
@@ -325,13 +326,13 @@ Fuzzing and invariant tests help ensure that your contracts behave correctly und
 conditions. These tests are crucial for catching edge cases and potential vulnerabilities.
 
 ```bash
-yarn test:foundry       # Run all Foundry-based fuzzing and invariant tests
+yarn test:forge         # Run all Foundry-based fuzzing and invariant tests
 ```
 
 ### Running Integration Tests
 
-Before running integration tests, ensure you have a `.env` file in the root of the project with the necessary
-environment variables configured. You can use the `.env.example` file as a template.
+Before running integration tests, start a local node in a separate terminal and configure the necessary environment
+variables using `.env.example` as a template. Keep the node running while you execute the test commands below.
 
 There are several ways to run integration tests; choose the one that best fits your requirements.
 
@@ -341,18 +342,13 @@ This is the most common method for running integration tests. It uses an instanc
 mainnet environment, allowing you to run integration tests with trace logging.
 
 > [!NOTE]
-> Ensure that `RPC_URL` is set to Ethereum Mainnet RPC and `MAINNET_*` environment variables are set in the
-> `.env` file (refer to `.env.example` for guidance). Otherwise, the tests will run against the Scratch deployment.
+> Start the fork with `HARDHAT_CHAIN_ID=1 yarn hardhat node --fork "<MAINNET_RPC_URL>" --trace`.
+> Use `--fulltrace` in place of `--trace` to include storage operations in the node's output.
+> In the test terminal, run `export NETWORK=mainnet RPC_URL=http://127.0.0.1:8545` to connect to that fork.
 
 ```bash
 # Run all integration tests
 yarn test:integration
-
-# Run all integration tests with trace logging (calls only)
-yarn test:integration:trace
-
-# Run all integration tests with full trace logging (calls and storage operations)
-yarn test:integration:fulltrace
 ```
 
 #### On Mainnet Fork Using Separate Ethereum Development Environment (without Tracing)
@@ -361,11 +357,12 @@ This method is suitable for running integration tests on a local mainnet fork us
 as Anvil. Tracing is not supported in this setup.
 
 > [!NOTE]
-> Ensure that `MAINNET_RPC_URL` and other `MAINNET_*` environment variables are configured in the `.env` file.
+> Start the fork with `NETWORK=mainnet FORK_NODE=anvil RPC_URL="<MAINNET_RPC_URL>" yarn test:node:local:fork`.
+> Run the tests from a second terminal, using the local fork's RPC URL:
 
 ```bash
 # Run integration tests on a local mainnet fork
-yarn test:integration:fork:mainnet
+NETWORK=mainnet RPC_URL=http://127.0.0.1:8545 yarn test:integration
 ```
 
 #### On Scratch Deployment of Protocol via Hardhat Network (with Tracing)
@@ -374,20 +371,16 @@ This method allows you to run integration tests against a scratch deployment on 
 will be automatically executed.
 
 > [!NOTE]
-> This approach runs integration tests against a local Hardhat scratch deployment instead of a mainnet fork. Ensure that
-> `DEPLOYER`, `GENESIS_TIME`, `GAS_PRIORITY_FEE`, and `GAS_MAX_FEE` are set in the `.env` file.
+> Install `just` on the host and start an empty node with `MODE=scratch yarn hardhat node --trace`.
+> Use `--fulltrace` to include storage operations. For a Docker node without tracing, use `yarn test:node:docker:scratch`.
+> In the test terminal, run `export NETWORK=local RPC_URL=http://127.0.0.1:8545`.
+> Ensure that `DEPLOYER`, `GENESIS_TIME`, `GAS_PRIORITY_FEE`, and `GAS_MAX_FEE` are set in the `.env` file.
 
 For more details, refer to the [Scratch Deploy](./docs/scratch-deploy.md) documentation.
 
 ```bash
 # Run all integration tests against a scratch deployment
 yarn test:integration:scratch
-
-# Run all integration tests with trace logging (calls only)
-yarn test:integration:scratch:trace
-
-# Run all integration tests with full trace logging (calls and storage operations)
-yarn test:integration:scratch:fulltrace
 ```
 
 #### On Scratch Deployment of Protocol via Local Ethereum Development Environment (e.g., Anvil, Hardhat Network, Ganache) (without Tracing)
@@ -396,10 +389,10 @@ This method enables you to run integration tests against a local deployment usin
 Hardhat Network, or Ganache. Tracing is not supported in this setup.
 
 > [!NOTE]
-> Ensure that a local deployment is running on port `8555` and that the `deployed-local.json` file with the deployed
+> Ensure that a local deployment is running and that the `deployed-local.json` file with the deployed
 > addresses is available. This file is automatically generated during the scratch deployment process. Refer
-> to [scratch-deploy.md](./docs/scratch-deploy.md) for more details. This setup is controlled by the `LOCAL_RPC_URL` and
-> `LOCAL_*` environment variables.
+> to [scratch-deploy.md](./docs/scratch-deploy.md) for more details. In the test terminal, export `RPC_URL` with the node's
+> endpoint (default: `http://127.0.0.1:8545`).
 
 ```bash
 # Run integration tests against a local deployment
@@ -467,8 +460,10 @@ jobs:
       - name: Run integration tests
         working-directory: core
         shell: bash
-        run: yarn test:integration:fork:mainnet
+        run: yarn test:integration
         env:
+          NETWORK: mainnet
+          RPC_URL: http://127.0.0.1:8545
           LOG_LEVEL: debug # optional
 ```
 

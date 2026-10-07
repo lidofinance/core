@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, Result, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, encodeBytes32String, Result, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -270,7 +270,7 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should rebase correctly", async () => {
-    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter, csm, cmv2, accounting } = ctx.contracts;
+    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter, accounting } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
     const strangerBalancesBeforeRebase = await getBalances(stranger);
@@ -366,7 +366,8 @@ describe("Scenario: Protocol Happy Path", () => {
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
     let toBurnerTransfer, toNorTransfer, toSdvtTransfer: LogDescriptionExtended | undefined;
-    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount()) + 2; // +1 initial mint, +1 for the treasury
+    const stakingModules = ctx.modules.all;
+    let numExpectedTransferEvents = stakingModules.length + 2; // +1 initial mint, +1 for the treasury
     if (wereWithdrawalsFinalized) {
       numExpectedTransferEvents += 1; // +1 for the burner transfer
       [toBurnerTransfer, , toNorTransfer, toSdvtTransfer] = transferEvents;
@@ -374,18 +375,12 @@ describe("Scenario: Protocol Happy Path", () => {
       [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
 
-    if (csm !== undefined) {
-      if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
-        // +1 for the CSM internal transfer
-        numExpectedTransferEvents += 1;
-      } else {
-        // no reward transfer to modules with 0 validators balance
-        numExpectedTransferEvents -= 1;
+    for (const { id, type } of stakingModules) {
+      if (type !== encodeBytes32String("community-onchain-v1") && type !== encodeBytes32String("curated-onchain-v2")) {
+        continue;
       }
-    }
-    if (cmv2 !== undefined) {
-      if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
-        // +1 for the CSM internal transfer
+      // Each CSM or CMv2 sends its rewards to a fee distributor.
+      if ((await stakingRouter.getModuleValidatorsBalance(id)) > 0) {
         numExpectedTransferEvents += 1;
       } else {
         // no reward transfer to modules with 0 validators balance
