@@ -229,7 +229,13 @@ export async function main() {
     "TopUpGateway",
     proxyContractsOwner,
     deployer,
-    [locator.address, topUpGatewayParams.gloasSlot, chainSpec.slotsPerEpoch],
+    [
+      locator.address,
+      topUpGatewayParams.gloasSlot,
+      chainSpec.slotsPerEpoch,
+      chainSpec.secondsPerSlot,
+      chainSpec.genesisTime,
+    ],
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions

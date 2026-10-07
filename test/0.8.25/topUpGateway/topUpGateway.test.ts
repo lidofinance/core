@@ -39,6 +39,8 @@ describe("TopUpGateway.sol", () => {
   const DEFAULT_TARGET_BALANCE_GWEI = 204675n * 10n ** 7n; // 2046.75 ETH in Gwei
   const DEFAULT_MIN_TOP_UP_GWEI = 1n * 10n ** 9n; // 1 ETH in Gwei
   const SLOTS_PER_EPOCH = 32n;
+  const SECONDS_PER_SLOT = 12n;
+  const GENESIS_TIME = 1606824023n;
 
   type TopUpData = {
     moduleId: bigint;
@@ -73,7 +75,13 @@ describe("TopUpGateway.sol", () => {
       lido: await lido.getAddress(),
     });
 
-    const impl = await ethers.deployContract("TopUpGateway__Harness", [await locator.getAddress(), 0, SLOTS_PER_EPOCH]);
+    const impl = await ethers.deployContract("TopUpGateway__Harness", [
+      await locator.getAddress(),
+      0,
+      SLOTS_PER_EPOCH,
+      SECONDS_PER_SLOT,
+      GENESIS_TIME,
+    ]);
 
     [topUpGateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
 
@@ -107,7 +115,7 @@ describe("TopUpGateway.sol", () => {
       validatorIndices: [1n],
       beaconRootData: {
         childBlockTimestamp: timestamp,
-        slot: 123n,
+        slot: (timestamp - GENESIS_TIME) / SECONDS_PER_SLOT - 1n,
         proposerIndex: 1n,
       },
       validatorWitness: [
@@ -136,15 +144,20 @@ describe("TopUpGateway.sol", () => {
       expect(await topUpGateway.harness_getLocator()).to.equal(await locator.getAddress());
     });
 
-    it("stores the Gloas fork slot from the constructor", async () => {
+    it("stores the Gloas fork slot and chain timing from the constructor", async () => {
       const gloasSlot = 12345n;
       const impl = await ethers.deployContract("TopUpGateway__Harness", [
         await locator.getAddress(),
         gloasSlot,
         SLOTS_PER_EPOCH,
+        SECONDS_PER_SLOT,
+        GENESIS_TIME,
       ]);
 
       expect(await impl.GLOAS_SLOT()).to.equal(gloasSlot);
+      expect(await impl.SLOTS_PER_EPOCH()).to.equal(SLOTS_PER_EPOCH);
+      expect(await impl.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
+      expect(await impl.GENESIS_TIME()).to.equal(GENESIS_TIME);
     });
 
     it("reverts on double initialization", async () => {
@@ -165,6 +178,8 @@ describe("TopUpGateway.sol", () => {
         await locator.getAddress(),
         0,
         SLOTS_PER_EPOCH,
+        SECONDS_PER_SLOT,
+        GENESIS_TIME,
       ]);
       const [gateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
       await expect(
@@ -184,6 +199,8 @@ describe("TopUpGateway.sol", () => {
         await locator.getAddress(),
         0,
         SLOTS_PER_EPOCH,
+        SECONDS_PER_SLOT,
+        GENESIS_TIME,
       ]);
       const [gateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
       await expect(
@@ -203,6 +220,8 @@ describe("TopUpGateway.sol", () => {
         await locator.getAddress(),
         0,
         SLOTS_PER_EPOCH,
+        SECONDS_PER_SLOT,
+        GENESIS_TIME,
       ]);
       const [gateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
       await expect(
@@ -220,9 +239,45 @@ describe("TopUpGateway.sol", () => {
     });
 
     it("reverts when lidoLocator is zero address (constructor)", async () => {
-      await expect(ethers.deployContract("TopUpGateway__Harness", [ethers.ZeroAddress, 0, SLOTS_PER_EPOCH]))
+      await expect(
+        ethers.deployContract("TopUpGateway__Harness", [
+          ethers.ZeroAddress,
+          0,
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+        ]),
+      )
         .to.be.revertedWithCustomError(await ethers.getContractFactory("TopUpGateway__Harness"), "ZeroArgument")
         .withArgs("_lidoLocator");
+    });
+
+    it("reverts when secondsPerSlot is zero (constructor)", async () => {
+      await expect(
+        ethers.deployContract("TopUpGateway__Harness", [
+          await locator.getAddress(),
+          0,
+          SLOTS_PER_EPOCH,
+          0,
+          GENESIS_TIME,
+        ]),
+      )
+        .to.be.revertedWithCustomError(await ethers.getContractFactory("TopUpGateway__Harness"), "ZeroArgument")
+        .withArgs("_secondsPerSlot");
+    });
+
+    it("reverts when slotsPerEpoch is zero (constructor)", async () => {
+      await expect(
+        ethers.deployContract("TopUpGateway__Harness", [
+          await locator.getAddress(),
+          0,
+          0,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+        ]),
+      )
+        .to.be.revertedWithCustomError(await ethers.getContractFactory("TopUpGateway__Harness"), "ZeroArgument")
+        .withArgs("_slotsPerEpoch");
     });
 
     it("reverts when calling initialize on the implementation directly", async () => {
@@ -230,6 +285,8 @@ describe("TopUpGateway.sol", () => {
         await locator.getAddress(),
         0,
         SLOTS_PER_EPOCH,
+        SECONDS_PER_SLOT,
+        GENESIS_TIME,
       ]);
       await expect(
         impl.initialize(
@@ -296,6 +353,46 @@ describe("TopUpGateway.sol", () => {
         topUpGateway,
         "MinTopUpExceedsTarget",
       );
+    });
+
+    it("allows manage limits role to set the max root age", async () => {
+      const newMaxRootAge = DEFAULT_MAX_ROOT_AGE + 60n;
+      await expect(topUpGateway.connect(limitsManager).setMaxRootAge(newMaxRootAge))
+        .to.emit(topUpGateway, "MaxRootAgeChanged")
+        .withArgs(newMaxRootAge);
+      expect(await topUpGateway.getMaxRootAge()).to.equal(newMaxRootAge);
+    });
+
+    it("reverts when non-manager tries to set the max root age", async () => {
+      await expect(topUpGateway.connect(stranger).setMaxRootAge(DEFAULT_MAX_ROOT_AGE + 60n))
+        .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger.address, manageLimitsRole);
+    });
+
+    it("reverts when max root age is zero", async () => {
+      await expect(topUpGateway.connect(limitsManager).setMaxRootAge(0n)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "ZeroValue",
+      );
+    });
+
+    it("reverts when max root age exceeds uint16", async () => {
+      await expect(topUpGateway.connect(limitsManager).setMaxRootAge(2n ** 16n)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "TooLargeValue",
+      );
+    });
+
+    it("accepts a max root age of exactly one slot", async () => {
+      await expect(topUpGateway.connect(limitsManager).setMaxRootAge(SECONDS_PER_SLOT))
+        .to.emit(topUpGateway, "MaxRootAgeChanged")
+        .withArgs(SECONDS_PER_SLOT);
+    });
+
+    it("reverts when max root age is below the slot duration", async () => {
+      await expect(
+        topUpGateway.connect(limitsManager).setMaxRootAge(SECONDS_PER_SLOT - 1n),
+      ).to.be.revertedWithCustomError(topUpGateway, "MaxRootAgeBelowSlotDuration");
     });
   });
 
@@ -392,11 +489,9 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
-    it("reverts when beacon data is too old", async () => {
-      await time.increase(400);
-      const now = BigInt(await time.latest());
+    it("rejects an old beacon state even when its EIP-4788 lookup timestamp is recent", async () => {
       const data = await buildTopUpData();
-      data.beaconRootData.childBlockTimestamp = now - 400n;
+      data.beaconRootData.slot -= DEFAULT_MAX_ROOT_AGE / SECONDS_PER_SLOT + 1n;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
@@ -404,15 +499,73 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
-    it("reverts when root precedes last top up", async () => {
-      const timestamp = BigInt(await time.latest());
-      await topUpGateway.harness_setLastTopUpTimestamp(timestamp);
+    it("rejects a state preceding the last top-up even when its lookup timestamp is newer", async () => {
       const data = await buildTopUpData();
-      data.beaconRootData.childBlockTimestamp = timestamp;
+      const rootTimestamp = GENESIS_TIME + data.beaconRootData.slot * SECONDS_PER_SLOT;
+      await topUpGateway.harness_setLastTopUpTimestamp(rootTimestamp + SECONDS_PER_SLOT);
+      expect(data.beaconRootData.childBlockTimestamp).to.be.gt(await topUpGateway.getLastTopUpTimestamp());
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
         "RootPrecedesLastTopUp",
+      );
+    });
+
+    it("reverts with an arithmetic panic when slot times secondsPerSlot overflows uint64", async () => {
+      const data = await buildTopUpData();
+      data.beaconRootData.slot = (1n << 64n) - 1n;
+
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithPanic(0x11);
+    });
+
+    it("reverts with an arithmetic panic when adding genesisTime overflows uint64", async () => {
+      const data = await buildTopUpData();
+      // The multiplication fits in uint64, but adding GENESIS_TIME exceeds its maximum value.
+      data.beaconRootData.slot = ((1n << 64n) - 1n) / SECONDS_PER_SLOT;
+
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithPanic(0x11);
+    });
+
+    it("rejects a same-slot Gloas snapshot after a top-up and accepts the following slot", async () => {
+      const data = await buildTopUpData();
+      const topUpSlot = (BigInt(await time.latest()) - GENESIS_TIME) / SECONDS_PER_SLOT + 1n;
+      const topUpTimestamp = GENESIS_TIME + topUpSlot * SECONDS_PER_SLOT;
+      data.beaconRootData.childBlockTimestamp = topUpTimestamp;
+      await time.setNextBlockTimestamp(topUpTimestamp);
+      await topUpGateway.connect(topUpOperator).topUp(data);
+      expect(await topUpGateway.getLastTopUpTimestamp()).to.equal(topUpTimestamp);
+
+      // The next payload exposes the same-slot beacon state, which excludes the previous top-up's requests.
+      data.beaconRootData.slot = topUpSlot;
+      data.beaconRootData.childBlockTimestamp = topUpTimestamp + SECONDS_PER_SLOT;
+      await time.setNextBlockTimestamp(data.beaconRootData.childBlockTimestamp);
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "RootPrecedesLastTopUp",
+      );
+
+      // One beacon block later, the state can account for those requests.
+      data.beaconRootData.slot = topUpSlot + 1n;
+      data.beaconRootData.childBlockTimestamp = topUpTimestamp + 2n * SECONDS_PER_SLOT;
+      await time.setNextBlockTimestamp(data.beaconRootData.childBlockTimestamp);
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.emit(stakingRouter, "TopUpCalled");
+    });
+
+    it("accepts a beacon state exactly maxRootAge seconds old", async () => {
+      const data = await buildTopUpData();
+      const rootTimestamp = GENESIS_TIME + data.beaconRootData.slot * SECONDS_PER_SLOT;
+      await time.setNextBlockTimestamp(rootTimestamp + DEFAULT_MAX_ROOT_AGE);
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.emit(stakingRouter, "TopUpCalled");
+    });
+
+    it("rejects a beacon state one second older than maxRootAge", async () => {
+      const data = await buildTopUpData();
+      const rootTimestamp = GENESIS_TIME + data.beaconRootData.slot * SECONDS_PER_SLOT;
+      data.beaconRootData.childBlockTimestamp = rootTimestamp + DEFAULT_MAX_ROOT_AGE;
+      await time.setNextBlockTimestamp(rootTimestamp + DEFAULT_MAX_ROOT_AGE + 1n);
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "RootIsTooOld",
       );
     });
 
