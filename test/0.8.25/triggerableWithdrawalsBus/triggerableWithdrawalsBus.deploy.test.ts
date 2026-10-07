@@ -43,7 +43,9 @@ describe("TriggerableWithdrawalsBus.sol: deployment", () => {
     const impl = await ethers.deployContract("TriggerableWithdrawalsBus", [await locator.getAddress()]);
     const [bus] = await proxify({ impl, admin });
 
-    await expect(bus.initialize(ethers.ZeroAddress)).to.be.revertedWithCustomError(bus, "AdminCannotBeZero");
+    await expect(bus.initialize(ethers.ZeroAddress))
+      .to.be.revertedWithCustomError(bus, "ZeroArgument")
+      .withArgs("admin");
   });
 
   it("reverts on the second initialize", async () => {

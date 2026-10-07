@@ -6,7 +6,15 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccountingOracle__MockForStakingRouter, LidoLocator, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, MAX_TOP_UP_PER_BLOCK_GWEI, randomAddress, randomBytes32, randomWCType1 } from "lib";
+import {
+  certainAddress,
+  ether,
+  MAX_TOP_UP_PER_BLOCK_GWEI,
+  randomAddress,
+  randomBytes32,
+  randomWCType1,
+  streccak,
+} from "lib";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -130,10 +138,9 @@ describe("StakingRouter.sol:misc", () => {
       MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE();
       // DSM
       STAKING_MODULE_UNVETTING_ROLE = await stakingRouter.STAKING_MODULE_UNVETTING_ROLE();
-      // VEBO
-      REPORT_VALIDATOR_EXITING_STATUS_ROLE = await stakingRouter.REPORT_VALIDATOR_EXITING_STATUS_ROLE();
-      // TW
-      REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE();
+      // VEDV and TW roles are removed from the StakingRouter API but still migrated by finalizeUpgrade_v4
+      REPORT_VALIDATOR_EXITING_STATUS_ROLE = streccak("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
+      REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = streccak("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
       UNSAFE_SET_EXITED_VALIDATORS_ROLE = await stakingRouter.UNSAFE_SET_EXITED_VALIDATORS_ROLE();
 
       roles = [

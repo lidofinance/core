@@ -20,8 +20,8 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
-        address validatorExitDelayVerifier;
         address triggerableWithdrawalsGateway;
+        address triggerableWithdrawalsBus;
         address consolidationGateway;
         address accounting;
         address predepositGuarantee;
@@ -48,8 +48,8 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
-    address public immutable validatorExitDelayVerifier;
     address public immutable triggerableWithdrawalsGateway;
+    address public immutable triggerableWithdrawalsBus;
     address public immutable consolidationGateway;
     address public immutable accounting;
     address public immutable predepositGuarantee;
@@ -74,8 +74,8 @@ contract LidoLocator__MockMutable is ILidoLocator {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
-        validatorExitDelayVerifier = _assertNonZero(_config.validatorExitDelayVerifier);
         triggerableWithdrawalsGateway = _assertNonZero(_config.triggerableWithdrawalsGateway);
+        triggerableWithdrawalsBus = _assertNonZero(_config.triggerableWithdrawalsBus);
         consolidationGateway = _assertNonZero(_config.consolidationGateway);
         accounting = _assertNonZero(_config.accounting);
         wstETH = _assertNonZero(_config.wstETH);

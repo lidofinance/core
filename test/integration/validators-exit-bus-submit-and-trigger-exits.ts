@@ -1,10 +1,9 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { NodeOperatorsRegistry, ValidatorsExitBusOracle, WithdrawalVault } from "typechain-types";
+import { ValidatorsExitBusOracle } from "typechain-types";
 
 import { de0x, ether, numberToHex } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -35,14 +34,11 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
   let snapshot: string;
 
   let veb: ValidatorsExitBusOracle;
-  let wv: WithdrawalVault;
-  let nor: NodeOperatorsRegistry;
 
   let hashReporter: HardhatEthersSigner;
   let resumer: HardhatEthersSigner;
   let agent: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let refundRecipient: HardhatEthersSigner;
 
   const dataFormat = 1;
 
@@ -62,10 +58,8 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
   before(async () => {
     ctx = await getProtocolContext();
     veb = ctx.contracts.validatorsExitBusOracle;
-    wv = ctx.contracts.withdrawalVault;
-    nor = ctx.contracts.nor;
 
-    [hashReporter, stranger, resumer, refundRecipient] = await ethers.getSigners();
+    [hashReporter, stranger, resumer] = await ethers.getSigners();
 
     agent = await ctx.getSigner("agent", ether("1"));
 
@@ -151,42 +145,5 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
     const currentExitRequestsLimit = exitLimitInfo[4];
     // Limit should decrease after processing
     expect(currentExitRequestsLimit).to.be.lessThan(limitBefore[4]);
-  });
-
-  it("should trigger exits", async () => {
-    const ethBefore = await ethers.provider.getBalance(refundRecipient.getAddress());
-
-    const triggerExitsTx = await veb
-      .connect(refundRecipient)
-      .triggerExits(exitRequest, [0], ZeroAddress, { value: 10 });
-    await expect(triggerExitsTx).to.emit(wv, "WithdrawalRequestAdded");
-
-    // check notification of 1 module
-    await expect(triggerExitsTx).to.emit(nor, "ValidatorExitTriggered");
-
-    const ethAfter = await ethers.provider.getBalance(refundRecipient.getAddress());
-
-    const fee = await wv.getWithdrawalRequestFee();
-
-    const txReceipt = await triggerExitsTx.wait();
-    const gasUsed = BigInt(txReceipt!.gasUsed) * txReceipt!.gasPrice;
-
-    expect(ethAfter).to.equal(ethBefore - gasUsed - fee);
-  });
-
-  it("should handle non-zero refundRecipient and refund the correct amount", async () => {
-    const ethBefore = await ethers.provider.getBalance(refundRecipient.getAddress());
-
-    const tx = await veb.triggerExits(exitRequest, [0], refundRecipient.getAddress(), { value: 10 });
-    await expect(tx).to.emit(wv, "WithdrawalRequestAdded");
-    // check notification of 1 module
-    await expect(tx).to.emit(nor, "ValidatorExitTriggered");
-
-    const fee = await wv.getWithdrawalRequestFee();
-
-    const ethAfter = await ethers.provider.getBalance(refundRecipient.getAddress());
-
-    // Should be increased by (10 - fee)
-    expect(ethAfter - ethBefore).to.equal(10n - fee);
   });
 });
