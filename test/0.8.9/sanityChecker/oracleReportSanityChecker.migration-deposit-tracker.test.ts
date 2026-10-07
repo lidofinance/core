@@ -55,7 +55,7 @@ const deployChecker = async (): Promise<CheckerFixture> => {
       withdrawalVault: withdrawalVaultAddress,
       postTokenRebaseReceiver: deployer.address,
       oracleDaemonConfig: deployer.address,
-      validatorExitDelayVerifier: deployer.address,
+      triggerableWithdrawalsBus: deployer.address,
       triggerableWithdrawalsGateway: deployer.address,
       consolidationGateway: deployer.address,
       accounting: await accounting.getAddress(),

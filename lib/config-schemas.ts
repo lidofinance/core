@@ -18,6 +18,7 @@ const ChainSpecSchema = z.object({
   secondsPerSlot: PositiveIntSchema,
   genesisTime: z.number().int().optional(),
   depositContract: EthereumAddressSchema.optional(),
+  capellaSlot: NonNegativeIntSchema.optional(),
 });
 
 // Validator exit delay verifier schema
@@ -72,12 +73,16 @@ const WithdrawalVaultSchema = z.object({
   consolidationRequestContract: EthereumAddressSchema,
 });
 
-// Triggerable withdrawals gateway schema (used in scratch configs)
-const TriggerableWithdrawalsGatewaySchema = z.object({
-  maxExitRequestsLimit: PositiveIntSchema,
-  exitsPerFrame: PositiveIntSchema,
-  frameDurationInSec: PositiveIntSchema,
-});
+// Triggerable withdrawals gateway schema, the exit balance limit is in ETH
+const TriggerableWithdrawalsGatewaySchema = z
+  .object({
+    maxExitBalanceEth: PositiveIntSchema.min(2048), // at least the weight of a full withdrawal
+    balancePerFrameEth: PositiveIntSchema,
+    frameDurationInSec: PositiveIntSchema,
+  })
+  .refine((value) => value.balancePerFrameEth <= value.maxExitBalanceEth, {
+    message: "balancePerFrameEth must not exceed maxExitBalanceEth",
+  });
 
 // Consolidation gateway schema
 const ConsolidationGatewaySchema = z.object({
@@ -372,7 +377,6 @@ export const ScratchParametersSchema = z.object({
   nodeOperatorsRegistry: StakingModuleSchema,
   simpleDvt: StakingModuleSchema,
   withdrawalQueueERC721: WithdrawalQueueERC721Schema,
-  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,

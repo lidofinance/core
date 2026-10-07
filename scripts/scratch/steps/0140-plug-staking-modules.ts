@@ -182,7 +182,7 @@ async function enableExternalModule(
   await makeTx(
     triggerableWithdrawalsGateway,
     "grantRole",
-    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), setup.ejector],
+    [await triggerableWithdrawalsGateway.ADD_WITHDRAWAL_REQUEST_ROLE(), setup.ejector],
     { from: deployer },
   );
 

@@ -25,6 +25,7 @@ export async function main() {
     { name: "OracleDaemonConfig", address: state[Sk.oracleDaemonConfig].address },
     { name: "OracleReportSanityChecker", address: state[Sk.oracleReportSanityChecker].address },
     { name: "TriggerableWithdrawalsGateway", address: state[Sk.triggerableWithdrawalsGateway].address },
+    { name: "TriggerableWithdrawalsBus", address: state[Sk.triggerableWithdrawalsBus].proxy.address },
     { name: "ConsolidationGateway", address: state[Sk.consolidationGateway].address },
     { name: "ConsolidationBus", address: state[Sk.consolidationBus].proxy.address },
     { name: "ConsolidationMigrator", address: state[Sk.consolidationMigrator].proxy.address },
@@ -54,6 +55,7 @@ export async function main() {
     state.operatorGrid.proxy.address,
     state.lazyOracle.proxy.address,
     state.burner.proxy.address,
+    state.triggerableWithdrawalsBus.proxy.address,
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {

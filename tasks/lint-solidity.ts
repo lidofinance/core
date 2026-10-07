@@ -17,7 +17,6 @@ const fileOverrides: Record<string, RuleOverride[]> = {
   "contracts/0.4.24/utils/Versioned.sol": [ruleOnLine("no-global-import", 5)],
   "contracts/0.8.9/utils/Versioned.sol": [ruleOnLine("no-global-import", 6)],
   "contracts/0.8.9/utils/PausableUntil.sol": [ruleOnLine("no-global-import", 5)],
-  "contracts/0.8.9/lib/ExitLimitUtils.sol": [ruleOnLine("one-contract-per-file", 3)],
   "contracts/0.8.9/proxy/OssifiableProxy.sol": [ruleOnLine("no-unused-import", 7)],
   "contracts/0.8.9/WithdrawalQueueBase.sol": [ruleOnLine("no-global-import", 7)],
   "contracts/common/lib/ECDSA.sol": [allOccurrences("gas-custom-errors")],

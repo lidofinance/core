@@ -39,9 +39,9 @@ withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
 consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
 [triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250
-exitsPerFrame = 1
-frameDurationInSec = 240
+maxExitBalanceEth = 358400
+balancePerFrameEth = 32
+frameDurationInSec = 48
 
 # Accounting oracle configuration
 [accountingOracle]

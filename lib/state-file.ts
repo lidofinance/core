@@ -100,6 +100,7 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  triggerableWithdrawalsBus = "triggerableWithdrawalsBus",
   consolidationGateway = "consolidationGateway",
   consolidationBus = "consolidationBus",
   consolidationMigrator = "consolidationMigrator",
@@ -173,6 +174,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.triggerableWithdrawalsBus:
     case Sk.sm_CSM:
     case Sk.sm_CM:
       return state[contractKey].proxy.address;

@@ -40,9 +40,6 @@ interface ISRBase {
         uint256 indexed stakingModuleId, uint256 unreportedExitedValidatorsCount
     );
     event WithdrawalsCredentialsChangeFailed(uint256 indexed stakingModuleId, bytes lowLevelRevertData);
-    event StakingModuleExitNotificationFailed(
-        uint256 indexed stakingModuleId, uint256 indexed nodeOperatorId, bytes _publicKey
-    );
 
     /**
      * Errors

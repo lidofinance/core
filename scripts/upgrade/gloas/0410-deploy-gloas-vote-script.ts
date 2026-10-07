@@ -2,13 +2,13 @@ import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
-  LidoLocator,
+  LidoLocatorGloas,
   OssifiableProxy__factory,
   UpgradeTemplate__factory,
   UpgradeVoteScript__factory,
 } from "typechain-types";
-import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeTemplate";
-import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript";
+import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/gloas/UpgradeTemplate";
+import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/gloas/UpgradeVoteScript";
 
 import {
   ConstructorArgs,
@@ -53,7 +53,7 @@ export async function main() {
   await logScriptHeader("Gloas — Deploy UpgradeTemplate and vote script", deployer);
 
   const locatorAddress = getAddress(Sk.lidoLocator, state);
-  const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
+  const locator = await loadContract<LidoLocatorGloas>("LidoLocatorGloas", locatorAddress);
   const locatorProxy = OssifiableProxy__factory.connect(locatorAddress, await getDeployerSigner());
 
   // The template's constructor rejects a mismatch against `block.chainid`, which is what makes a

@@ -17,7 +17,7 @@
  */
 import { network } from "hardhat";
 
-import { ConsolidationGateway, LidoLocator } from "typechain-types";
+import { ConsolidationGateway, LidoLocatorGloas } from "typechain-types";
 
 import { deployContract, getAddress, getDeployerSigner, loadContract, log, readNetworkState, Sk } from "lib";
 
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
   const shardCommitteePeriodInSeconds = SHARD_COMMITTEE_PERIOD_EPOCHS * slotsPerEpoch * secondsPerSlot;
 
   const locatorAddress = getAddress(Sk.lidoLocator, state);
-  const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
+  const locator = await loadContract<LidoLocatorGloas>("LidoLocatorGloas", locatorAddress);
   const currentConsolidationGateway = await loadContract<ConsolidationGateway>(
     "ConsolidationGateway",
     await locator.consolidationGateway(),
