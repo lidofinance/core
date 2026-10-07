@@ -376,109 +376,104 @@ library SRLib {
         return module.getStakingModuleSummary();
     }
 
-    /// @notice Deposit allocation for modules
-    /// @dev Allocates seed deposits to staking modules based on their stake share limits and available capacity.
-    ///      The allocation algorithm prioritizes modules with lower validator (WC 0x01 equivalent) counts (MinFirst strategy).
+    // Deposit allocation
+    //
+    // There is one allocation between modules: the seed allocation. Every module takes part in the
+    // MinFirst strategy with its seed demand: the current level plus the depositable keys, limited
+    // by the stake share. A top-up is a question about one module only: how much it can take while
+    // every other module keeps its seed demand. Top-ups are never allocated between 0x02 modules.
+
+    /// @notice Seed deposit allocation for all modules
     /// @dev Method uses conversion from/to Ether amounts due to MinFirstAllocationStrategy working with unit values.
     /// @param _cfg - protocol-level constants
     /// @param _allocateAmount - Eth amount that should be allocated into modules
     /// @return totalAllocated - amount actually allocated
     /// @return allocated - Array of newly allocated amounts for each module
     /// @return newAllocations - Array of new allocation amounts for each module
-    function _getDepositAllocations(Config calldata _cfg, uint256 _allocateAmount)
+    function _getSeedDepositAllocations(Config calldata _cfg, uint256 _allocateAmount)
         public
         view
         returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
     {
         uint256 depositsToAllocate = _allocateAmount / _cfg.maxEBType1;
-        (uint256[] memory allocations, uint256[] memory capacities,) =
-            _getModulesAllocationAndCapacity(_cfg, depositsToAllocate);
-        return _allocate(_cfg.maxEBType1, depositsToAllocate, allocations, capacities);
+        (uint256[] memory levels, uint256[] memory capacities,) = _getSeedAllocationState(_cfg, depositsToAllocate);
+        return _allocateMinFirst(_cfg.maxEBType1, depositsToAllocate, levels, capacities);
     }
 
-    /// @notice calculate seed deposit allocation amount for single module
-    function _getModuleDepositAllocation(Config calldata _cfg, uint256 _moduleId, uint256 _allocateAmount)
+    /// @notice Seed deposit allocation for a single module
+    function _getModuleSeedDepositAllocation(Config calldata _cfg, uint256 _moduleId, uint256 _allocateAmount)
         public
         view
         returns (uint256 allocation)
     {
-        (, uint256[] memory allocated,) = _getDepositAllocations(_cfg, _allocateAmount);
+        (, uint256[] memory allocated,) = _getSeedDepositAllocations(_cfg, _allocateAmount);
         allocation = allocated[SRUtils._getModuleIndexById(_moduleId)];
     }
 
-    /**
-     * @notice calculate top-up allocation amount for single 0x02 module
-     * @dev The Allocation logic must preserve the same priority between modules
-     *      regardless of the allocation type or amount (initial seed deposits or top-ups).
-     *
-     *      Important facts:
-     *
-     *      1. Top-ups are only possible for modules with keys type 0x02.
-     *      2. The top-up amount is limited by the unused capacity of the module's active keys.
-     *      3. Only the allocation of the module being topped up is used by the caller.
-     *
-     *      Therefore the following approach is used:
-     *
-     *      - The module being topped up gets its top-up capacity: the unused capacity of its
-     *        active keys, limited by its stake share limit.
-     *
-     *      - Every other module, 0x01 and 0x02, keeps the same capacity as for seed deposits.
-     *        These modules stay visible to the MinFirst strategy, so the module being topped up
-     *        keeps the same priority relative to them as for seed deposits.
-     *        Another 0x02 module must not get top-up capacity here: the router counts its
-     *        deposited keys as active even while they wait for activation on the consensus layer,
-     *        and that capacity would take the allocation of the module being topped up while
-     *        no top-up could use it.
-     *
-     * @param _cfg - protocol-level constants
-     * @param _moduleId - id of the 0x02 module being topped up
-     * @param _allocateAmount - Eth amount available for deposits
-     * @return allocation - top-up amount for the module
-     */
-    function _getTopUpAllocation(Config calldata _cfg, uint256 _moduleId, uint256 _allocateAmount)
+    /// @notice Top-up allocation for a single module
+    /// @dev The module being topped up gets its top-up capacity. Every other module keeps its seed
+    ///      capacity, so the module keeps the same priority relative to them as for seed deposits.
+    ///      The caller checks that the module is active and has 0x02 withdrawal credentials.
+    /// @param _cfg - protocol-level constants
+    /// @param _moduleId - id of the module being topped up
+    /// @param _allocateAmount - Eth amount available for deposits
+    /// @return allocation - top-up amount for the module
+    function _getModuleTopUpAllocation(Config calldata _cfg, uint256 _moduleId, uint256 _allocateAmount)
         public
         view
         returns (uint256 allocation)
     {
-        uint256 maxEBType1 = _cfg.maxEBType1;
-        uint256 depositsToAllocate = _allocateAmount / maxEBType1;
-        (uint256[] memory allocations, uint256[] memory capacities, uint256 totalValidators) =
-            _getModulesAllocationAndCapacity(_cfg, depositsToAllocate);
+        uint256 depositsToAllocate = _allocateAmount / _cfg.maxEBType1;
+        (uint256[] memory levels, uint256[] memory capacities, uint256 totalValidators) =
+            _getSeedAllocationState(_cfg, depositsToAllocate);
 
         uint256 moduleIdx = SRUtils._getModuleIndexById(_moduleId);
+        capacities[moduleIdx] = _getModuleTopUpCapacity(_cfg, _moduleId, totalValidators);
+
+        (, uint256[] memory allocated,) = _allocateMinFirst(_cfg.maxEBType1, depositsToAllocate, levels, capacities);
+        allocation = allocated[moduleIdx];
+    }
+
+    /// @notice Top-up capacity of a module: the unused capacity of its active keys, limited by its stake share
+    /// @dev The router counts deposited keys as active while they wait for activation on the consensus layer.
+    ///      This is why only the module being topped up gets this capacity, see `_getModuleTopUpAllocation`.
+    /// @param _cfg - protocol-level constants
+    /// @param _moduleId - id of the module
+    /// @param _totalValidators - total validators equivalent after the allocation
+    /// @return capacity in validators equivalent
+    function _getModuleTopUpCapacity(Config calldata _cfg, uint256 _moduleId, uint256 _totalValidators)
+        private
+        view
+        returns (uint256)
+    {
         ModuleState storage moduleState = _moduleId.getModuleState();
         ModuleStateConfig memory stateConfig = moduleState.config;
 
-        if (stateConfig.status == StakingModuleStatus.Active) {
-            (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) =
-                _getStakingModuleSummary(_moduleId.getIStakingModule());
-            uint256 activeCount =
-                depositedValidatorsCount - Math.max(exitedValidatorsCount, moduleState.accounting.exitedValidatorsCount);
-            // max eth capacity of active validators = n * maxEB,
-            // so capacity in validators equivalent = n * maxEBType2 / maxEBType1
-            uint256 topUpCapacity = activeCount * _cfg.maxEBType2 / maxEBType1;
-            // Target validators = (stakeShareLimit * totalValidators) / TOTAL_BASIS_POINTS
-            uint256 targetValidators = (stateConfig.stakeShareLimit * totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
-            capacities[moduleIdx] = Math.min(targetValidators, topUpCapacity);
-        }
-
-        (, uint256[] memory allocated,) = _allocate(maxEBType1, depositsToAllocate, allocations, capacities);
-        allocation = allocated[moduleIdx];
+        (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) =
+            _getStakingModuleSummary(_moduleId.getIStakingModule());
+        uint256 activeCount =
+            depositedValidatorsCount - Math.max(exitedValidatorsCount, moduleState.accounting.exitedValidatorsCount);
+        // max eth capacity of active validators = n * maxEB,
+        // so capacity in validators equivalent = n * maxEBType2 / maxEBType1
+        uint256 topUpCapacity = activeCount * _cfg.maxEBType2 / _cfg.maxEBType1;
+        // Target validators = (stakeShareLimit * totalValidators) / TOTAL_BASIS_POINTS
+        uint256 targetValidators = (stateConfig.stakeShareLimit * _totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
+        return Math.min(targetValidators, topUpCapacity);
     }
 
     /// @dev Runs MinFirstAllocationStrategy and converts the result to Ether amounts.
     /// @param _unit - Eth amount of one allocation unit (maxEBType1)
     /// @param _depositsToAllocate - deposits to allocate, in units
-    /// @param _allocations - current allocation of each module, in units
+    /// @param _levels - current level of each module, in units
     /// @param _capacities - capacity of each module, in units
-    function _allocate(
+    function _allocateMinFirst(
         uint256 _unit,
         uint256 _depositsToAllocate,
-        uint256[] memory _allocations,
+        uint256[] memory _levels,
         uint256[] memory _capacities
     ) private pure returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations) {
-        uint256 modulesCount = _allocations.length;
-        allocated = _allocations;
+        uint256 modulesCount = _levels.length;
+        allocated = _levels;
 
         // If no deposits to allocate, return current state
         if (_depositsToAllocate > 0) {
@@ -503,19 +498,19 @@ library SRLib {
         }
     }
 
-    /// @notice calculate current allocations and seed deposit capacities for all modules
+    /// @notice Current level and seed deposit capacity of every module, the input of the MinFirst strategy
     /// @param _cfg - protocol-level constants
     /// @param depositsToAllocate - deposits to allocate, in validators equivalent
-    /// @return _allocations - current allocation of each module, in validators equivalent
-    /// @return _capacities - seed deposit capacity of each module, in validators equivalent
+    /// @return levels - current level of each module, in validators equivalent
+    /// @return capacities - seed deposit capacity of each module, in validators equivalent
     /// @return totalValidators - total validators equivalent after the allocation
-    function _getModulesAllocationAndCapacity(Config calldata _cfg, uint256 depositsToAllocate)
+    function _getSeedAllocationState(Config calldata _cfg, uint256 depositsToAllocate)
         internal
         view
-        returns (uint256[] memory _allocations, uint256[] memory _capacities, uint256 totalValidators)
+        returns (uint256[] memory levels, uint256[] memory capacities, uint256 totalValidators)
     {
         uint256 modulesCount = SRStorage.getModulesCount();
-        _allocations = new uint256[](modulesCount);
+        levels = new uint256[](modulesCount);
 
         ModuleParamsCache[] memory cache = new ModuleParamsCache[](modulesCount);
         ModuleState storage moduleState;
@@ -543,16 +538,16 @@ library SRLib {
                 // Calculate equivalent of WC01 validators count rounded up: ceil(balance / maxEBType1)
                 validatorsCount = Math.ceilDiv(moduleId.getIStakingModuleV2().getTotalModuleStake(), maxEBType1);
             }
-            _allocations[i] = validatorsCount;
+            levels[i] = validatorsCount;
             totalValidators += validatorsCount;
         }
-        _capacities = new uint256[](modulesCount);
+        capacities = new uint256[](modulesCount);
 
         for (uint256 i = 0; i < modulesCount; ++i) {
-            // module initial capacity = current allocation
-            uint256 validatorsCapacity = _allocations[i];
+            // module initial capacity = current level
+            uint256 validatorsCapacity = levels[i];
             if (cache[i].status == StakingModuleStatus.Active) {
-                validatorsCapacity = _allocations[i] + cache[i].depositableCount;
+                validatorsCapacity = levels[i] + cache[i].depositableCount;
                 // Calculate target validators for each module based on stake share limits
                 // Target validators = (stakeShareLimit * totalValidators) / TOTAL_BASIS_POINTS
                 uint256 targetValidators = (cache[i].shareLimit * totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
@@ -560,7 +555,7 @@ library SRLib {
                 validatorsCapacity = Math.min(targetValidators, validatorsCapacity);
             }
 
-            _capacities[i] = validatorsCapacity;
+            capacities[i] = validatorsCapacity;
         }
     }
 

@@ -656,7 +656,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         // Module capacity is calculated based on the depositableValidatorsCount (from getStakingModuleSummary), so
         // stakingModuleDepositableEthAmount is already capped by the module capacity and represents the max ETH amount possible to deposit.
         return
-            _getModuleDepositAllocation(_stakingModuleId, _maxDepositsValue) / MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+            _getModuleSeedDepositAllocation(_stakingModuleId, _maxDepositsValue) / MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
     }
 
     /**
@@ -698,7 +698,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
         // Get allocation based on target share
         uint256 smDepositableEthAmount =
-            Math.min(SRLib._getTopUpAllocation(_getConfig(), _stakingModuleId, depositableEther), maxTopUpPerBlockWei);
+            Math.min(SRLib._getModuleTopUpAllocation(_getConfig(), _stakingModuleId, depositableEther), maxTopUpPerBlockWei);
 
         // Call allocateDeposits on the staking module to determine for what amount deposit each key
         // The module verifies keys belong to it and reverts if invalid.
@@ -932,14 +932,13 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         view
         returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
     {
-        (totalAllocated, allocated, newAllocations) = SRLib._getDepositAllocations(_getConfig(), _depositAmount);
+        (totalAllocated, allocated, newAllocations) = SRLib._getSeedDepositAllocations(_getConfig(), _depositAmount);
     }
 
     /// @notice Returns the ETH amount `topUp` would allocate to the staking module out of `_depositAmount`.
-    /// @dev Computed by the same code as `topUp`: the module competes with the seed demand of every other
-    ///      module under the MinFirst strategy, and its own capacity is the unused capacity of its active keys.
+    /// @dev Computed by the same code as `topUp`, see `SRLib._getModuleTopUpAllocation`.
     ///      The per-block cap `maxTopUpPerBlockGwei` is not applied here.
-    ///      Returns 0 for a module with 0x01 withdrawal credentials or a module that is not active.
+    ///      Returns 0 for a module that cannot be topped up: not active or with 0x01 withdrawal credentials.
     /// @param _stakingModuleId Id of the staking module to be topped up.
     /// @param _depositAmount The maximum ETH amount of deposits to be allocated.
     /// @return Top-up ETH amount for the module (can be less than `_depositAmount`).
@@ -949,8 +948,9 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         returns (uint256)
     {
         (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
+        if (stateConfig.status != StakingModuleStatus.Active) return 0;
         if (!WithdrawalCredentials.isType2(stateConfig.withdrawalCredentialsType)) return 0;
-        return SRLib._getTopUpAllocation(_getConfig(), _stakingModuleId, _depositAmount);
+        return SRLib._getModuleTopUpAllocation(_getConfig(), _stakingModuleId, _depositAmount);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
@@ -967,7 +967,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         address stakingModuleAddress = stateConfig.moduleAddress;
 
         uint256 depositableEther = LIDO.getDepositableEther();
-        uint256 stakingModuleDepositableEthAmount = _getModuleDepositAllocation(_stakingModuleId, depositableEther);
+        uint256 stakingModuleDepositableEthAmount = _getModuleSeedDepositAllocation(_stakingModuleId, depositableEther);
         uint256 maxDepositsCount = Math.min(
             state.deposits.maxDepositsPerBlock,
             stakingModuleDepositableEthAmount / MAX_EFFECTIVE_BALANCE_WC_TYPE_01
@@ -1077,12 +1077,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param moduleId Id of staking module
     /// @param amountToAllocate Eth amount that can be deposited in module
     /// @return allocation Eth amount that can be deposited in module with id `moduleId` (can be less than `amountToAllocate`)
-    function _getModuleDepositAllocation(uint256 moduleId, uint256 amountToAllocate)
+    function _getModuleSeedDepositAllocation(uint256 moduleId, uint256 amountToAllocate)
         internal
         view
         returns (uint256 allocation)
     {
-        return SRLib._getModuleDepositAllocation(_getConfig(), moduleId, amountToAllocate);
+        return SRLib._getModuleSeedDepositAllocation(_getConfig(), moduleId, amountToAllocate);
     }
 
     /// module wrapper
