@@ -31,8 +31,6 @@ abstract contract CLValidatorVerifier {
     GIndex public constant GI_VALIDATORS_PRE_GLOAS = CLGIndices.VALIDATORS_PRE_GLOAS;
     // validators field gindex starting from Gloas
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
-    // Depth of the pre-Gloas validators List[Validator, VALIDATOR_REGISTRY_LIMIT], log2(VALIDATOR_REGISTRY_LIMIT)
-    uint256 private constant VALIDATORS_DEPTH_PRE_GLOAS = 40;
 
     /// @notice First slot of the Gloas fork.
     /// @dev Sentinel values: `type(uint64).max` means the Gloas fork slot is not known yet, so every
@@ -102,7 +100,7 @@ abstract contract CLValidatorVerifier {
     /// @dev GIndex for Validator[i] given slot (fork-aware).
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
         if (_provenSlot < GLOAS_SLOT) {
-            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(_offset, VALIDATORS_DEPTH_PRE_GLOAS));
+            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(_offset, CLGIndices.VALIDATORS_DEPTH_PRE_GLOAS));
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));
     }

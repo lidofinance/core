@@ -94,8 +94,6 @@ abstract contract CLProofVerifier is ICLProofVerifier {
     /// @notice GIndex of the validators field in CL state tree starting from Gloas.
     /// @dev This index is relative to a state like: `BeaconState.validators`.
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
-    /// @dev Depth of the pre-Gloas `BeaconState.validators` list, log2(VALIDATOR_REGISTRY_LIMIT).
-    uint256 private constant VALIDATORS_DEPTH_PRE_GLOAS = 40;
     /// @notice First slot of the Gloas fork.
     /// @dev Sentinel values: `type(uint64).max` means the Gloas fork slot is not known yet, so every
     ///      proof takes the pre-Gloas path; `0` means Gloas is active from genesis.
@@ -203,7 +201,7 @@ abstract contract CLProofVerifier is ICLProofVerifier {
      */
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
         if (_provenSlot < GLOAS_SLOT) {
-            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(_offset, VALIDATORS_DEPTH_PRE_GLOAS));
+            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(_offset, CLGIndices.VALIDATORS_DEPTH_PRE_GLOAS));
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));
     }

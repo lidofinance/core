@@ -100,13 +100,6 @@ contract ValidatorExitDelayVerifier {
     ///      This index is relative to HistoricalSummary like: HistoricalSummary.block_summary_root.
     GIndex public constant GI_BLOCK_ROOT_IN_SUMMARY = CLGIndices.BLOCK_ROOT_IN_SUMMARY;
 
-    /// @dev Depth of the pre-Gloas `BeaconState.validators` list, log2(VALIDATOR_REGISTRY_LIMIT).
-    uint256 private constant VALIDATORS_DEPTH_PRE_GLOAS = 40;
-
-    /// @dev Depth of the `BeaconState.historical_summaries` list, log2(HISTORICAL_ROOTS_LIMIT).
-    ///      The list stays a static one starting from Gloas.
-    uint256 private constant HISTORICAL_SUMMARIES_DEPTH = 24;
-
     /// @notice The first slot this verifier will accept proofs for.
     uint64 public immutable FIRST_SUPPORTED_SLOT;
 
@@ -353,7 +346,7 @@ contract ValidatorExitDelayVerifier {
 
     function _getValidatorGI(uint256 offset, uint64 stateSlot) internal view returns (GIndex) {
         if (stateSlot < GLOAS_SLOT) {
-            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(offset, VALIDATORS_DEPTH_PRE_GLOAS));
+            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(offset, CLGIndices.VALIDATORS_DEPTH_PRE_GLOAS));
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(offset));
     }
@@ -371,7 +364,7 @@ contract ValidatorExitDelayVerifier {
         gI = recentSlot < GLOAS_SLOT ? GI_HISTORICAL_SUMMARIES_PRE_GLOAS : GI_HISTORICAL_SUMMARIES;
 
         // historical_summaries[summaryIndex]
-        gI = gI.concat(staticListNodeGIndex(summaryIndex, HISTORICAL_SUMMARIES_DEPTH));
+        gI = gI.concat(staticListNodeGIndex(summaryIndex, CLGIndices.HISTORICAL_SUMMARIES_DEPTH));
         // historical_summaries[summaryIndex].block_summary_root
         gI = gI.concat(GI_BLOCK_ROOT_IN_SUMMARY);
         // historical_summaries[summaryIndex].block_summary_root[rootIndex]
