@@ -3,6 +3,7 @@ import * as process from "node:process";
 import hre from "hardhat";
 
 import { log } from "lib";
+import { isTruthyEnv } from "lib/env-flags";
 import { readNetworkState, Sk } from "lib/state-file";
 
 import { getMode } from "../../hardhat.helpers";
@@ -25,14 +26,9 @@ export function isNonForkingHardhatNetwork() {
 }
 
 export async function parseDeploymentJson(name: string) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - file is missing out of the box, that's why we need to catch the error
-    return await import(`../../deployed-${name}.json`);
-  } catch (e) {
-    log.error(e as Error);
-    throw new Error("Failed to parse deployed-local.json. Did you run scratch deploy?");
-  }
+  return readNetworkState({
+    networkStateFile: process.env.NETWORK_STATE_FILE || `deployed-${name}.json`,
+  });
 }
 
 export class ProtocolNetworkConfig {
@@ -131,12 +127,25 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
 async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
   const state = readNetworkState();
 
+  // Scratch deploys (e.g. forking a local anvil scratch deploy) have no
+  // EasyTrack; fall back to the Voting address, matching getLocalNetworkConfig.
+  // Real mainnet/hoodi forks still resolve the actual executor from state —
+  // there the fallback would silently swap EasyTrack-gated paths to the
+  // broader Voting permissions, so make it loud outside the scratch-fork case.
+  const easyTrackExecutor = state[Sk.easyTrackEVMScriptExecutor]?.address;
+  if (!easyTrackExecutor && !isTruthyEnv("PROVISION_ON_FORK")) {
+    log.warning(
+      "easyTrackEVMScriptExecutor is missing from the state file — falling back to the Voting address. " +
+        "Expected only when forking a scratch deploy; for a real-network fork, fix the state file.",
+    );
+  }
+
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
     locator: state[Sk.lidoLocator].proxy.address,
     agentAddress: state[Sk.appAgent].proxy.address,
     votingAddress: state[Sk.appVoting].proxy.address,
-    easyTrackAddress: state[Sk.easyTrackEVMScriptExecutor]?.address,
+    easyTrackAddress: easyTrackExecutor ?? state[Sk.appVoting]?.proxy.address,
     stakingVaultFactory: state[Sk.stakingVaultFactory]?.address,
     stakingVaultBeacon: state[Sk.stakingVaultBeacon]?.address,
     operatorGrid: state[Sk.operatorGrid]?.proxy.address,

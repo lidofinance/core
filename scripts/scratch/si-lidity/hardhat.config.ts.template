@@ -1,0 +1,27 @@
+// Runs inside si-lidity with its own dependencies and compiler settings.
+import viewer from "./hardhat.vault-viewer.config.ts";
+import staker from "./hardhat.wsteth-staker.config.ts";
+
+// Upstream tasks import lib/log, which adds BigInt.toJSON. That turns Ignition's
+// tagged bigint journal values into plain strings and breaks reconciliation on
+// restart ("Value has been changed from 0 to 0"). Keep Ignition's own serializer.
+delete (BigInt.prototype as unknown as { toJSON?: unknown }).toJSON;
+
+export default {
+  ...viewer,
+  paths: {
+    ...viewer.paths,
+    sources: ["./si-contracts/0.8.25/vaults", "./si-contracts/0.8.25/wsteth-staker"],
+  },
+  solidity: {
+    ...viewer.solidity,
+    overrides: { ...viewer.solidity.overrides, ...staker.solidity.overrides },
+  },
+  networks: {
+    scratch: {
+      type: "http",
+      url: process.env.SI_LIDITY_RPC_URL,
+      accounts: JSON.parse(process.env.SI_LIDITY_ACCOUNTS || '"remote"'),
+    },
+  },
+};

@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { WithdrawalVault } from "typechain-types";
 
-import { ether, readWithdrawalRequests } from "lib";
+import { EIP7002_ADDRESS, ether } from "lib";
 import { impersonate } from "lib/account";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
@@ -66,30 +66,28 @@ describe("Integration: WithdrawalVault: addWithdrawalRequests", () => {
   });
 
   it("should emit WithdrawalRequestAdded for each request", async () => {
-    //Clear any existing withdrawal requests before adding new ones
-    while ((await readWithdrawalRequests()).length > 0) {
-      /* empty */
-    }
-
     const withdrawalFee = await withdrawalVault.getWithdrawalRequestFee();
     const totalFee = withdrawalFee * BigInt(PUBKEYS.length);
-    await expect(withdrawalVault.connect(gateway).addWithdrawalRequests(PUBKEYS, AMOUNTS, { value: totalFee }))
+    const tx = await withdrawalVault.connect(gateway).addWithdrawalRequests(PUBKEYS, AMOUNTS, { value: totalFee });
+    await expect(tx)
       .to.emit(withdrawalVault, "WithdrawalRequestAdded")
       .withArgs(encodeEIP7002Payload(PUBKEYS[0], AMOUNTS[0]))
       .and.to.emit(withdrawalVault, "WithdrawalRequestAdded")
       .withArgs(encodeEIP7002Payload(PUBKEYS[1], AMOUNTS[1]));
 
-    const requests = await readWithdrawalRequests();
-    expect(requests.length).to.equal(PUBKEYS.length);
-
-    expect(requests[0].address.toLocaleLowerCase()).to.equal(withdrawalVaultAddress.toLocaleLowerCase());
-    expect(requests[0].pubkey).to.equal(PUBKEYS[0]);
-    expect(requests[0].amount).to.equal(AMOUNTS[0]);
-
-    expect(requests[1].address.toLocaleLowerCase()).to.equal(withdrawalVaultAddress.toLocaleLowerCase());
-    expect(requests[1].pubkey).to.equal(PUBKEYS[1]);
-    expect(requests[1].amount).to.equal(AMOUNTS[1]);
-
-    expect((await readWithdrawalRequests()).length).to.equal(0);
+    // Anvil processes the EIP-7002 queue at block end, before a post-mining
+    // eth_call can inspect it. The native predeploy's anonymous logs record the
+    // accepted requests: sender[20] ++ pubkey[48] ++ amount[8, big-endian].
+    const receipt = await tx.wait();
+    const requests = receipt!.logs.filter((log) => log.address.toLowerCase() === EIP7002_ADDRESS.toLowerCase());
+    expect(requests.map((log) => log.topics)).to.deep.equal(PUBKEYS.map(() => []));
+    expect(requests).to.have.length(PUBKEYS.length);
+    requests.forEach((log, i) => {
+      const data = Buffer.from(log.data.slice(2), "hex");
+      expect(data.length).to.equal(76);
+      expect(ethers.getAddress("0x" + data.subarray(0, 20).toString("hex"))).to.equal(withdrawalVaultAddress);
+      expect("0x" + data.subarray(20, 68).toString("hex")).to.equal(PUBKEYS[i]);
+      expect(data.readBigUInt64BE(68)).to.equal(AMOUNTS[i]);
+    });
   });
 });

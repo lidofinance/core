@@ -1,9 +1,9 @@
-import { execSync } from "child_process";
 import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
 import os from "os";
 import path from "path";
+import { explorerVerificationArgs, runExternal } from "scripts/utils/subprocess";
 
 import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
@@ -38,16 +38,21 @@ export async function main() {
 
   const params = state[Sk.circuitBreaker].deployParameters;
 
+  const verificationArgs = explorerVerificationArgs();
+
   // Clone the CircuitBreaker repo into a temp directory
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "circuit-breaker-"));
   log(`Cloning CircuitBreaker repo to ${tmpDir}...`);
 
   try {
-    const cloneCmd = `git clone --depth 1 --branch ${CIRCUIT_BREAKER_BRANCH} ${CIRCUIT_BREAKER_REPO} ${tmpDir}`;
-    execSync(cloneCmd, { stdio: "inherit" });
+    runExternal(
+      "git",
+      ["clone", "--depth", "1", "--branch", CIRCUIT_BREAKER_BRANCH, CIRCUIT_BREAKER_REPO, tmpDir],
+      process.cwd(),
+    );
 
     // Install foundry dependencies
-    execSync("forge install", { cwd: tmpDir, stdio: "inherit" });
+    runExternal("forge", ["install"], tmpDir);
 
     // Extract RPC URL and private key from Hardhat's network config
     const networkConfig = hardhatNetwork.config;
@@ -71,8 +76,10 @@ export async function main() {
     }
 
     const forgeArgs = [
-      "forge script script/Deploy.s.sol:Deploy",
-      `--sig "run(address,uint256,uint256,uint256,uint256,uint256,uint256)"`,
+      "script",
+      "script/Deploy.s.sol:Deploy",
+      "--sig",
+      "run(address,uint256,uint256,uint256,uint256,uint256,uint256)",
       agentAddress,
       params.minPauseDuration.toString(),
       params.maxPauseDuration.toString(),
@@ -80,19 +87,19 @@ export async function main() {
       params.maxHeartbeatInterval.toString(),
       params.initialPauseDuration.toString(),
       params.initialHeartbeatInterval.toString(),
-      `--rpc-url ${rpcUrl}`,
-      `--private-key ${privateKey}`,
+      "--rpc-url",
+      rpcUrl,
+      "--private-key",
+      privateKey,
       "--broadcast",
       // Override forge gas estimation until the CI Foundry version supports Amsterdam gas accounting (EIP-8037).
-      "--gas-limit 16000000",
+      "--gas-limit",
+      "16000000",
+      ...verificationArgs,
     ];
 
-    if (process.env.ETHERSCAN_API_KEY) {
-      forgeArgs.push("--verify", `--etherscan-api-key ${process.env.ETHERSCAN_API_KEY}`);
-    }
-
     log("Running CircuitBreaker deploy script...");
-    execSync(forgeArgs.join(" "), { cwd: tmpDir, stdio: "inherit" });
+    runExternal("forge", forgeArgs, tmpDir);
 
     await warmUpJsonRpcProvider();
 

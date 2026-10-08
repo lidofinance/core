@@ -8511,6 +8511,7 @@ __metadata:
     typechain: "npm:8.3.2"
     typescript: "npm:5.8.3"
     typescript-eslint: "npm:8.34.0"
+    yaml: "npm:^2.8.0"
     zod: "npm:^4.0.13"
   languageName: unknown
   linkType: soft

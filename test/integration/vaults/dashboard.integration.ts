@@ -977,7 +977,9 @@ describe("Integration: Dashboard Full Coverage", () => {
       ).to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable");
     });
 
-    it("Deposits to beacon chain successfully", async () => {
+    it("Deposits to beacon chain successfully", async function () {
+      if (!ctx.supportsVariableDepositAmounts) this.skip();
+
       const validator = generateValidator(await stakingVault.withdrawalCredentials());
       const deposit = generateDepositStruct(validator.container, ether("1"));
 

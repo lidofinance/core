@@ -117,7 +117,6 @@ prepare_migration_env() {
     load_env_var SCRATCH_DEPLOY_CONFIG "scripts/scratch/deploy-params-testnet.toml"
     load_env_var STEPS_FILE "scratch/steps.json"
 
-    export GENESIS_TIME=1639659600
   else
     # if MODE env is undefined, it means run migration on external node directly
     if [[ $NETWORK != $RUN_NETWORK ]]; then
@@ -175,6 +174,7 @@ prepare_migration_env() {
   load_env_var GAS_PRIORITY_FEE "1"
   load_env_var GAS_MAX_FEE "10"
   load_env_var GAS_LIMIT "16000000"
+  # Both modes honor the explicit environment, then .env, before the testnet default.
   load_env_var GENESIS_TIME "1639659600"
 }
 

@@ -1,13 +1,24 @@
-import { applyMigrationScript, loadSteps, log, resolveMigrationFile } from "lib";
+import path from "node:path";
+
+import { runScratchDeployPreflight } from "scripts/scratch/preflight";
+
+import { applyDeploySteps, loadSteps, log } from "lib";
 
 const runMigrations = async (stepsFile: string): Promise<void> => {
   const steps = loadSteps(stepsFile);
   console.log(`Loaded ${steps.length} migration steps from ${stepsFile}`);
-  for (const step of steps) {
-    const migrationFile = resolveMigrationFile(step);
-    console.log(`Applying migration: ${migrationFile}`);
-    await applyMigrationScript(migrationFile);
+
+  // Progress tracking (and thus RESUME support) applies to the scratch deploy
+  // only: upgrade flows operate on real network state files that must not be
+  // polluted with the completed-steps cursor.
+  // Normalize so equivalent spellings (./scratch/steps.json, scratch//steps.json)
+  // don't silently disable the preflight and RESUME progress tracking
+  const isScratchDeploy = path.normalize(stepsFile).startsWith("scratch/");
+  if (isScratchDeploy) {
+    await runScratchDeployPreflight();
   }
+
+  await applyDeploySteps(steps, { trackProgress: isScratchDeploy });
   process.exit(0);
 };
 
@@ -19,5 +30,8 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  runMigrations(stepsFile).catch(() => process.exit(1));
+  runMigrations(stepsFile).catch((error) => {
+    log.error((error as Error).message);
+    process.exit(1);
+  });
 }

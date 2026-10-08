@@ -43,8 +43,9 @@ const CMV2_ERRORS_ABI = [
  * effective balances are chosen so the expected top-up amounts are exact constants.
  *
  * The suite requires a CMv2 module in the StakingRouter. When CMv2 is unavailable the
- * suite fails loudly; skipping is allowed only via the explicit
- * INTEGRATION_WITH_CMv2=off opt-out.
+ * suite fails loudly unless INTEGRATION_WITH_CMv2=off explicitly opts out.
+ * Only cases that make variable-amount deposits skip on chains such as Sepolia,
+ * whose deposit contract reconstructs every deposit root using exactly 32 ETH.
  */
 describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)", () => {
   let ctx: ProtocolContext;
@@ -138,7 +139,8 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
   });
 
   context("Full top-up flow", () => {
-    it("Should top up real CMv2 validators end to end with exact amounts", async () => {
+    it("Should top up real CMv2 validators end to end with exact amounts", async function () {
+      if (!ctx.supportsVariableDepositAmounts) this.skip();
       const { topUpGateway, lido, stakingRouter } = ctx.contracts;
 
       const expectedPerKey = await expectedTopUpLimitWei(ctx, ebForTopUpGwei);
@@ -184,7 +186,8 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
       expect(await topUpGateway.isBlockDistancePassed()).to.equal(false);
     });
 
-    it("Should count pending deposits against the top-up limit", async () => {
+    it("Should count pending deposits against the top-up limit", async function () {
+      if (!ctx.supportsVariableDepositAmounts) this.skip();
       const { topUpGateway, lido } = ctx.contracts;
 
       // Key 0 is fully covered by a pending deposit, key 1 gets a real top-up
@@ -264,7 +267,8 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
   });
 
   context("Rate limiting", () => {
-    it("Should enforce min block distance after a successful top-up and recover after it passes", async () => {
+    it("Should enforce min block distance after a successful top-up and recover after it passes", async function () {
+      if (!ctx.supportsVariableDepositAmounts) this.skip();
       const { topUpGateway } = ctx.contracts;
 
       // First top-up: single key, non-zero amount
@@ -294,7 +298,8 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
       expect(ctx.getEvents(receipt!, "StakingRouterETHTopUp")[0].args.amount).to.equal(TOP_UP_PER_KEY);
     });
 
-    it("Should reject a root that precedes the last successful top-up", async () => {
+    it("Should reject a root that precedes the last successful top-up", async function () {
+      if (!ctx.supportsVariableDepositAmounts) this.skip();
       const { topUpGateway } = ctx.contracts;
 
       // The stale root is committed BEFORE the successful top-up

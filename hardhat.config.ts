@@ -39,6 +39,10 @@ const config: HardhatUserConfig = {
       // minimal base fee is 1 for EIP-1559
       // gasPrice: 0,
       // initialBaseFeePerGas: 0,
+      // Hardhat does NOT inherit the forked chain's chainId (it defaults to
+      // 31337), and `hardhat node` has no --chainId flag. Set HARDHAT_CHAIN_ID
+      // to the source chain's id (e.g. 11155111 for Sepolia) so chainId-keyed
+      // deploy branches behave as on the real network. Leave unset for 31337.
       ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
       blockGasLimit: 30000000,
       allowUnlimitedContractSize: true,
@@ -78,16 +82,19 @@ const config: HardhatUserConfig = {
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
       chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID || "32382", 10),
     },
-    // testnets
+    // testnets — long RPC timeout to survive occasional Infura/Alchemy
+    // headers stalls during long scratch deploys.
     "sepolia": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
+      timeout: 120_000,
     },
     "hoodi": {
       url: process.env.HOODI_RPC_URL || RPC_URL,
       chainId: 560048,
       accounts: loadAccounts("hoodi"),
+      timeout: 120_000,
     },
     "mainnet": {
       url: RPC_URL,
@@ -229,6 +236,23 @@ const config: HardhatUserConfig = {
           },
           viaIR: true,
           evmVersion: "cancun",
+        },
+      },
+      // NB: low optimizer `runs` keeps LidoTemplate under the 24KB EIP-170 limit
+      // after the DG-finalization additions (finalizePermissionsAfterDGDeployment,
+      // finalizePermissionsWithoutDGDeployment, _finalizePermissions) and the
+      // activateProtocol addition. The template is deployed once and each function
+      // is called once during deploy, so `runs: 1` (optimize for size, not runtime
+      // gas) is the right trade-off. solc 0.4.24 predates the IR pipeline, so `viaIR`
+      // is a no-op here — the size win is entirely from `runs`.
+      "contracts/0.4.24/template/LidoTemplate.sol": {
+        version: "0.4.24",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 1,
+          },
+          evmVersion: "constantinople",
         },
       },
     },

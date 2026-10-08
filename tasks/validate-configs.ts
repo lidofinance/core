@@ -205,6 +205,7 @@ function validateParameterConsistency(): {
   expectedMissingInScratch: MissingInScratch[];
   matchCount: number;
   totalChecked: number;
+  uncoveredReason?: string;
 } {
   let upgradeParams: UpgradeParameters | EDFUpgradeParameters;
   let scratchParams: ScratchParameters;
@@ -216,6 +217,13 @@ function validateParameterConsistency(): {
     process.exit(1);
   }
 
+  try {
+    scratchParams = readScratchParameters();
+  } catch (error) {
+    console.error("❌ Failed to read scratch parameters:", (error as Error).message);
+    process.exit(1);
+  }
+
   if ("executionDelegationFramework" in upgradeParams) {
     return {
       results: [],
@@ -223,14 +231,8 @@ function validateParameterConsistency(): {
       expectedMissingInScratch: [],
       matchCount: 0,
       totalChecked: 0,
+      uncoveredReason: "EDF upgrade parameters have no scratch comparison mapping",
     };
-  }
-
-  try {
-    scratchParams = readScratchParameters();
-  } catch (error) {
-    console.error("❌ Failed to read scratch parameters:", (error as Error).message);
-    process.exit(1);
   }
 
   const results: ValidationResult[] = [];
@@ -280,6 +282,7 @@ function validateParameterConsistency(): {
 }
 
 task("validate-configs", "Validate configuration consistency between upgrade and scratch parameters")
+  .addFlag("allowUncovered", "Allow an explicit EDF consistency skip; does not validate parameter consistency")
   .addFlag("silent", "Run in silent mode (no output on success)")
   .setAction(async (taskArgs) => {
     const silent = taskArgs.silent;
@@ -288,8 +291,23 @@ task("validate-configs", "Validate configuration consistency between upgrade and
       console.log("🔍 Validating configuration consistency between upgrade and scratch parameters...\n");
     }
 
-    const { results, missingInScratch, expectedMissingInScratch, matchCount, totalChecked } =
+    const { results, missingInScratch, expectedMissingInScratch, matchCount, totalChecked, uncoveredReason } =
       validateParameterConsistency();
+
+    if (totalChecked === 0) {
+      for (const missing of [...missingInScratch, ...expectedMissingInScratch]) {
+        console.error(`Missing in scratch: ${missing.path}`);
+      }
+      if (uncoveredReason && taskArgs.allowUncovered) {
+        console.warn(
+          `Configuration consistency SKIPPED: ${uncoveredReason} (0 parameters checked; --allow-uncovered).`,
+        );
+        return;
+      }
+      throw new Error(
+        `Configuration consistency coverage is missing: ${uncoveredReason ?? "no comparable parameters"} (0 parameters checked).`,
+      );
+    }
 
     let unexpectedMismatches = 0;
     const expectedDifferencesFound = results.filter((r) => !r.match && isExpectedDifference(r.path.split(" -> ")[0]));

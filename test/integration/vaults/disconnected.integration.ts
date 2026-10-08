@@ -282,7 +282,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         await stakingVault.connect(owner).fund({ value: ether("2048") });
       });
 
-      it("Can set depositor and deposit validators to beacon chain manually", async () => {
+      it("Can set depositor and deposit validators to beacon chain manually", async function () {
+        if (!ctx.supportsVariableDepositAmounts) this.skip();
+
         const { predepositGuarantee } = ctx.contracts;
         await expect(stakingVault.connect(owner).setDepositor(owner))
           .to.emit(stakingVault, "DepositorSet")
@@ -318,7 +320,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         );
       });
 
-      it("Can deposit to beacon chain using PDG", async () => {
+      it("Can deposit to beacon chain using PDG", async function () {
+        if (!ctx.supportsVariableDepositAmounts) this.skip();
+
         const { predepositGuarantee } = ctx.contracts;
         const withdrawalCredentials = await stakingVault.withdrawalCredentials();
         const validator = generateValidator(withdrawalCredentials, true);
@@ -356,7 +360,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(witness.pubkey, withdrawalCredentials, toLittleEndian64(toGwei(ether("2047"))), anyValue, anyValue);
       });
 
-      it("Can deposit to beacon chain using PDG even if messing with staged balance", async () => {
+      it("Can deposit to beacon chain using PDG even if messing with staged balance", async function () {
+        if (!ctx.supportsVariableDepositAmounts) this.skip();
+
         const { predepositGuarantee, vaultHub } = ctx.contracts;
         const withdrawalCredentials = await stakingVault.withdrawalCredentials();
         const validator = generateValidator(withdrawalCredentials, true);
@@ -413,7 +419,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(validator.container.pubkey, nodeOperator, stakingVault, withdrawalCredentials);
       });
 
-      it("Can receive compensation for disproven predeposit even if messing with staged balance", async () => {
+      it("Can receive compensation for disproven predeposit even if messing with staged balance", async function () {
+        if (!ctx.supportsVariableDepositAmounts) this.skip();
+
         const { predepositGuarantee } = ctx.contracts;
 
         await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
