@@ -2,91 +2,49 @@
 // SPDX-License-Identifier: GPL-3.0
 
 /*
- GIndex library from CSM
- original: https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/GIndex.sol
+ GIndex library based on the library from lidofinance/staking-modules.
+ @see https://github.com/lidofinance/staking-modules/blob/1289e46b41e6b591e0c34fad59cefa38a7c0da54/src/lib/GIndex.sol
 */
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity ^0.8.25;
 
-type GIndex is bytes32;
+/// @dev A plain generalized index of a node in a binary Merkle tree, see
+///      https://github.com/ethereum/consensus-specs/blob/dev/ssz/merkle-proofs.md#generalized-merkle-tree-index
+type GIndex is uint256;
 
-using {isRoot, index, width, shr, shl, concat, unwrap, pow} for GIndex global;
+using {isRoot, concat, unwrap} for GIndex global;
 
 error IndexOutOfRange();
 
-uint256 constant INDEX_BIT_SIZE = 248;
+uint256 constant GINDEX_BIT_SIZE = 256;
 
-/// @param gI Is a generalized index of a node in a tree.
-/// @param p Is a power of a tree level the node belongs to.
-/// @return GIndex
-function pack(uint256 gI, uint8 p) pure returns (GIndex) {
-    if (gI > type(uint248).max) {
-        revert IndexOutOfRange();
-    }
-
-    // NOTE: We can consider adding additional metadata like a fork version.
-    return GIndex.wrap(bytes32((gI << 8) | p));
-}
-
-function unwrap(GIndex self) pure returns (bytes32) {
+function unwrap(GIndex self) pure returns (uint256) {
     return GIndex.unwrap(self);
 }
 
+function toGIndex(uint256 gI) pure returns (GIndex) {
+    return GIndex.wrap(gI);
+}
+
 function isRoot(GIndex self) pure returns (bool) {
-    return index(self) == 1;
-}
-
-function index(GIndex self) pure returns (uint256) {
-    return uint256(unwrap(self)) >> 8;
-}
-
-function width(GIndex self) pure returns (uint256) {
-    return 1 << pow(self);
-}
-
-function pow(GIndex self) pure returns (uint8) {
-    return uint8(uint256(unwrap(self)));
-}
-
-/// @return Generalized index of the nth neighbor of the node to the right.
-function shr(GIndex self, uint256 n) pure returns (GIndex) {
-    uint256 i = index(self);
-    uint256 w = width(self);
-
-    if ((i % w) + n >= w) {
-        revert IndexOutOfRange();
-    }
-
-    return pack(i + n, pow(self));
-}
-
-/// @return Generalized index of the nth neighbor of the node to the left.
-function shl(GIndex self, uint256 n) pure returns (GIndex) {
-    uint256 i = index(self);
-    uint256 w = width(self);
-
-    if (i % w < n) {
-        revert IndexOutOfRange();
-    }
-
-    return pack(i - n, pow(self));
+    return self.unwrap() == 1;
 }
 
 // See https://github.com/protolambda/remerkleable/blob/91ed092d08ef0ba5ab076f0a34b0b371623db728/remerkleable/tree.py#L46
 function concat(GIndex lhs, GIndex rhs) pure returns (GIndex) {
-    uint256 lindex = index(lhs);
-    uint256 rindex = index(rhs);
+    uint256 lindex = lhs.unwrap();
+    uint256 rindex = rhs.unwrap();
 
     uint256 lhsMSbIndex = fls(lindex);
     uint256 rhsMSbIndex = fls(rindex);
 
-    if (lhsMSbIndex + 1 + rhsMSbIndex > INDEX_BIT_SIZE) {
+    if (lhsMSbIndex + 1 + rhsMSbIndex > GINDEX_BIT_SIZE) {
         revert IndexOutOfRange();
     }
 
-    return pack((lindex << rhsMSbIndex) | (rindex ^ (1 << rhsMSbIndex)), pow(rhs));
+    return toGIndex((lindex << rhsMSbIndex) | (rindex ^ (1 << rhsMSbIndex)));
 }
 
 /// @dev From Solady LibBit, see https://github.com/Vectorized/solady/blob/main/src/utils/LibBit.sol.
@@ -108,7 +66,47 @@ function fls(uint256 x) pure returns (uint256 r) {
     }
 }
 
-/// @param i Index of a node relative to the root of ProgressiveList[type].
+/// @return r The exponent of the smallest power of two greater than or equal to `x`.
+function ceilLog2(uint256 x) pure returns (uint256 r) {
+    if (x < 2) return 0;
+
+    unchecked {
+        return fls(x - 1) + 1;
+    }
+}
+
+/// @param i Index of a node in the List[type, N].
+/// @param depth Depth of the List[type, N] data tree, so N = 2 ** depth.
+/// @return gI Generalized index of the ith node relative to the root of the List[type, N].
+function staticListNodeGIndex(uint256 i, uint256 depth) pure returns (GIndex gI) {
+    if (depth + 2 > GINDEX_BIT_SIZE) revert IndexOutOfRange();
+    if (i >= 1 << depth) revert IndexOutOfRange();
+
+    // Start with the left node under the root (sibling of the length node).
+    uint256 p = 2;
+
+    // Down to the first node in the very bottom layer.
+    p = p << depth;
+    // Shift right to the node requested.
+    p = p + i;
+
+    gI = toGIndex(p);
+}
+
+/// @param i Index of a node in the Vector[type, N].
+/// @param length Length N of the vector.
+/// @return gI Generalized index of the ith node relative to the root of the Vector[type, N].
+function vectorNodeGIndex(uint256 i, uint256 length) pure returns (GIndex gI) {
+    if (i >= length) revert IndexOutOfRange();
+    uint256 p = ceilLog2(length);
+    if (p >= GINDEX_BIT_SIZE) revert IndexOutOfRange();
+    unchecked {
+        gI = toGIndex((1 << p) + i);
+    }
+}
+
+/// @param i Index of a node in the ProgressiveList[type].
+/// @return gI Generalized index of the ith node relative to the root of the ProgressiveList[type].
 function progressiveListNodeGIndex(uint256 i) pure returns (GIndex gI) {
     if (i > (type(uint256).max - 1) / 3) {
         revert IndexOutOfRange();
@@ -119,7 +117,7 @@ function progressiveListNodeGIndex(uint256 i) pure returns (GIndex gI) {
     uint256 k = fls(i * 3 + 1) >> 1;
 
     unchecked {
-        if (3 * k + 3 > INDEX_BIT_SIZE) revert IndexOutOfRange();
+        if (3 * k + 3 > GINDEX_BIT_SIZE) revert IndexOutOfRange();
     }
 
     assembly ("memory-safe") {
@@ -134,7 +132,5 @@ function progressiveListNodeGIndex(uint256 i) pure returns (GIndex gI) {
         i := sub(i, div(sub(shl(twoK, 1), 1), 3))
         // To the right to the node we're looking for.
         gI := add(gI, i)
-        // Shift to conform the current GIndex layout.
-        gI := shl(8, gI)
     }
 }

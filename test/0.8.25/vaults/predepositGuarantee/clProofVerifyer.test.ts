@@ -112,15 +112,9 @@ describe("CLProofVerifier.sol", () => {
       {},
     );
 
-    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(
-      "0x0000000000000000000000000000000000000000000000000096000000000128",
-    );
-    expect(await clProofVerifier.TEST_getValidatorGI(0n, gloasSlot)).to.equal(
-      "0x0000000000000000000000000000000000000000000000000000000000059800",
-    );
-    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(
-      "0x00000000000000000000000000000000000000000000000000000000002cc800",
-    );
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(0x960000000001n);
+    expect(await clProofVerifier.TEST_getValidatorGI(0n, gloasSlot)).to.equal(0x598n);
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(0x2cc8n);
   });
 
   it("should validate proofs before and after Gloas", async () => {
@@ -148,11 +142,7 @@ describe("CLProofVerifier.sol", () => {
     };
 
     const prepareGloasCLState = async (slot: number) => {
-      const localTree: SSZMerkleTree = await ethers.deployContract(
-        "SSZMerkleTree",
-        ["0x00000000000000000000000000000000000000000000000000000000002cc800"],
-        {},
-      );
+      const localTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [0x2cc8n], {});
       const validatorLeafIndex = await localTree.leafCount();
       await localTree.addValidatorLeaf(provenValidator.container);
 
@@ -161,7 +151,7 @@ describe("CLProofVerifier.sol", () => {
       const beaconMerkle = await localTree.getBeaconBlockHeaderProof(beaconHeader);
 
       return {
-        gIndexProven: "0x00000000000000000000000000000000000000000000000000000000002cc800",
+        gIndexProven: 0x2cc8n,
         proof: [...validatorMerkle.proof, ...stateProof, ...beaconMerkle.proof],
         beaconHeader,
         beaconRoot: beaconMerkle.root,

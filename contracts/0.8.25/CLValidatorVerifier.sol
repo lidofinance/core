@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
+import {GIndex, toGIndex, concat, staticListNodeGIndex, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
@@ -20,15 +20,15 @@ abstract contract CLValidatorVerifier {
     // BeaconBlockHeader: state_root field gindex
     uint8 private constant STATE_ROOT_DEPTH = 3;
     uint256 private constant STATE_ROOT_POSITION = 3;
-    GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, 0);
+    GIndex public immutable GI_STATE_ROOT = toGIndex((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION);
 
     // Position (from the end) of parent(slot, proposerIndex) node inside concatenated proof
     uint256 private constant SLOT_PROPOSER_PARENT_PROOF_OFFSET = 2;
     // EIP-4788 system contract
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
-    // validators[0] gindex before Gloas
-    GIndex public constant GI_FIRST_VALIDATOR_PRE_GLOAS = CLGIndices.FIRST_VALIDATOR_PRE_GLOAS;
+    // validators field gindex before Gloas
+    GIndex public constant GI_VALIDATORS_PRE_GLOAS = CLGIndices.VALIDATORS_PRE_GLOAS;
     // validators field gindex starting from Gloas
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
 
@@ -100,7 +100,7 @@ abstract contract CLValidatorVerifier {
     /// @dev GIndex for Validator[i] given slot (fork-aware).
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
         if (_provenSlot < GLOAS_SLOT) {
-            return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(_offset);
+            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(_offset, CLGIndices.VALIDATORS_DEPTH_PRE_GLOAS));
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));
     }

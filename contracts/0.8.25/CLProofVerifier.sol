@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
+import {GIndex, toGIndex, concat, staticListNodeGIndex, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
@@ -60,15 +60,16 @@ abstract contract CLProofVerifier is ICLProofVerifier {
     uint256 private constant WC_PUBKEY_PARENT_POSITION = 0;
 
     /// @notice GIndex of parent node for (Pubkey,WC) in validator container
-    GIndex public immutable GI_PUBKEY_WC_PARENT = pack((1 << WC_PUBKEY_PARENT_DEPTH) + WC_PUBKEY_PARENT_POSITION, 0);
+    GIndex public immutable GI_PUBKEY_WC_PARENT = toGIndex((1 << WC_PUBKEY_PARENT_DEPTH) + WC_PUBKEY_PARENT_POSITION);
 
     /**  GIndex of validator in state tree is calculated dynamically
-     *   offsetting from GIndex of first validator by proving validator numerical index.
+     *   by concatenating GIndex of the validators field with GIndex of the validator node
+     *   inside the validators list, located by proving validator numerical index.
      *
-     * NB! This works for pre-Gloas static lists only.
-     *
-     * NB! Position of validators in CL state tree can change between ethereum hardforks
-     *     so two values must be stored and used depending on the slot of beacon block in proof.
+     * NB! Position of validators in CL state tree and the shape of the validators list can change
+     *     between ethereum hardforks so two values must be stored and used depending on the slot
+     *     of beacon block in proof. Before Gloas validators is a static List[Validator, 2**40],
+     *     starting from Gloas it's a ProgressiveList[Validator].
      *
      *   Scheme of CL State Tree:
      *
@@ -77,18 +78,21 @@ abstract contract CLProofVerifier is ICLProofVerifier {
                         ┌───────────────┴───────────────┐
                         │                               │
              .......................................................
-                │                               │
-          ┌─────┴─────┐                   ┌─────┴─────┐
-          │           │   ............... │           │
-    [Validator 0]                        ....     [Validator to prove]  **DEPTH = N
-            ↑                                               ↑
-    GI_FIRST_VALIDATOR_PRE_GLOAS         GI_FIRST_VALIDATOR_PRE_GLOAS + validator_index
+                        │
+                [validators root]  <- GI_VALIDATORS_PRE_GLOAS / GI_VALIDATORS
+                        │
+          ┌─────────────┴─────────────────────┐
+          │           ...............         │
+    [Validator 0]                        [Validator to prove]
+                                                    ↑
+                        GI_VALIDATORS(_PRE_GLOAS).concat(<list node GIndex of validator_index>)
     */
 
-    /// @notice GIndex of first validator in CL state tree
-    /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
-    GIndex public constant GI_FIRST_VALIDATOR_PRE_GLOAS = CLGIndices.FIRST_VALIDATOR_PRE_GLOAS;
+    /// @notice GIndex of the validators field in CL state tree before Gloas.
+    /// @dev This index is relative to a state like: `BeaconState.validators`.
+    GIndex public constant GI_VALIDATORS_PRE_GLOAS = CLGIndices.VALIDATORS_PRE_GLOAS;
     /// @notice GIndex of the validators field in CL state tree starting from Gloas.
+    /// @dev This index is relative to a state like: `BeaconState.validators`.
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
     /// @notice First slot of the Gloas fork.
     /// @dev Sentinel values: `type(uint64).max` means the Gloas fork slot is not known yet, so every
@@ -119,7 +123,7 @@ abstract contract CLProofVerifier is ICLProofVerifier {
     uint8 private constant STATE_ROOT_DEPTH = 3;
     uint256 private constant STATE_ROOT_POSITION = 3;
     /// @notice GIndex of state root in Beacon block header
-    GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, 0);
+    GIndex public immutable GI_STATE_ROOT = toGIndex((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION);
 
     /// @notice location(from end) of parent node for (slot,proposerInd) in concatenated merkle proof
     uint256 private constant SLOT_PROPOSER_PARENT_PROOF_OFFSET = 2;
@@ -197,7 +201,7 @@ abstract contract CLProofVerifier is ICLProofVerifier {
      */
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
         if (_provenSlot < GLOAS_SLOT) {
-            return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(_offset);
+            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(_offset, CLGIndices.VALIDATORS_DEPTH_PRE_GLOAS));
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(_offset));
     }
