@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
 /*
- GIndex library from CSM
- original: https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/GIndex.sol
+ GIndex library based on the library from lidofinance/staking-modules.
+ @see https://github.com/lidofinance/staking-modules/blob/1289e46b41e6b591e0c34fad59cefa38a7c0da54/src/lib/GIndex.sol
 */
 
 // See contracts/COMPILERS.md
