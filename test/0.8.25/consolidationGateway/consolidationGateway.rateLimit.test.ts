@@ -19,7 +19,7 @@ import { PUBKEYS } from "../consolidation-helpers";
 
 // Helper functions
 const grantLimitManagerRole = async (consolidationGateway: ConsolidationGateway, account: HardhatEthersSigner) => {
-  const role = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
+  const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
   await consolidationGateway.grantRole(role, account);
 };
 
@@ -122,9 +122,7 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
       100, // maxConsolidationRequestsLimit
       1, // consolidationsPerFrame
       48, // frameDurationInSec
-      localMerkle.gIFirstValidator,
-      localMerkle.gIFirstValidator,
-      0,
+      (1n << 64n) - 1n,
     ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
@@ -136,8 +134,8 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("setConsolidationRequestLimit", () => {
-    it("should revert without EXIT_LIMIT_MANAGER_ROLE", async () => {
-      const limitManagerRole = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
+    it("should revert without CONSOLIDATION_LIMIT_MANAGER_ROLE", async () => {
+      const limitManagerRole = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
 
       await expect(consolidationGateway.connect(stranger).setConsolidationRequestLimit(4, 1, 48))
         .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")

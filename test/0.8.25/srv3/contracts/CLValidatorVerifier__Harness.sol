@@ -8,11 +8,7 @@ import {CLValidatorVerifier} from "contracts/0.8.25/CLValidatorVerifier.sol";
 import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
 
 contract CLValidatorVerifier__Harness is CLValidatorVerifier {
-    constructor(
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
-        uint64 _pivotSlot
-    ) CLValidatorVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {}
+    constructor(uint64 _gloasSlot) CLValidatorVerifier(_gloasSlot) {}
 
     function TEST_verifyValidator(
         BeaconRootData calldata beaconData,

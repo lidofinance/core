@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
+import {GIndex, toGIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 
 import {SSZBLSHelpers} from "./SSZBLSHelpers.sol";
@@ -19,7 +19,7 @@ contract SSZMerkleTree is SSZBLSHelpers {
     constructor(GIndex base) {
         TREE_DEPTH = depth(base);
         // allows to simulate middle part of the tree
-        leafCount = base.index() - (1 << TREE_DEPTH);
+        leafCount = base.unwrap() - (1 << TREE_DEPTH);
     }
 
     /// @notice Adds a new leaf to the tree
@@ -66,7 +66,7 @@ contract SSZMerkleTree is SSZBLSHelpers {
     function getGeneralizedIndex(uint256 position) public view returns (GIndex) {
         require(position < (1 << TREE_DEPTH), "Invalid position");
 
-        return pack((1 << TREE_DEPTH) + position, uint8(TREE_DEPTH));
+        return toGIndex((1 << TREE_DEPTH) + position);
     }
 
     /// @dev Updates the tree after adding a leaf

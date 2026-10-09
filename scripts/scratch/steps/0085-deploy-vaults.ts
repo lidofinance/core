@@ -120,12 +120,7 @@ export async function main() {
     "PredepositGuarantee",
     proxyContractsOwner,
     deployer,
-    [
-      state.chainSpec.genesisForkVersion,
-      pdgDeployParams.gIndex,
-      pdgDeployParams.gIndexAfterChange,
-      pdgDeployParams.changeSlot,
-    ],
+    [state.chainSpec.genesisForkVersion, pdgDeployParams.gloasSlot],
   );
   const pdgAddress = pdg_.address;
 

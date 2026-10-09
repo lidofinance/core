@@ -254,8 +254,8 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
 
       // Normalize the live rate-limit state: the exact-delta assertion below only
       // holds when the limit is at max, so per-frame replenishment cannot interfere
-      const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
-      await consolidationGateway.connect(agentSigner).grantRole(EXIT_LIMIT_MANAGER_ROLE, agentSigner.address);
+      const CONSOLIDATION_LIMIT_MANAGER_ROLE = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
+      await consolidationGateway.connect(agentSigner).grantRole(CONSOLIDATION_LIMIT_MANAGER_ROLE, agentSigner.address);
       // setLimits keeps the remaining limit when the new max is not lower than it, so live
       // consumption on the fork would survive a plain raise. Drop the limit to zero first:
       // raising it from the unlimited state resets the remaining limit to the new max
@@ -611,9 +611,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
     it("Should revert executeConsolidation when rate limit is exhausted", async () => {
       const { withdrawalVault } = ctx.contracts;
 
-      // Grant EXIT_LIMIT_MANAGER_ROLE to agent and set a small limit
-      const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
-      await consolidationGateway.connect(agentSigner).grantRole(EXIT_LIMIT_MANAGER_ROLE, agentSigner.address);
+      // Grant CONSOLIDATION_LIMIT_MANAGER_ROLE to agent and set a small limit
+      const CONSOLIDATION_LIMIT_MANAGER_ROLE = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
+      await consolidationGateway.connect(agentSigner).grantRole(CONSOLIDATION_LIMIT_MANAGER_ROLE, agentSigner.address);
 
       // Submit BOTH batches before a single delay wait: the first execution consumes
       // the quota and the second must fail without the limit recovering in between

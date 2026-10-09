@@ -37,9 +37,14 @@ jobs:
         run: cargo install just
 
       - name: Run integration tests
-        # Use the following command if there are upgrade steps
-        # run: yarn test:integration:upgrade
-        run: yarn test:integration
+        # Use the following command if there are no upgrade steps
+        # run: yarn test:integration
+        run: yarn test:integration:upgrade
         env:
           NETWORK: "mainnet"
           RUN_NETWORK: "local"
+          # Target the DG proposal explicitly: the Aragon vote already executed on
+          # mainnet, so its non-DG items must be skipped on the fork. Works both before
+          # the proposal is enacted (DG items are mock-executed) and after (already
+          # enacted -> skipped). See scripts/upgrade/steps/0500-mock-upgrade.ts.
+          # PROPOSAL_ID: "12"

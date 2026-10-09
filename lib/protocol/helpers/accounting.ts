@@ -15,7 +15,6 @@ import {
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   getCurrentBlockTimestamp,
-  HASH_CONSENSUS_FAR_FUTURE_EPOCH,
   impersonate,
   log,
   ONE_GWEI,
@@ -1216,16 +1215,19 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
   const { hashConsensus } = ctx.contracts;
 
   const { initialEpoch } = await hashConsensus.getFrameConfig();
-  if (initialEpoch === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
+  const latestBlockTimestamp = await getCurrentBlockTimestamp();
+  const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
+  const currentEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
+
+  // Same condition as HashConsensus.updateInitialEpoch: the initial epoch must still be in the future.
+  // The far-future sentinel set by the constructor depends on genesisTime, so it can't be matched by a constant.
+  if (initialEpoch > currentEpoch) {
     log.debug("Initializing hash consensus epoch...", {
       "Initial epoch": initialEpoch,
+      "Current epoch": currentEpoch,
     });
 
-    const latestBlockTimestamp = await getCurrentBlockTimestamp();
-    const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
-    const updatedInitialEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
-
     const agentSigner = await ctx.getSigner("agent");
-    await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
+    await hashConsensus.connect(agentSigner).updateInitialEpoch(currentEpoch);
   }
 };
