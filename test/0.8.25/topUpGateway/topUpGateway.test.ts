@@ -280,6 +280,20 @@ describe("TopUpGateway.sol", () => {
         .withArgs("_slotsPerEpoch");
     });
 
+    it("reverts when genesisTime is zero (constructor)", async () => {
+      await expect(
+        ethers.deployContract("TopUpGateway__Harness", [
+          await locator.getAddress(),
+          0,
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          0,
+        ]),
+      )
+        .to.be.revertedWithCustomError(await ethers.getContractFactory("TopUpGateway__Harness"), "ZeroArgument")
+        .withArgs("_genesisTime");
+    });
+
     it("reverts when calling initialize on the implementation directly", async () => {
       const impl = await ethers.deployContract("TopUpGateway__Harness", [
         await locator.getAddress(),

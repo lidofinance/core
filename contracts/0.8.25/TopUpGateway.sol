@@ -72,6 +72,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         if (_slotsPerEpoch == 0) revert ZeroArgument("_slotsPerEpoch");
         if (_secondsPerSlot == 0) revert ZeroArgument("_secondsPerSlot");
+        if (_genesisTime == 0) revert ZeroArgument("_genesisTime");
         LOCATOR = ILidoLocator(_lidoLocator);
         SLOTS_PER_EPOCH = _slotsPerEpoch;
         SECONDS_PER_SLOT = _secondsPerSlot;
