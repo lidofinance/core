@@ -9,8 +9,7 @@ import {GIndex} from "contracts/common/lib/GIndex.sol";
 /// @dev The indices point to the field roots. The tree shapes below the fields are fork-dependent,
 ///      so the verifiers concatenate the node indices themselves, see `_getValidatorGI` and the alike.
 library CLGIndices {
-    // Pre-Gloas (Electra) CL state layout. There is a single supported fork before Gloas,
-    // so these indices are fixed for every Lido deployment.
+    // Pre-Gloas CL state layout, valid since Electra, so these indices are fixed for every Lido deployment.
 
     /// @dev `BeaconState.validators`.
     GIndex internal constant VALIDATORS_PRE_GLOAS = GIndex.wrap(0x4b);

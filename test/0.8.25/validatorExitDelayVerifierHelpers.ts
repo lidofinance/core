@@ -11,7 +11,7 @@ import {
 
 import { de0x, findEventsWithInterfaces, generateBeaconHeader, generateValidator, numberToHex } from "lib";
 
-import { VALIDATOR_REGISTRY_LIMIT_LOG2 } from "test/common/lib/clGIndices";
+import { giValidator, giValidatorPreGloas } from "test/common/lib/clGIndices";
 
 import { BlockHeader, ValidatorStateProof } from "./validatorState";
 
@@ -106,9 +106,9 @@ export interface GeneratedValidatorProof {
  * captured mainnet one, and unlike a captured one it follows whichever fork layout the deployed
  * verifier is configured for.
  *
- * The generalized index is recomputed here rather than read back from the verifier: asking the
- * contract which index it wants and then proving at that index would make the test circular and
- * blind to a wrong derivation rule.
+ * The generalized index is derived independently in `test/common/lib/clGIndices.ts` rather than read
+ * back from the verifier: asking the contract which index it wants and then proving at that index
+ * would make the test circular and blind to a wrong derivation rule.
  */
 export async function generateValidatorStateProof(
   verifier: ValidatorExitDelayVerifier,
@@ -116,16 +116,10 @@ export async function generateValidatorStateProof(
   validatorIndex: number,
   exitRequestIndex = 0,
 ): Promise<GeneratedValidatorProof> {
-  const gIndexLib = await hre.deployContract("GIndex__Harness");
   const gloasSlot = await verifier.GLOAS_SLOT();
 
   const validatorGI =
-    BigInt(slot) < gloasSlot
-      ? await gIndexLib.concat(
-          await verifier.GI_VALIDATORS_PRE_GLOAS(),
-          await gIndexLib.staticListNode(validatorIndex, VALIDATOR_REGISTRY_LIMIT_LOG2),
-        )
-      : await gIndexLib.concat(await verifier.GI_VALIDATORS(), await gIndexLib.progressiveListNode(validatorIndex));
+    BigInt(slot) < gloasSlot ? giValidatorPreGloas(BigInt(validatorIndex)) : giValidator(BigInt(validatorIndex));
 
   const { container } = generateValidator();
   const provenContainer = {

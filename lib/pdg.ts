@@ -37,7 +37,7 @@ export const firstValidatorGIndexPreGloas = (validatorsGI: BigNumberish): bigint
 
 /**
  * Generalized index of `BeaconState.validators[0]` on mainnet before Gloas.
- * `BeaconState.validators` is the field 11 of the 37-fields container: 2^6 + 11 = 0x4b.
+ * `BeaconState.validators` is field 11 of the pre-Gloas container: 2^6 + 11 = 0x4b.
  */
 export const MAINNET_FIRST_VALIDATOR_GINDEX_PRE_GLOAS = firstValidatorGIndexPreGloas(0x4bn);
 

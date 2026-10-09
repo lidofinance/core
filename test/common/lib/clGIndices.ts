@@ -8,9 +8,10 @@
  * over a failing assertion is not.
  */
 
-// Electra `BeaconState` is a flat SSZ container; Gloas turns it into a `ProgressiveContainer`
-// (EIP-7688/7495) but keeps the field order, and `historical_summaries` stays a plain `List` in both.
-export const BEACON_STATE_FIELD_COUNT = 37n;
+// Before Gloas `BeaconState` is a flat SSZ container: 37 fields in Electra, 38 in Fulu, which appends
+// `proposer_lookahead`. Gloas turns it into a `ProgressiveContainer` (EIP-7688/7495) but keeps the field
+// order, and `historical_summaries` stays a plain `List` in both.
+export const BEACON_STATE_FIELD_COUNT = 38n;
 export const VALIDATORS_FIELD_INDEX = 11n;
 export const HISTORICAL_SUMMARIES_FIELD_INDEX = 27n;
 
