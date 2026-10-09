@@ -516,7 +516,8 @@ describe("TopUpGateway.sol", () => {
     it("rejects a state preceding the last top-up even when its lookup timestamp is newer", async () => {
       const data = await buildTopUpData();
       const rootTimestamp = GENESIS_TIME + data.beaconRootData.slot * SECONDS_PER_SLOT;
-      await topUpGateway.harness_setLastTopUpTimestamp(rootTimestamp + SECONDS_PER_SLOT);
+      // Between the proved slot and the lookup timestamp; a full slot later may equal the latter.
+      await topUpGateway.harness_setLastTopUpTimestamp(rootTimestamp + 1n);
       expect(data.beaconRootData.childBlockTimestamp).to.be.gt(await topUpGateway.getLastTopUpTimestamp());
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
@@ -736,8 +737,6 @@ describe("TopUpGateway.sol", () => {
       // A subsequent valid top-up in the same block is NOT throttled, because
       // the previous no-op did not consume the rate-limit window.
       const data2 = await buildTopUpData();
-      // ensure the witness is fresh w.r.t. lastTopUpTimestamp (still 0)
-      data2.beaconRootData.childBlockTimestamp = BigInt(await time.latest()) + 1n;
       await expect(topUpGateway.connect(topUpOperator).topUp(data2))
         .to.emit(stakingRouter, "TopUpCalled")
         .and.to.emit(topUpGateway, "LastTopUpChanged");
