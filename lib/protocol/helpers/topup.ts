@@ -2,16 +2,11 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { certainAddress, ether, impersonate, log } from "lib";
-import {
-  addressToWC,
-  firstValidatorGIndexPreGloas,
-  generateBeaconHeader,
-  setBeaconBlockRoot,
-  unpackLegacyGIndex,
-} from "lib/pdg";
-import { prepareLocalMerkleTree } from "lib/top-ups";
+import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "lib/pdg";
+import { buildBeaconHeaderProof, buildValidatorStateProofs } from "lib/top-ups";
 
 import { ProtocolContext } from "../types";
 
@@ -21,9 +16,8 @@ import { ensureSubmitFitsStakeLimit, setModuleStakeShareLimit } from "./staking"
  * Helpers for driving the real top-up path in integration tests:
  * TopUpGateway.topUp -> StakingRouter.topUp -> module.allocateDeposits -> DepositContract.
  *
- * Witnesses are built against a local SSZ validators tree committed to the EIP-4788
- * beacon roots contract. This helper only supports deployments with a pre-Gloas
- * proof window; a zero pivot denotes a Gloas-only deployment.
+ * Witnesses are built against a real Electra or Gloas BeaconState (Lodestar SSZ types) committed
+ * to the EIP-4788 beacon roots contract, using a fresh header slot and the deployed fork's layout.
  */
 
 const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
@@ -75,43 +69,20 @@ export const prepareTopUpWitnesses = async (
 ): Promise<TopUpWitnessBundle> => {
   const { topUpGateway, withdrawalVault } = ctx.contracts;
 
-  let gloasSlot: bigint;
+  // TODO(GLOAS): REMOVE THE FALLBACK AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS SLOT.
+  // Gateways deployed before GLOAS_SLOT existed only verify the Electra (pre-Gloas) layout.
+  let gloasSlot = 2n ** 64n - 1n;
   try {
     gloasSlot = await topUpGateway.GLOAS_SLOT();
   } catch {
-    const legacyGateway = new ethers.Contract(
-      await topUpGateway.getAddress(),
-      ["function PIVOT_SLOT() view returns (uint64)"],
-      ethers.provider,
-    );
-    gloasSlot = await legacyGateway.PIVOT_SLOT();
+    // Legacy gateway: keep the pre-Gloas layout.
   }
 
-  const slot = 8192;
-  if (slot >= gloasSlot) {
-    if (gloasSlot !== 0n) {
-      throw new Error(`Pre-Gloas proof slot ${slot} must be below Gloas slot ${gloasSlot}`);
-    }
-  }
-
-  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS SLOT.
-  // The legacy gateway returns the gindex packed in the `index << 8 | pow` format.
-  const gIFirstValidator =
-    gloasSlot === 0n
-      ? unpackLegacyGIndex(
-          await new ethers.Contract(
-            await topUpGateway.getAddress(),
-            ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
-            ethers.provider,
-          ).GI_FIRST_VALIDATOR_CURR(),
-        )
-      : firstValidatorGIndexPreGloas(await topUpGateway.GI_VALIDATORS_PRE_GLOAS());
-
-  const { stateTree, firstValidatorLeafIndex } = await prepareLocalMerkleTree(gIFirstValidator);
+  const { genesisTime, secondsPerSlot } = await ctx.contracts.hashConsensus.getChainConfig();
+  const slot = (BigInt(await time.latest()) - genesisTime) / secondsPerSlot + 1n;
 
   const withdrawalCredentials = addressToWC(await withdrawalVault.getAddress(), 2);
 
-  const validatorIndices: bigint[] = [];
   const containers = validators.map((v) => ({
     pubkey: v.pubkey,
     withdrawalCredentials,
@@ -123,32 +94,24 @@ export const prepareTopUpWitnesses = async (
     withdrawableEpoch: FAR_FUTURE_EPOCH,
   }));
 
-  for (const container of containers) {
-    await stateTree.addValidatorsLeaf(container);
-    validatorIndices.push((await stateTree.leafCount()) - 1n - firstValidatorLeafIndex);
-  }
+  const state = await buildValidatorStateProofs(containers, { gloas: slot >= gloasSlot });
+  const validatorIndices = containers.map((_, i) => BigInt(i));
 
-  const stateRoot = await stateTree.getStateRoot();
-  const beaconBlockHeader = generateBeaconHeader(stateRoot, Number(slot));
-  const headerHash = await stateTree.beaconBlockHeaderHashTreeRoot(beaconBlockHeader);
-  const childBlockTimestamp = await setBeaconBlockRoot(headerHash);
+  const beaconBlockHeader = generateBeaconHeader(state.root, Number(slot));
+  const headerProof = await buildBeaconHeaderProof(beaconBlockHeader);
+  await time.setNextBlockTimestamp(genesisTime + (slot + 1n) * secondsPerSlot);
+  const childBlockTimestamp = await setBeaconBlockRoot(headerProof.root);
 
-  const validatorWitness = await Promise.all(
-    containers.map(async (container, i) => {
-      const validatorProof = await stateTree.getValidatorProof(firstValidatorLeafIndex + validatorIndices[i]);
-      const headerProof = await stateTree.getBeaconBlockHeaderProof(beaconBlockHeader);
-      return {
-        proofValidator: [...validatorProof, ...headerProof.proof],
-        pubkey: container.pubkey,
-        effectiveBalance: container.effectiveBalance,
-        slashed: container.slashed,
-        activationEligibilityEpoch: container.activationEligibilityEpoch,
-        activationEpoch: container.activationEpoch,
-        exitEpoch: container.exitEpoch,
-        withdrawableEpoch: container.withdrawableEpoch,
-      };
-    }),
-  );
+  const validatorWitness = containers.map((container, i) => ({
+    proofValidator: [...state.proofs[i], ...headerProof.proof],
+    pubkey: container.pubkey,
+    effectiveBalance: container.effectiveBalance,
+    slashed: container.slashed,
+    activationEligibilityEpoch: container.activationEligibilityEpoch,
+    activationEpoch: container.activationEpoch,
+    exitEpoch: container.exitEpoch,
+    withdrawableEpoch: container.withdrawableEpoch,
+  }));
 
   return {
     validatorIndices,

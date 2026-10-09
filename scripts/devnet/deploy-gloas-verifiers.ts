@@ -96,7 +96,7 @@ async function main(): Promise<void> {
 
   const topUpGateway = await deployContract(
     "TopUpGateway",
-    [locatorAddress, gloasForkSlot, slotsPerEpoch],
+    [locatorAddress, gloasForkSlot, slotsPerEpoch, secondsPerSlot, genesisTime],
     deployer.address,
     false,
   );

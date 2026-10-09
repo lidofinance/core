@@ -16,6 +16,7 @@ import {
     IConsolidationBus,
     IConsolidationGateway,
     IGloasForkAware,
+    ITopUpGateway,
     IValidatorExitDelayVerifier,
     IWithdrawalsManagerProxy,
     IWithdrawalVault
@@ -163,6 +164,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertConsistentGloasSlot(config);
 
         _assertUnchangedVerifierProfile(config);
+
+        _assertTopUpGatewayChainProfile(config);
 
         IAccessControlEnumerable stakingRouter = IAccessControlEnumerable(stakingRouterAddr);
         if (!stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, oldVerifierAddr)) {
@@ -353,6 +356,22 @@ contract UpgradeTemplate is IUpgradeTemplate {
             newVerifier.SLOTS_PER_HISTORICAL_ROOT(),
             oldVerifier.SLOTS_PER_HISTORICAL_ROOT()
         );
+    }
+
+    /// @dev The new gateway implementation derives slot timestamps from these immutables (this
+    ///      upgrade introduces them), so they must match the chain profile the exit-delay verifier
+    ///      is pinned to — which `_assertUnchangedVerifierProfile` has already diffed against the
+    ///      live deployment. A mismatch would not revert on-chain; it would silently shift the
+    ///      gateway's root-age and root-staleness checks.
+    function _assertTopUpGatewayChainProfile(UpgradeConfig config) private view {
+        IValidatorExitDelayVerifier verifier = IValidatorExitDelayVerifier(
+            config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER()
+        );
+        ITopUpGateway gateway = ITopUpGateway(config.NEW_TOP_UP_GATEWAY_IMPL());
+
+        _assertUint("gateway-genesis-time", gateway.GENESIS_TIME(), verifier.GENESIS_TIME());
+        _assertUint("gateway-slots-per-epoch", gateway.SLOTS_PER_EPOCH(), verifier.SLOTS_PER_EPOCH());
+        _assertUint("gateway-seconds-per-slot", gateway.SECONDS_PER_SLOT(), verifier.SECONDS_PER_SLOT());
     }
 
     function _assertConsistentGloasSlot(UpgradeConfig config) private view {

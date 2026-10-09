@@ -89,6 +89,8 @@ export async function main() {
     locatorAddress,
     parameters.topUpGateway.gloasSlot,
     chainSpec.slotsPerEpoch,
+    chainSpec.secondsPerSlot,
+    chainSpec.genesisTime,
   ];
 
   logStartReview();
@@ -116,7 +118,7 @@ export async function main() {
   );
 
   //
-  // Deploy the implementations that only change their Gloas fork switch
+  // Deploy the Gloas-aware implementations
   //
   await deployImplementation(
     Sk.predepositGuarantee,
