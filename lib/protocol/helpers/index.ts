@@ -65,6 +65,7 @@ export {
   getCMv2SigningKeys,
 } from "./cmv2";
 export type { CMv2OperatorKeys } from "./cmv2";
+export { csm0x02EnsureDepositedKeys, getCSM0x02Module } from "./csm0x02";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";
 export {
   buildTopUpData,
