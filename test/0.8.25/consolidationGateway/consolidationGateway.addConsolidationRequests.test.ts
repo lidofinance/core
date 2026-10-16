@@ -39,7 +39,7 @@ const grantConsolidationRequestRole = async (
 };
 
 const grantLimitManagerRole = async (consolidationGateway: ConsolidationGateway, account: HardhatEthersSigner) => {
-  const role = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
+  const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
   await consolidationGateway.grantRole(role, account);
 };
 
@@ -132,9 +132,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       100, // maxConsolidationRequestsLimit
       1, // consolidationsPerFrame
       48, // frameDurationInSec
-      localMerkle.gIFirstValidator,
-      localMerkle.gIFirstValidator,
-      0,
+      (1n << 64n) - 1n,
     ]);
 
     await grantConsolidationRequestRole(consolidationGateway, authorizedEntity);

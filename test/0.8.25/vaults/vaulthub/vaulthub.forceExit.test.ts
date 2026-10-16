@@ -74,8 +74,6 @@ describe("VaultHub.sol:forceExit", () => {
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [
       GENESIS_FORK_VERSION,
-      "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
     ]);
     lazyOracle = await ethers.deployContract("LazyOracle__MockForVaultHub");

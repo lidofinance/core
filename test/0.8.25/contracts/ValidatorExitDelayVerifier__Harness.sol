@@ -3,14 +3,13 @@
 
 pragma solidity 0.8.25;
 
-import {ValidatorExitDelayVerifier, GIndices, GIndex} from "contracts/0.8.25/ValidatorExitDelayVerifier.sol";
+import {ValidatorExitDelayVerifier, GIndex} from "contracts/0.8.25/ValidatorExitDelayVerifier.sol";
 
 contract ValidatorExitDelayVerifier__Harness is ValidatorExitDelayVerifier {
     constructor(
         address lidoLocator,
-        GIndices memory gIndices,
         uint64 firstSupportedSlot,
-        uint64 pivotSlot,
+        uint64 gloasSlot,
         uint64 capellaSlot,
         uint64 slotsPerHistoricalRoot,
         uint32 slotsPerEpoch,
@@ -20,9 +19,8 @@ contract ValidatorExitDelayVerifier__Harness is ValidatorExitDelayVerifier {
     )
         ValidatorExitDelayVerifier(
             lidoLocator,
-            gIndices,
             firstSupportedSlot,
-            pivotSlot,
+            gloasSlot,
             capellaSlot,
             slotsPerHistoricalRoot,
             slotsPerEpoch,
@@ -34,5 +32,9 @@ contract ValidatorExitDelayVerifier__Harness is ValidatorExitDelayVerifier {
 
     function getHistoricalBlockRootGI(uint64 recentSlot, uint64 targetSlot) external returns (GIndex gI) {
         return _getHistoricalBlockRootGI(recentSlot, targetSlot);
+    }
+
+    function getValidatorGI(uint256 offset, uint64 stateSlot) external view returns (GIndex) {
+        return _getValidatorGI(offset, stateSlot);
     }
 }

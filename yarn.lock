@@ -322,10 +322,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@chainsafe/as-sha256@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@chainsafe/as-sha256@npm:1.2.0"
-  checksum: 10c0/277589bfbdfc692f669a19b87110f4eda033f94d2774cb6d8fc0f745bff3b9e895add862684dbf09ff19102ae79639fdfbc758ecafbbee1cb8e033c679c82aef
+"@chainsafe/as-sha256@npm:":
+  version: 1.2.5
+  resolution: "@chainsafe/as-sha256@npm:1.2.5"
+  checksum: 10c0/d6b3246aa47f53da60d868494bef91498a7c11362361df75ebafd5a084a572686f15cb545dde0466117020e651072a6ab13fde9210fde60c986529d588667229
   languageName: node
   linkType: hard
 
@@ -408,63 +408,93 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@chainsafe/hashtree-darwin-arm64@npm:1.0.1":
-  version: 1.0.1
-  resolution: "@chainsafe/hashtree-darwin-arm64@npm:1.0.1"
+"@chainsafe/hashtree-darwin-arm64@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@chainsafe/hashtree-darwin-arm64@npm:1.0.2"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@chainsafe/hashtree-linux-arm64-gnu@npm:1.0.1":
-  version: 1.0.1
-  resolution: "@chainsafe/hashtree-linux-arm64-gnu@npm:1.0.1"
+"@chainsafe/hashtree-linux-arm64-gnu@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@chainsafe/hashtree-linux-arm64-gnu@npm:1.0.2"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@chainsafe/hashtree-linux-x64-gnu@npm:1.0.1":
-  version: 1.0.1
-  resolution: "@chainsafe/hashtree-linux-x64-gnu@npm:1.0.1"
+"@chainsafe/hashtree-linux-arm64-musl@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@chainsafe/hashtree-linux-arm64-musl@npm:1.0.2"
+  conditions: os=linux & cpu=arm64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@chainsafe/hashtree-linux-x64-gnu@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@chainsafe/hashtree-linux-x64-gnu@npm:1.0.2"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@chainsafe/hashtree@npm:1.0.1":
-  version: 1.0.1
-  resolution: "@chainsafe/hashtree@npm:1.0.1"
+"@chainsafe/hashtree-linux-x64-musl@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@chainsafe/hashtree-linux-x64-musl@npm:1.0.2"
+  conditions: os=linux & cpu=x64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@chainsafe/hashtree-win32-x64-msvc@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@chainsafe/hashtree-win32-x64-msvc@npm:1.0.2"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@chainsafe/hashtree@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@chainsafe/hashtree@npm:1.0.2"
   dependencies:
-    "@chainsafe/hashtree-darwin-arm64": "npm:1.0.1"
-    "@chainsafe/hashtree-linux-arm64-gnu": "npm:1.0.1"
-    "@chainsafe/hashtree-linux-x64-gnu": "npm:1.0.1"
+    "@chainsafe/hashtree-darwin-arm64": "npm:1.0.2"
+    "@chainsafe/hashtree-linux-arm64-gnu": "npm:1.0.2"
+    "@chainsafe/hashtree-linux-arm64-musl": "npm:1.0.2"
+    "@chainsafe/hashtree-linux-x64-gnu": "npm:1.0.2"
+    "@chainsafe/hashtree-linux-x64-musl": "npm:1.0.2"
+    "@chainsafe/hashtree-win32-x64-msvc": "npm:1.0.2"
   dependenciesMeta:
     "@chainsafe/hashtree-darwin-arm64":
       optional: true
     "@chainsafe/hashtree-linux-arm64-gnu":
       optional: true
+    "@chainsafe/hashtree-linux-arm64-musl":
+      optional: true
     "@chainsafe/hashtree-linux-x64-gnu":
       optional: true
-  checksum: 10c0/fb2589727f222875f2e89459424809782717ce1e24a60c08ca413874134f219061a0389114a14c1fcb66a81ea34f3511a4d5916d8094f7961137fc6230d3c53f
+    "@chainsafe/hashtree-linux-x64-musl":
+      optional: true
+    "@chainsafe/hashtree-win32-x64-msvc":
+      optional: true
+  checksum: 10c0/3ae4b989c015575613e18176bb46edabf99b0ee1982f6797c57c5fc2c5667867611110659f94d70bda7a2d4056f05826eeae8ef575eeb05fdc578cb600748729
   languageName: node
   linkType: hard
 
-"@chainsafe/persistent-merkle-tree@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@chainsafe/persistent-merkle-tree@npm:1.2.0"
+"@chainsafe/persistent-merkle-tree@npm:":
+  version: 1.3.1
+  resolution: "@chainsafe/persistent-merkle-tree@npm:1.3.1"
   dependencies:
-    "@chainsafe/as-sha256": "npm:1.2.0"
-    "@chainsafe/hashtree": "npm:1.0.1"
+    "@chainsafe/as-sha256": "npm:"
+    "@chainsafe/hashtree": "npm:1.0.2"
     "@noble/hashes": "npm:^1.3.0"
-  checksum: 10c0/7f6cb6f92e7182d114a6bcde6d58e4f6267abacf71873ca72cf80c3fd8e7121868c92061760968304cbf4dbb59405da2bfe68f722b10614fedb1e0bf486e4b20
+  checksum: 10c0/d2e331370957402a7946992f1fc44b16f209e939c1d3d964751a72235363ef01341b0b9b493231260d8bfadac92aae8666f20e0677b1ac32772b68f6e2e223ac
   languageName: node
   linkType: hard
 
-"@chainsafe/ssz@npm:1.2.1":
-  version: 1.2.1
-  resolution: "@chainsafe/ssz@npm:1.2.1"
+"@chainsafe/ssz@npm:1.8.1, @chainsafe/ssz@npm:^1.8.0":
+  version: 1.8.1
+  resolution: "@chainsafe/ssz@npm:1.8.1"
   dependencies:
-    "@chainsafe/as-sha256": "npm:1.2.0"
-    "@chainsafe/persistent-merkle-tree": "npm:1.2.0"
-  checksum: 10c0/af9656c28b5a9a4da9a0a170fe2652369bdbc16348f921717530496fe33aa4b064037549c1dd62e9f2f88ba451b5351cfa1d786e3b8a9eff6729ad9b0cb9d337
+    "@chainsafe/as-sha256": "npm:"
+    "@chainsafe/persistent-merkle-tree": "npm:"
+  checksum: 10c0/bb76667eb150924366e73f28e5a98d54433742371cd453504cab616e9963eac83f67af75ae5ba37fb40ebc16044a251dfe82d7d630afd86d49d95913a5a38e34
   languageName: node
   linkType: hard
 
@@ -1425,6 +1455,24 @@ __metadata:
   dependencies:
     call-bind: "npm:^1.0.7"
   checksum: 10c0/fb60b2fb2c674a674d8ebdb8972ccf52f8a62a9c1f5a2ac42557bc0273231c65d642aa2d7627cbb300766a25ae4642acd0f95fba2f8a1ff891086f0cb15807c3
+  languageName: node
+  linkType: hard
+
+"@lodestar/params@npm:^1.49.0":
+  version: 1.49.0
+  resolution: "@lodestar/params@npm:1.49.0"
+  checksum: 10c0/0ab3272a6b09cfb0a86215bb4cbb69f5145c4702a3d5802279615e753667ed175fd348004838fb2a0840e993267665e0ab24342ba3516f21ddf3929a5161eb95
+  languageName: node
+  linkType: hard
+
+"@lodestar/types@npm:1.49.0":
+  version: 1.49.0
+  resolution: "@lodestar/types@npm:1.49.0"
+  dependencies:
+    "@chainsafe/ssz": "npm:^1.8.0"
+    "@lodestar/params": "npm:^1.49.0"
+    ethereum-cryptography: "npm:^2.0.0"
+  checksum: 10c0/e23faca8965d8bb5e3b28f39f1f95c0575cb4b09ffafbf74d7a12c784569913099a9a7ace750d3e6ad96b7e15731d2b4737fabce351f9dee8383459defe5881d
   languageName: node
   linkType: hard
 
@@ -8454,12 +8502,13 @@ __metadata:
     "@aragon/minime": "npm:1.0.0"
     "@aragon/os": "npm:4.4.0"
     "@chainsafe/blst": "npm:2.2.0"
-    "@chainsafe/ssz": "npm:1.2.1"
+    "@chainsafe/ssz": "npm:1.8.1"
     "@commitlint/cli": "npm:^19.8.1"
     "@commitlint/config-conventional": "npm:^19.8.1"
     "@eslint/compat": "npm:1.3.0"
     "@eslint/js": "npm:9.28.0"
     "@iarna/toml": "npm:^2.2.5"
+    "@lodestar/types": "npm:1.49.0"
     "@nomicfoundation/ethereumjs-util": "npm:^9.0.4"
     "@nomicfoundation/hardhat-chai-matchers": "npm:2.0.9"
     "@nomicfoundation/hardhat-ethers": "npm:3.0.9"

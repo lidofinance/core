@@ -9,7 +9,6 @@ import {CLValidatorVerifier} from "./CLValidatorVerifier.sol";
 import {
     AccessControlEnumerableUpgradeable
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
-import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 
@@ -55,6 +54,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     uint256 internal constant PUBKEY_LENGTH = 48;
     uint256 internal constant FAR_FUTURE_EPOCH = type(uint64).max;
     uint256 public immutable SLOTS_PER_EPOCH;
+    uint32 public immutable SECONDS_PER_SLOT;
+    uint64 public immutable GENESIS_TIME;
 
     bytes32 public constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     bytes32 public constant MANAGE_LIMITS_ROLE = keccak256("MANAGE_LIMITS_ROLE");
@@ -63,14 +64,19 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
     constructor(
         address _lidoLocator,
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
-        uint64 _pivotSlot,
-        uint256 _slotsPerEpoch
-    ) CLValidatorVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
+        uint64 _gloasSlot,
+        uint256 _slotsPerEpoch,
+        uint32 _secondsPerSlot,
+        uint64 _genesisTime
+    ) CLValidatorVerifier(_gloasSlot) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
+        if (_slotsPerEpoch == 0) revert ZeroArgument("_slotsPerEpoch");
+        if (_secondsPerSlot == 0) revert ZeroArgument("_secondsPerSlot");
+        if (_genesisTime == 0) revert ZeroArgument("_genesisTime");
         LOCATOR = ILidoLocator(_lidoLocator);
         SLOTS_PER_EPOCH = _slotsPerEpoch;
+        SECONDS_PER_SLOT = _secondsPerSlot;
+        GENESIS_TIME = _genesisTime;
         _disableInitializers();
     }
 
@@ -78,7 +84,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     /// @param _admin Address to receive DEFAULT_ADMIN_ROLE
     /// @param _maxValidatorsPerTopUp Maximum number of validators per single topUp call
     /// @param _minTopUpBlockDistance Minimum blocks between topUp calls
-    /// @param _maxRootAgeSec Maximum age (seconds) of beacon root relative to block.timestamp
+    /// @param _maxRootAgeSec Maximum age (seconds) of the proved beacon block's slot relative to block.timestamp.
+    ///        Must be at least SECONDS_PER_SLOT.
     /// @param _targetBalanceGwei Target validator balance ceiling after top-up (in Gwei).
     ///        Top-up amount = targetBalance - currentTotal.
     /// @param _minTopUpGwei Minimum top-up that can be performed (in Gwei). If calculated top-up < minTopUp, returns 0.
@@ -149,8 +156,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
      *  - validatorIndices length exceeds maxValidatorsPerTopUp (`MaxValidatorsPerTopUpExceeded`);
      *  - validatorIndices is not strictly increasing (not sorted or contains duplicates) (`InvalidValidatorIndicesSortOrder`);
      *  - fewer than minBlockDistance blocks have passed since the last top-up (`MinBlockDistanceNotMet`);
-     *  - the beacon root is older than maxRootAge relative to block.timestamp (`RootIsTooOld`);
-     *  - the beacon root childBlockTimestamp is not newer than the last top-up timestamp
+     *  - the proved beacon block's slot is older than maxRootAge relative to block.timestamp (`RootIsTooOld`);
+     *  - the proved beacon block's slot timestamp is not newer than the last top-up timestamp
      *    (`RootPrecedesLastTopUp`);
      *  - the module's withdrawal credentials are not of type 0x02 (`WrongWithdrawalCredentials`);
      *  - any validator pubkey has a length different from 48 bytes (`WrongPubkeyLength`);
@@ -179,8 +186,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         _requireBlockDistancePassed();
 
         // Check proof age
-        // 0. _topUps.beaconRootData.childBlockTimestamp is newer than timestamp of last top up
-        // 1. _topUps.beaconRootData.childBlockTimestamp is not older than maxRootAge
+        // 0. The proved beacon block's slot timestamp is newer than the timestamp of the last top-up
+        // 1. The proved beacon block's slot timestamp is not older than maxRootAge
         _verifyRootAge(_topUps.beaconRootData);
 
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
@@ -266,7 +273,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     }
 
     /**
-     * @notice Returns the maximum age (seconds) of beacon root relative to block.timestamp
+     * @notice Returns the maximum age (seconds) of the proved beacon block's slot relative to block.timestamp
      */
     function getMaxRootAge() external view returns (uint256) {
         return _gatewayStorage().maxRootAge;
@@ -314,8 +321,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         _setTopUpBalanceLimits(_targetBalanceGwei, _minTopUpGwei);
     }
 
-    /// @notice Sets the maximum allowed age of beacon root relative to current block timestamp
-    /// @param _newValue Maximum age in seconds
+    /// @notice Sets the maximum allowed age of the proved beacon block's slot relative to current block timestamp
+    /// @param _newValue Maximum age in seconds; must be at least SECONDS_PER_SLOT, or no state could ever be proven
     function setMaxRootAge(uint256 _newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
         _setMaxRootAge(_newValue);
     }
@@ -347,6 +354,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     function _setMaxRootAge(uint256 _newValue) internal {
         if (_newValue == 0) revert ZeroValue();
         if (_newValue > type(uint16).max) revert TooLargeValue();
+        if (_newValue < SECONDS_PER_SLOT) revert MaxRootAgeBelowSlotDuration();
         _gatewayStorage().maxRootAge = uint16(_newValue);
 
         emit MaxRootAgeChanged(_newValue);
@@ -378,11 +386,15 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     }
 
     function _verifyRootAge(BeaconRootData calldata _beaconRootData) internal view {
-        if (block.timestamp > _beaconRootData.childBlockTimestamp + _gatewayStorage().maxRootAge) {
+        uint256 rootTimestamp = GENESIS_TIME + _beaconRootData.slot * SECONDS_PER_SLOT;
+        Storage storage $ = _gatewayStorage();
+
+        if (block.timestamp > rootTimestamp + $.maxRootAge) {
             revert RootIsTooOld();
         }
 
-        if (_beaconRootData.childBlockTimestamp <= _gatewayStorage().lastTopUpTimestamp) {
+        // Gloas processes a payload's deposit requests in the next beacon block, so a same-slot state is too early.
+        if (rootTimestamp <= $.lastTopUpTimestamp) {
             revert RootPrecedesLastTopUp();
         }
     }
@@ -440,4 +452,5 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     error InvalidValidatorIndicesSortOrder();
     error ValidatorIsNotActivated();
     error MinTopUpExceedsTarget();
+    error MaxRootAgeBelowSlotDuration();
 }
