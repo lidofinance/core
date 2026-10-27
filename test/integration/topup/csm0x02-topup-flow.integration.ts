@@ -102,10 +102,13 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CSM 0x0
     );
 
     const params = { reportElVault: false, reportWithdrawalsVault: false, reportBurner: false, skipWithdrawals: true };
-    const pendingBalance = before.clPendingBalanceAtLastReport + topUpAmount;
+    // Deposits made on the forked network after its last oracle report are not activated yet:
+    // carry them as pending in both reports, so only the top-up moves between the balances.
+    const carriedPending = before.clPendingBalanceAtLastReport + before.depositedSinceLastReport;
+    const pendingBalance = carriedPending + topUpAmount;
     const pendingReport = await report(ctx, {
       ...params,
-      clDiff: topUpAmount,
+      clDiff: before.depositedSinceLastReport + topUpAmount,
       clPendingBalanceGwei: pendingBalance / ONE_GWEI,
       ...(await buildModuleAccountingReportParams(ctx)),
     });
@@ -119,14 +122,14 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CSM 0x0
     const activationReport = await report(ctx, {
       ...params,
       clDiff: 0n,
-      clPendingBalanceGwei: before.clPendingBalanceAtLastReport / ONE_GWEI,
+      clPendingBalanceGwei: carriedPending / ONE_GWEI,
       ...(await buildModuleAccountingReportParams(ctx, {
         validatorsDeltaGweiByModule: new Map([[target.moduleId, topUpAmount / ONE_GWEI]]),
       })),
     });
     const activationReceipt = (await activationReport.reportTx!.wait())!;
     const after = await lido.getBalanceStats();
-    expect(after.clPendingBalanceAtLastReport).to.equal(before.clPendingBalanceAtLastReport);
+    expect(after.clPendingBalanceAtLastReport).to.equal(carriedPending);
     expect(after.clValidatorsBalanceAtLastReport).to.equal(before.clValidatorsBalanceAtLastReport + topUpAmount);
     expect(await stakingRouter.getModuleValidatorsBalance(target.moduleId)).to.equal(moduleBalanceBefore + topUpAmount);
     expect(ctx.getEvents(activationReceipt, "TokenRebased")[0].args.sharesMintedAsFees).to.equal(0n);

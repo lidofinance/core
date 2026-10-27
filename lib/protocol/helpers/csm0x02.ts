@@ -2,11 +2,17 @@ import { expect } from "chai";
 import { Contract } from "ethers";
 import { ethers } from "hardhat";
 
-import { certainAddress, ether, impersonate } from "lib";
+import { certainAddress, ether, impersonate, ONE_GWEI } from "lib";
 
 import { ProtocolContext } from "../types";
 
-import { depositAndReportValidators } from "./staking";
+import {
+  ensureFirstPostMigrationReport,
+  normalizeWithdrawalVaultBaseline,
+  report,
+  waitNextAvailableReportTime,
+} from "./accounting";
+import { buildModuleAccountingReportParams, depositAndReportValidators } from "./staking";
 import { randomPubkeys, randomSignatures } from "./staking-module";
 
 const CSM0X02_ABI = [
@@ -102,4 +108,42 @@ export const csm0x02EnsureDepositedKeys = async (ctx: ProtocolContext, keysCount
     pubkeys.push(await module.getSigningKeys(operatorId, keyIndex, 1n));
   }
   return { moduleId, operatorIds, keyIndices, pubkeys };
+};
+
+/**
+ * Make CSM 0x02 hold a non-zero validators balance in StakingRouter.
+ * On an empty module, deposit and report a fresh key. On a fork taken soon after the module
+ * activation, its initial deposits fill the module share but are not reported by the oracle yet:
+ * report them as activated, moving the deposits from the CL pending balance to the module balance.
+ */
+export const csm0x02EnsureValidatorsBalance = async (ctx: ProtocolContext) => {
+  const { lido, stakingRouter } = ctx.contracts;
+  const { moduleId } = getCSM0x02Module(ctx);
+  if ((await stakingRouter.getModuleValidatorsBalance(moduleId)) === 0n) {
+    const { totalDepositedValidators } = await stakingRouter.getStakingModuleSummary(moduleId);
+    if (totalDepositedValidators === 0n) {
+      await csm0x02EnsureDepositedKeys(ctx, 1n);
+    } else {
+      await ensureFirstPostMigrationReport(ctx);
+      await normalizeWithdrawalVaultBaseline(ctx, 0n);
+      await waitNextAvailableReportTime(ctx);
+
+      const { clPendingBalanceAtLastReport, depositedForCurrentReport } = await lido.getBalanceStats();
+      const activated = totalDepositedValidators * (await stakingRouter.INITIAL_DEPOSIT_SIZE());
+      await report(ctx, {
+        waitNextReportTime: false,
+        clDiff: depositedForCurrentReport,
+        clAppearedValidators: totalDepositedValidators,
+        clPendingBalanceGwei: (clPendingBalanceAtLastReport + depositedForCurrentReport - activated) / ONE_GWEI,
+        reportElVault: false,
+        reportWithdrawalsVault: false,
+        skipWithdrawals: true,
+        ...(await buildModuleAccountingReportParams(ctx, {
+          validatorsDeltaGweiByModule: new Map([[moduleId, activated / ONE_GWEI]]),
+        })),
+      });
+    }
+  }
+  expect(await stakingRouter.getModuleValidatorsBalance(moduleId)).to.be.gt(0n);
+  return { moduleId };
 };
