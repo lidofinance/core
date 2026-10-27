@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 /**
- * @notice State of a replenishing quota, packed into one storage slot
+ * @notice State of a replenishing quota, packed into one storage slot; all fields are zero for a disabled quota
  * @param maxLimit Maximum quota that can be accumulated
  * @param prevLimit Quota left after the last update
  * @param limitPerFrame Quota restored per frame
@@ -24,21 +24,9 @@ struct WithdrawalLimitData {
  * @title WithdrawalLimit
  * @author Lido
  * @notice A replenishing quota per time frame, as in `RateLimit`, with 64-bit amounts to count balances in gwei.
- *         Unlike `RateLimit`, changing the limits keeps the quota restored so far.
+ *         Unlike `RateLimit`, changing the limits keeps the quota restored so far, and a quota can be disabled.
  */
 library WithdrawalLimit {
-    struct DataStorage {
-        WithdrawalLimitData data;
-    }
-
-    function load(bytes32 position) internal view returns (WithdrawalLimitData memory) {
-        return _storage(position).data;
-    }
-
-    function store(WithdrawalLimitData memory data, bytes32 position) internal {
-        _storage(position).data = data;
-    }
-
     function calculateCurrentLimit(
         WithdrawalLimitData memory data,
         uint256 timestamp
@@ -54,6 +42,7 @@ library WithdrawalLimit {
         }
     }
 
+    /// @dev Must be called only for an enabled quota: a disabled one has no frame to align the timestamp to
     function updatePrevLimit(
         WithdrawalLimitData memory data,
         uint256 newLimit,
@@ -71,6 +60,11 @@ library WithdrawalLimit {
         return data;
     }
 
+    /**
+     * @dev Sets new limits. `maxLimit == 0` disables the quota and requires the other parameters to be zero too.
+     *      An enabled quota keeps the quota restored so far, capped by the new maximum;
+     *      a quota that was disabled starts full.
+     */
     function setLimits(
         WithdrawalLimitData memory data,
         uint256 maxLimit,
@@ -78,7 +72,13 @@ library WithdrawalLimit {
         uint256 frameDurationInSec,
         uint256 timestamp
     ) internal pure returns (WithdrawalLimitData memory) {
+        if (maxLimit == 0) {
+            if (limitPerFrame != 0 || frameDurationInSec != 0) revert InvalidDisabledLimit();
+            return WithdrawalLimitData(0, 0, 0, 0, 0);
+        }
+
         if (maxLimit > type(uint64).max) revert TooLargeMaxLimit();
+        if (limitPerFrame == 0) revert ZeroLimitPerFrame();
         if (limitPerFrame > maxLimit) revert TooLargeLimitPerFrame();
         if (frameDurationInSec == 0) revert ZeroFrameDuration();
         if (frameDurationInSec > type(uint32).max) revert TooLargeFrameDuration();
@@ -101,17 +101,17 @@ library WithdrawalLimit {
         return data.maxLimit != 0;
     }
 
-    function _storage(bytes32 position) private pure returns (DataStorage storage $) {
-        assembly {
-            $.slot := position
-        }
-    }
-
     /// @notice Thrown when the new remaining quota exceeds the maximum
     error LimitExceeded();
 
+    /// @notice Thrown when a disabled quota (zero maximum) has a non-zero restore rate or frame duration
+    error InvalidDisabledLimit();
+
     /// @notice Thrown when the maximum quota exceeds uint64
     error TooLargeMaxLimit();
+
+    /// @notice Thrown when an enabled quota is never restored
+    error ZeroLimitPerFrame();
 
     /// @notice Thrown when the quota restored per frame exceeds the maximum quota
     error TooLargeLimitPerFrame();

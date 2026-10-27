@@ -11,7 +11,7 @@ import {
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ITriggerableWithdrawalsBus} from "contracts/common/interfaces/ITriggerableWithdrawalsBus.sol";
 import {ITriggerableWithdrawalsGateway} from "contracts/common/interfaces/ITriggerableWithdrawalsGateway.sol";
-import {WithdrawalIntent, MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI} from "contracts/common/interfaces/WithdrawalIntent.sol";
+import {WithdrawalIntent, MAX_PWR_AMOUNT_GWEI} from "contracts/common/interfaces/WithdrawalIntent.sol";
 
 /**
  * @title TriggerableWithdrawalsBus
@@ -23,10 +23,15 @@ import {WithdrawalIntent, MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI} from "contracts/co
  * 1. The ValidatorsExitBusOracle appends decoded report records to the tail of the queue (ADD_WITHDRAWAL_INTENTS_ROLE)
  * 2. Anyone pops intents from the head of the queue in order, paying the EIP-7002 fee;
  *    the bus forwards them to the TriggerableWithdrawalsGateway resolved via LidoLocator
+ *
+ * Intents cannot be reordered, skipped or dismissed one by one. The only way to stop queued intents is
+ * `clearWithdrawalIntents`, which drops the whole queue (CLEAR_WITHDRAWAL_INTENTS_ROLE).
  */
 contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlEnumerableUpgradeable {
     /// @notice role that allows to append withdrawal intents to the queue
     bytes32 public constant ADD_WITHDRAWAL_INTENTS_ROLE = keccak256("ADD_WITHDRAWAL_INTENTS_ROLE");
+    /// @notice role that allows to drop all unprocessed intents; only a DAO vote holds it, within that vote
+    bytes32 public constant CLEAR_WITHDRAWAL_INTENTS_ROLE = keccak256("CLEAR_WITHDRAWAL_INTENTS_ROLE");
 
     uint256 internal constant PUBKEY_LENGTH = 48;
 
@@ -83,7 +88,7 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
             if (pubkey.length != PUBKEY_LENGTH) revert InvalidPubkeyLength(i, pubkey.length);
 
             uint64 amount = intents[i].amount;
-            if (amount > MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI) revert WithdrawalAmountTooLarge(i, amount);
+            if (amount > MAX_PWR_AMOUNT_GWEI) revert WithdrawalAmountTooLarge(i, amount);
 
             $.intents[firstIndex + i] = PackedIntent({
                 pubkeyHead: bytes32(pubkey[:32]),
@@ -98,37 +103,32 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
     }
 
     /**
-     * @notice Pops up to `count` intents from the head of the queue and executes them as withdrawal requests
+     * @notice Pops exactly `count` intents from the head of the queue and executes them as withdrawal requests
      *         through the TriggerableWithdrawalsGateway, forwarding `msg.value` as the EIP-7002 fee
-     * @param count Maximum number of intents to process
+     * @param count Number of intents to process
      * @param refundRecipient Receiver of the unused fee; `address(0)` refunds to `msg.sender`
-     * @return processedCount Number of intents processed, less than `count` if the queue holds fewer intents
-     * @dev If the gateway reverts (e.g. the batch exceeds its remaining limit), the queue is left unchanged
+     * @dev Reverts if the queue holds fewer than `count` intents.
+     *      If the gateway reverts (e.g. the batch exceeds its remaining limits), the queue is left unchanged.
      */
-    function processWithdrawalIntents(
-        uint256 count,
-        address refundRecipient
-    ) external payable returns (uint256 processedCount) {
+    function processWithdrawalIntents(uint256 count, address refundRecipient) external payable {
         if (count == 0) revert ZeroArgument("count");
 
         Storage storage $ = _storage();
         uint256 head = $.head;
         uint256 queued = $.tail - head;
-        if (queued == 0) revert NoWithdrawalIntents();
+        if (count > queued) revert InsufficientWithdrawalIntents(count, queued);
 
-        processedCount = count < queued ? count : queued;
-
-        WithdrawalIntent[] memory intents = new WithdrawalIntent[](processedCount);
-        for (uint256 i = 0; i < processedCount; ++i) {
+        WithdrawalIntent[] memory intents = new WithdrawalIntent[](count);
+        for (uint256 i = 0; i < count; ++i) {
             uint256 index = head + i;
             intents[i] = _unpack($.intents[index]);
             delete $.intents[index];
         }
 
         // forge-lint: disable-next-line(unsafe-typecast)
-        $.head = uint128(head + processedCount);
+        $.head = uint128(head + count);
 
-        emit WithdrawalIntentsProcessed(head, processedCount);
+        emit WithdrawalIntentsProcessed(head, count);
 
         // The gateway refunds to its caller when no recipient is set, and this contract cannot receive ETH
         if (refundRecipient == address(0)) {
@@ -139,6 +139,23 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
             intents,
             refundRecipient
         );
+    }
+
+    /**
+     * @notice Drops all unprocessed intents at once. Nothing is sent to the gateway and no gateway limit is consumed.
+     * @dev Emergency measure: a DAO vote grants CLEAR_WITHDRAWAL_INTENTS_ROLE, calls this and revokes the role.
+     *      Does not revert on an empty queue, so such a vote does not fail if the queue was drained before enactment.
+     *      The storage of dropped intents is not cleared, so the call costs the same for any queue length;
+     *      queue indices only grow, so it is never read again.
+     */
+    function clearWithdrawalIntents() external onlyRole(CLEAR_WITHDRAWAL_INTENTS_ROLE) {
+        Storage storage $ = _storage();
+        uint128 tail = $.tail;
+        uint256 clearedCount = tail - $.head;
+
+        $.head = tail;
+
+        emit WithdrawalIntentsCleared(clearedCount);
     }
 
     // ==============
@@ -217,6 +234,12 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
      */
     event WithdrawalIntentsProcessed(uint256 firstIndex, uint256 count);
 
+    /**
+     * @notice Emitted when all unprocessed intents are dropped from the queue
+     * @param clearedCount Number of dropped intents
+     */
+    event WithdrawalIntentsCleared(uint256 clearedCount);
+
     // ========
     //  Errors
     // ========
@@ -235,14 +258,16 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
     error InvalidPubkeyLength(uint256 index, uint256 length);
 
     /**
-     * @notice Thrown when a partial withdrawal amount exceeds MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI
+     * @notice Thrown when a partial withdrawal amount exceeds MAX_PWR_AMOUNT_GWEI
      * @param index Index of the invalid intent in the passed array
      * @param amount Requested amount in gwei
      */
     error WithdrawalAmountTooLarge(uint256 index, uint256 amount);
 
     /**
-     * @notice Thrown when there are no intents in the queue to process
+     * @notice Thrown when the queue holds fewer intents than requested to process
+     * @param requested Number of intents requested to process
+     * @param available Number of intents in the queue
      */
-    error NoWithdrawalIntents();
+    error InsufficientWithdrawalIntents(uint256 requested, uint256 available);
 }

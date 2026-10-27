@@ -1,5 +1,7 @@
 import { ethers } from "hardhat";
 
+import { TriggerableWithdrawalsGateway } from "typechain-types";
+
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
@@ -35,6 +37,16 @@ export async function main() {
     { name: "OperatorGrid", address: state[Sk.operatorGrid].proxy.address },
     { name: "LazyOracle", address: state[Sk.lazyOracle].proxy.address },
   ];
+
+  // The deployer set the triggerable withdrawals gateway consumer limits in `0083` and `0140`.
+  // Only the Agent changes them afterwards, as on mainnet (LIP-38: a limit change needs a DAO vote).
+  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
+    "TriggerableWithdrawalsGateway",
+    state[Sk.triggerableWithdrawalsGateway].address,
+  );
+  const limitManagerRole = await triggerableWithdrawalsGateway.TW_EXIT_LIMIT_MANAGER_ROLE();
+  await makeTx(triggerableWithdrawalsGateway, "grantRole", [limitManagerRole, agent], { from: deployer });
+  await makeTx(triggerableWithdrawalsGateway, "renounceRole", [limitManagerRole, deployer], { from: deployer });
 
   for (const contract of ozAdminTransfers) {
     const contractInstance = await loadContract(contract.name, contract.address);

@@ -340,13 +340,7 @@ export async function main() {
     Sk.triggerableWithdrawalsGateway,
     "TriggerableWithdrawalsGateway",
     deployer,
-    [
-      admin,
-      locator.address,
-      triggerableWithdrawalsGatewayParams.maxWithdrawalLimitGwei,
-      triggerableWithdrawalsGatewayParams.withdrawalLimitPerFrameGwei,
-      triggerableWithdrawalsGatewayParams.frameDurationInSec,
-    ],
+    [admin, locator.address],
   );
   const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
     "TriggerableWithdrawalsGateway",
@@ -371,10 +365,19 @@ export async function main() {
 
   await makeTx(triggerableWithdrawalsBus, "initialize", [admin], { from: deployer });
 
+  // The deployer sets the consumer limits until `0150` hands TW_EXIT_LIMIT_MANAGER_ROLE over to the Agent.
+  // A consumer without limits cannot submit requests, so this also lets the bus call the gateway.
   await makeTx(
     triggerableWithdrawalsGateway,
     "grantRole",
-    [await triggerableWithdrawalsGateway.ADD_WITHDRAWAL_REQUEST_ROLE(), triggerableWithdrawalsBus_.address],
+    [await triggerableWithdrawalsGateway.TW_EXIT_LIMIT_MANAGER_ROLE(), deployer],
+    { from: deployer },
+  );
+  const { busLimits } = triggerableWithdrawalsGatewayParams;
+  await makeTx(
+    triggerableWithdrawalsGateway,
+    "setConsumerLimits",
+    [triggerableWithdrawalsBus_.address, busLimits.pwr, busLimits.fwr],
     { from: deployer },
   );
   await makeTx(

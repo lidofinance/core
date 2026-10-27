@@ -154,11 +154,20 @@ name = "Lido: stETH Withdrawal NFT"   # NFT collection name
 symbol = "unstETH"                    # NFT collection symbol
 # baseUri is set to null for testnet deployment
 
-# Triggerable withdrawals gateway, the withdrawal limit is in gwei
-[triggerableWithdrawalsGateway]
-maxWithdrawalLimitGwei = 358_400_000_000_000  # Maximum quota (358,400 ETH), at least 2048 ETH (weight of a full withdrawal)
-withdrawalLimitPerFrameGwei = 32_000_000_000  # Quota restored per frame (32 ETH)
-frameDurationInSec = 48                       # Duration of each frame in seconds
+# Triggerable withdrawals gateway limits per consumer (LIP-38 "Initial limits"):
+# `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators.
+# All zero disables a limit; an enabled PWR limit holds at least 2016 ETH.
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: one VEBO report of either kind per 8 hours
+pwr = { maxLimit = 19_200_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 19,200 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 500, limitPerFrame = 5, frameDurationInSec = 288 }                             # 500 validators, 5 per 288 s
+
+[triggerableWithdrawalsGateway.ejectorLimitsWC0x01]   # Ejector of a 0x01 staking module: full withdrawals only
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 500, limitPerFrame = 1, frameDurationInSec = 192 }
+
+[triggerableWithdrawalsGateway.ejectorLimitsWC0x02]   # Ejector of a 0x02 staking module: full withdrawals only
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed

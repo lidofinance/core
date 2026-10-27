@@ -15,24 +15,33 @@ import {OmnibusBase} from "../utils/OmnibusBase.sol";
 
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
 import {SRPhase2UpgradeTemplate} from "./SRPhase2UpgradeTemplate.sol";
-import {IWithdrawalsManagerProxy} from "./SRPhase2UpgradeTypes.sol";
+import {
+    GatewayConsumerLimits,
+    IDualGovernanceTiebreaker,
+    ITriggerableWithdrawalsGateway,
+    IWithdrawalsManagerProxy
+} from "./SRPhase2UpgradeTypes.sol";
 
 /// @title SRPhase2UpgradeVoteScript
 /// @notice Omnibus for the SR phase 2 (LIP-38) upgrade: replaces the TriggerableWithdrawalsGateway,
 ///         plugs in the TriggerableWithdrawalsBus and removes the exit delay penalties.
+/// @dev The Dual Governance proposal has four calls. The first runs the upgrade through the Agent, starting
+///      with `startUpgrade`. The next two replace the gateway among the tiebreaker sealable withdrawal blockers:
+///      only the Dual Governance admin executor may change them, so they cannot go through the Agent.
+///      The last one calls `finishUpgrade` through the Agent, so the template checks the blockers too.
 contract SRPhase2UpgradeVoteScript is OmnibusBase {
     using CallsScriptBuilder for CallsScriptBuilder.Context;
     using Strings for uint256;
 
     error InvalidItemsCount(uint256 actual, uint256 expected);
 
-    uint256 public constant DG_ITEMS_COUNT = 1;
+    uint256 public constant DG_ITEMS_COUNT = 4;
     uint256 public constant VOTING_ITEMS_COUNT = 0;
-    uint256 public constant RAW_ACTIONS_COUNT = 14;
+    /// @notice Agent actions of the first Dual Governance call, besides one `setConsumerLimits` per gateway consumer
+    uint256 public constant FIXED_RAW_ACTIONS_COUNT = 12;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
-    bytes32 internal constant ADD_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_WITHDRAWAL_REQUEST_ROLE");
     bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
     bytes32 internal constant ADD_WITHDRAWAL_INTENTS_ROLE = keccak256("ADD_WITHDRAWAL_INTENTS_ROLE");
     bytes32 internal constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE =
@@ -65,6 +74,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         items = new VoteItem[](VOTING_ITEMS_COUNT);
     }
 
+    /// @notice Agent actions of the first Dual Governance call, numbered as its sub-items.
     function getVoteItemsRaw() external view returns (VoteItem[] memory) {
         VoteItem[] memory items = _getVoteItems();
         for (uint256 i = 0; i < items.length; ++i) {
@@ -74,6 +84,9 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory items) {
+        SRPhase2UpgradeConfig config = SRPhase2UpgradeConfig(CONFIG);
+        address dualGovernance = address(DUAL_GOVERNANCE);
+
         VoteItem[] memory rawItems = _getVoteItems();
         CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
         for (uint256 i = 0; i < rawItems.length; ++i) {
@@ -82,17 +95,42 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
 
         items = new VoteItem[](DG_ITEMS_COUNT);
         items[0] = VoteItem({
-            description: "1. Submit the SR phase 2 (LIP-38) upgrade to Dual Governance",
+            description: "1. Upgrade the SR phase 2 (LIP-38) contracts through the Agent",
             call: _votingCall(AGENT, abi.encodeCall(IForwarder.forward, (scriptBuilder.getResult())))
+        });
+        items[1] = VoteItem({
+            description: "2. Remove the old TriggerableWithdrawalsGateway from the Dual Governance tiebreaker sealable withdrawal blockers",
+            call: _votingCall(
+                dualGovernance,
+                abi.encodeCall(
+                    IDualGovernanceTiebreaker.removeTiebreakerSealableWithdrawalBlocker,
+                    (config.OLD_TRIGGERABLE_WITHDRAWALS_GATEWAY())
+                )
+            )
+        });
+        items[2] = VoteItem({
+            description: "3. Add the new TriggerableWithdrawalsGateway to the Dual Governance tiebreaker sealable withdrawal blockers",
+            call: _votingCall(
+                dualGovernance,
+                abi.encodeCall(
+                    IDualGovernanceTiebreaker.addTiebreakerSealableWithdrawalBlocker,
+                    (config.NEW_TRIGGERABLE_WITHDRAWALS_GATEWAY())
+                )
+            )
+        });
+        items[3] = VoteItem({
+            description: "4. Call SRPhase2UpgradeTemplate.finishUpgrade",
+            call: _forwardCall(AGENT, TEMPLATE, abi.encodeCall(SRPhase2UpgradeTemplate.finishUpgrade, ()))
         });
     }
 
     function _getVoteItems() internal view returns (VoteItem[] memory items) {
         SRPhase2UpgradeConfig config = SRPhase2UpgradeConfig(CONFIG);
         address newGateway = config.NEW_TRIGGERABLE_WITHDRAWALS_GATEWAY();
-        address bus = config.TRIGGERABLE_WITHDRAWALS_BUS();
+        GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
 
-        items = new VoteItem[](RAW_ACTIONS_COUNT);
+        uint256 rawActionsCount = FIXED_RAW_ACTIONS_COUNT + consumers.length;
+        items = new VoteItem[](rawActionsCount);
         uint256 i = 0;
 
         items[i++] = _item(
@@ -162,11 +200,24 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             newGateway,
             abi.encodeCall(IAccessControl.grantRole, (TW_EXIT_LIMIT_MANAGER_ROLE, AGENT))
         );
-        items[i++] = _item(
-            "Grant ADD_WITHDRAWAL_REQUEST_ROLE on the new TriggerableWithdrawalsGateway to the TriggerableWithdrawalsBus",
-            newGateway,
-            abi.encodeCall(IAccessControl.grantRole, (ADD_WITHDRAWAL_REQUEST_ROLE, bus))
-        );
+        // A consumer without limits cannot submit requests, so these items also decide who may call the gateway.
+        // The first consumer is the bus.
+        for (uint256 c = 0; c < consumers.length; ++c) {
+            items[i++] = _item(
+                string.concat(
+                    c == 0
+                        ? "Set the limits of the TriggerableWithdrawalsBus "
+                        : "Set the limits of the staking module ejector ",
+                    Strings.toHexString(consumers[c].consumer),
+                    " on the new TriggerableWithdrawalsGateway"
+                ),
+                newGateway,
+                abi.encodeCall(
+                    ITriggerableWithdrawalsGateway.setConsumerLimits,
+                    (consumers[c].consumer, consumers[c].pwrLimit, consumers[c].fwrLimit)
+                )
+            );
+        }
         items[i++] = _item(
             "Register CircuitBreaker pauser for the new TriggerableWithdrawalsGateway",
             config.CIRCUIT_BREAKER(),
@@ -176,17 +227,11 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         // --- TriggerableWithdrawalsBus ---
         items[i++] = _item(
             "Grant ADD_WITHDRAWAL_INTENTS_ROLE on the TriggerableWithdrawalsBus to the ValidatorsExitBusOracle",
-            bus,
+            config.TRIGGERABLE_WITHDRAWALS_BUS(),
             abi.encodeCall(IAccessControl.grantRole, (ADD_WITHDRAWAL_INTENTS_ROLE, config.VALIDATORS_EXIT_BUS_ORACLE()))
         );
 
-        items[i++] = _item(
-            "Call SRPhase2UpgradeTemplate.finishUpgrade",
-            TEMPLATE,
-            abi.encodeCall(SRPhase2UpgradeTemplate.finishUpgrade, ())
-        );
-
-        if (i != RAW_ACTIONS_COUNT) revert InvalidItemsCount(i, RAW_ACTIONS_COUNT);
+        if (i != rawActionsCount) revert InvalidItemsCount(i, rawActionsCount);
     }
 
     function _item(string memory description, address to, bytes memory data) private pure returns (VoteItem memory) {

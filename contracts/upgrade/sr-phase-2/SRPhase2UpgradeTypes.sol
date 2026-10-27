@@ -35,10 +35,15 @@ struct SRPhase2UpgradeParameters {
     address triggerableWithdrawalsBus;
     // removed from the protocol
     address validatorExitDelayVerifier;
-    // withdrawal limit the new gateway is deployed with
-    uint256 maxWithdrawalLimitGwei;
-    uint256 withdrawalLimitPerFrameGwei;
-    uint256 withdrawalLimitFrameDurationInSec;
+    // limits the vote sets on the new gateway: the bus first, then the staking module ejectors
+    GatewayConsumerLimits[] gatewayConsumers;
+}
+
+/// @notice Limits the vote sets for one consumer of the new TriggerableWithdrawalsGateway (LIP-38 "Initial limits").
+struct GatewayConsumerLimits {
+    address consumer;
+    ITriggerableWithdrawalsGateway.LimitConfig pwrLimit; // in gwei
+    ITriggerableWithdrawalsGateway.LimitConfig fwrLimit; // in validators
 }
 
 /// @dev `WithdrawalVault` sits behind `WithdrawalsManagerProxy`, not an `OssifiableProxy`.
@@ -59,26 +64,51 @@ interface IWithdrawalVault {
 }
 
 interface ITriggerableWithdrawalsGateway {
+    struct LimitConfig {
+        uint256 maxLimit;
+        uint256 limitPerFrame;
+        uint256 frameDurationInSec;
+    }
+
+    struct LimitInfo {
+        uint256 maxLimit;
+        uint256 limitPerFrame;
+        uint256 frameDurationInSec;
+        uint256 prevLimit;
+        uint256 currentLimit;
+    }
+
     function LOCATOR() external view returns (address);
 
     function isPaused() external view returns (bool);
 
-    function getWithdrawalLimitFullInfo()
-        external
-        view
-        returns (
-            uint256 maxWithdrawalLimitGwei,
-            uint256 withdrawalLimitPerFrameGwei,
-            uint256 frameDurationInSec,
-            uint256 prevWithdrawalLimitGwei,
-            uint256 currentWithdrawalLimitGwei
-        );
+    function setConsumerLimits(address consumer, LimitConfig calldata pwrLimit, LimitConfig calldata fwrLimit) external;
+
+    function getConsumerLimitsFullInfo(
+        address consumer
+    ) external view returns (LimitInfo memory pwrLimit, LimitInfo memory fwrLimit);
 }
 
 interface ITriggerableWithdrawalsBus {
     function LOCATOR() external view returns (address);
 
     function unprocessedIntentsCount() external view returns (uint256);
+}
+
+/// @dev The tiebreaker part of DualGovernance; its `Duration` type is a uint32.
+interface IDualGovernanceTiebreaker {
+    struct TiebreakerDetails {
+        bool isTie;
+        address tiebreakerCommittee;
+        uint32 tiebreakerActivationTimeout;
+        address[] sealableWithdrawalBlockers;
+    }
+
+    function addTiebreakerSealableWithdrawalBlocker(address sealableWithdrawalBlocker) external;
+
+    function removeTiebreakerSealableWithdrawalBlocker(address sealableWithdrawalBlocker) external;
+
+    function getTiebreakerDetails() external view returns (TiebreakerDetails memory);
 }
 
 interface IStakingRouter {

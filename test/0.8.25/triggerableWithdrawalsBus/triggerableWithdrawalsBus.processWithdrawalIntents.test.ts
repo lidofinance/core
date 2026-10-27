@@ -17,7 +17,7 @@ import { Snapshot } from "test/suite";
 
 import {
   fullWithdrawal,
-  MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI,
+  MAX_PWR_AMOUNT_GWEI,
   partialWithdrawal,
   toIntents,
   WithdrawalIntent,
@@ -37,7 +37,7 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
     partialWithdrawal(1, 1n),
     partialWithdrawal(2, 32n * 10n ** 9n),
     fullWithdrawal(3),
-    partialWithdrawal(4, MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI),
+    partialWithdrawal(4, MAX_PWR_AMOUNT_GWEI),
   ];
 
   let originalState: string;
@@ -77,18 +77,29 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
     });
 
     it("reverts if the queue is empty", async () => {
-      await expect(
-        bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }),
-      ).to.be.revertedWithCustomError(bus, "NoWithdrawalIntents");
+      await expect(bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }))
+        .to.be.revertedWithCustomError(bus, "InsufficientWithdrawalIntents")
+        .withArgs(1, 0);
     });
 
     it("reverts once all intents are processed", async () => {
       await addQueued();
       await bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
 
-      await expect(
-        bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }),
-      ).to.be.revertedWithCustomError(bus, "NoWithdrawalIntents");
+      await expect(bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }))
+        .to.be.revertedWithCustomError(bus, "InsufficientWithdrawalIntents")
+        .withArgs(1, 0);
+    });
+
+    it("reverts if count exceeds the queue length and leaves the queue unchanged", async () => {
+      await addQueued();
+
+      await expect(bus.connect(executor).processWithdrawalIntents(QUEUED.length + 1, executor.address, { value: 10n }))
+        .to.be.revertedWithCustomError(bus, "InsufficientWithdrawalIntents")
+        .withArgs(QUEUED.length + 1, QUEUED.length);
+
+      expect(await bus.unprocessedIntentsCount()).to.equal(QUEUED.length);
+      expect(toIntents(await bus.getWithdrawalIntents(0, QUEUED.length))).to.deep.equal(QUEUED);
     });
   });
 
@@ -118,25 +129,13 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
       expect(toIntents(await bus.getWithdrawalIntents(0, QUEUED.length))).to.deep.equal(QUEUED.slice(4));
     });
 
-    it("processes only the queued intents if count exceeds the queue length", async () => {
-      const count = QUEUED.length + 10;
-
-      expect(
-        await bus.connect(executor).processWithdrawalIntents.staticCall(count, executor.address, { value: 10n }),
-      ).to.equal(QUEUED.length);
-
-      const tx = bus.connect(executor).processWithdrawalIntents(count, executor.address, { value: 10n });
+    it("processes the whole queue if count equals the queue length", async () => {
+      const tx = bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
 
       await expect(tx).to.emit(bus, "WithdrawalIntentsProcessed").withArgs(0, QUEUED.length);
       await expectForwarded(tx, QUEUED);
       expect(await bus.unprocessedIntentsCount()).to.equal(0);
       expect(await bus.getWithdrawalIntents(0, 10)).to.deep.equal([]);
-    });
-
-    it("returns the processed count", async () => {
-      expect(
-        await bus.connect(executor).processWithdrawalIntents.staticCall(2, executor.address, { value: 10n }),
-      ).to.equal(2);
     });
 
     it("keeps queue indices growing after the queue is drained and refilled", async () => {

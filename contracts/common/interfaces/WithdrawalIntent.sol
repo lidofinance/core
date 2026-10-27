@@ -16,8 +16,6 @@ struct WithdrawalIntent {
     bytes pubkey;
 }
 
-/// @dev Weight of a full withdrawal in the gateway limit, in gwei (2048 ETH, max effective balance of a 0x02 validator)
-uint256 constant FULL_WITHDRAWAL_WEIGHT_GWEI = 2048 * 1e9;
-
-/// @dev Max partial withdrawal amount in gwei, so no intent weighs more than a full withdrawal
-uint256 constant MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI = FULL_WITHDRAWAL_WEIGHT_GWEI;
+/// @dev Max partial withdrawal amount in gwei: MAX_EFFECTIVE_BALANCE - MIN_ACTIVATION_BALANCE = 2048 - 32 = 2016 ETH.
+///      No partial withdrawal needs more, and every enabled gateway PWR limit can hold at least this amount.
+uint256 constant MAX_PWR_AMOUNT_GWEI = 2016 * 1e9;

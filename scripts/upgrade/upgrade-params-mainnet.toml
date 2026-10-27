@@ -38,11 +38,31 @@ withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#specification
 consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
-# The withdrawal limit is in gwei: 358,400 ETH max, 32 ETH per frame (LIP-38)
-[triggerableWithdrawalsGateway]
-maxWithdrawalLimitGwei = 358_400_000_000_000
-withdrawalLimitPerFrameGwei = 32_000_000_000
-frameDurationInSec = 48
+# Limits the SR phase 2 vote sets on the new triggerable withdrawals gateway (LIP-38 "Initial limits"):
+# `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators; all zero disables a limit.
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: one VEBO report of either kind per 8 hours
+pwr = { maxLimit = 19_200_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 19,200 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 500, limitPerFrame = 5, frameDurationInSec = 288 }                             # 500 validators, 5 per 288 s
+
+# Staking module ejectors: the live ejectors from the Lido KB access-control registry (block 26126589, 2026-10-05),
+# not yet read on-chain. Replace them if the CSM release deploys new ejectors that call `triggerWithdrawals`.
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM"   # 0x01
+address = "0x610B517D380f287c239C93F8eF6FfBd567AA4bA5"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 500, limitPerFrame = 1, frameDurationInSec = 192 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM 0x02"   # 0x02
+address = "0x2EE500885870b020e84E86a09A5d26D1EEec3E5E"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CMv2"   # 0x02
+address = "0xe181A377A2d2BDE9A83f1474BC3DB7A412de091E"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 
 # Accounting oracle configuration
 [accountingOracle]

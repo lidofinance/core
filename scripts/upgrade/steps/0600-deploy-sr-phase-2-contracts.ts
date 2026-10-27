@@ -63,13 +63,11 @@ export async function main() {
   // TriggerableWithdrawalsGateway and TriggerableWithdrawalsBus
   //
 
-  // The Agent is the admin from birth: the vote itself executes as the Agent and grants the remaining roles.
+  // The Agent is the admin from birth: the vote itself executes as the Agent, grants the remaining roles
+  // and sets the consumer limits.
   const gatewayConstructorArgs: ConstructorArgs<TriggerableWithdrawalsGateway__factory> = [
     agentAddress,
     locatorAddress,
-    parameters.triggerableWithdrawalsGateway.maxWithdrawalLimitGwei,
-    parameters.triggerableWithdrawalsGateway.withdrawalLimitPerFrameGwei,
-    parameters.triggerableWithdrawalsGateway.frameDurationInSec,
   ];
   const busConstructorArgs: ConstructorArgs<TriggerableWithdrawalsBus__factory> = [locatorAddress];
 

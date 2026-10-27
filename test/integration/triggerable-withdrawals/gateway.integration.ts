@@ -9,20 +9,23 @@ import { ether, impersonate, readWithdrawalRequests } from "lib";
 import { randomValidatorPubkey } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
+  DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT,
   drainWithdrawalRequestsQueue,
   ensureRoleFromAgent,
-  setTriggerableWithdrawalsGatewayLimit,
+  fixedTriggerableWithdrawalsLimit,
+  setTriggerableWithdrawalsConsumerLimits,
 } from "lib/protocol/helpers";
 
 import { encodeEIP7002Payload } from "test/0.8.9/withdrawalVault/eip7002Mock";
 import { Snapshot } from "test/suite";
 
 const GWEI_PER_ETH = 10n ** 9n;
-const FULL_WITHDRAWAL_WEIGHT_GWEI = 2048n * GWEI_PER_ETH;
+const PWR_LIMIT_GWEI = 10_000n * GWEI_PER_ETH;
+const FWR_LIMIT = 10n;
 
 /**
- * Modules withdrawals flow of LIP-38 on the deployed protocol: a role holder (a staking module ejector)
- * calls TriggerableWithdrawalsGateway directly and shares its withdrawal limit with the bus.
+ * Modules withdrawals flow of LIP-38 on the deployed protocol: a consumer with its own limits (a staking module
+ * ejector) calls TriggerableWithdrawalsGateway directly, without touching the quota of the bus.
  */
 describe("Integration: TriggerableWithdrawalsGateway module path", () => {
   let ctx: ProtocolContext;
@@ -47,7 +50,12 @@ describe("Integration: TriggerableWithdrawalsGateway module path", () => {
     withdrawalVault = ctx.contracts.withdrawalVault;
 
     [, requester, executor, stranger] = await ethers.getSigners();
-    await ensureRoleFromAgent(ctx, gateway, await gateway.ADD_WITHDRAWAL_REQUEST_ROLE(), requester);
+    await setTriggerableWithdrawalsConsumerLimits(
+      ctx,
+      requester.address,
+      fixedTriggerableWithdrawalsLimit(PWR_LIMIT_GWEI),
+      fixedTriggerableWithdrawalsLimit(FWR_LIMIT),
+    );
   });
 
   beforeEach(async () => {
@@ -59,64 +67,95 @@ describe("Integration: TriggerableWithdrawalsGateway module path", () => {
 
   after(async () => await Snapshot.restore(globalSnapshot));
 
-  const currentLimit = async () => (await gateway.getWithdrawalLimitFullInfo()).currentWithdrawalLimitGwei;
+  const currentLimits = async (consumer: string) => {
+    const { pwrLimit, fwrLimit } = await gateway.getConsumerLimitsFullInfo(consumer);
+    return { pwr: pwrLimit.currentLimit, fwr: fwrLimit.currentLimit };
+  };
 
-  it("rejects callers without ADD_WITHDRAWAL_REQUEST_ROLE", async () => {
+  const fullWithdrawal = () => ({ amount: 0n, pubkey: randomValidatorPubkey() });
+  const partialWithdrawal = (amount: bigint) => ({ amount, pubkey: randomValidatorPubkey() });
+
+  it("rejects callers without limits", async () => {
     const fee = await withdrawalVault.getWithdrawalRequestFee();
 
-    await expect(
-      gateway
-        .connect(stranger)
-        .triggerWithdrawals([{ amount: 0n, pubkey: randomValidatorPubkey() }], stranger.address, { value: fee }),
-    )
-      .to.be.revertedWithCustomError(gateway, "AccessControlUnauthorizedAccount")
-      .withArgs(stranger.address, await gateway.ADD_WITHDRAWAL_REQUEST_ROLE());
+    await expect(gateway.connect(stranger).triggerWithdrawals([fullWithdrawal()], stranger.address, { value: fee }))
+      .to.be.revertedWithCustomError(gateway, "FwrLimitExceeded")
+      .withArgs(1, 0);
   });
 
-  it("submits full and partial withdrawals and consumes their weight", async () => {
-    await setTriggerableWithdrawalsGatewayLimit(ctx, 10_000n * GWEI_PER_ETH);
-
-    const intents = [
-      { amount: 0n, pubkey: randomValidatorPubkey() },
-      { amount: 5n * GWEI_PER_ETH, pubkey: randomValidatorPubkey() },
-    ];
-    const weightGwei = FULL_WITHDRAWAL_WEIGHT_GWEI + 5n * GWEI_PER_ETH;
-    const limitBefore = await currentLimit();
+  it("submits full and partial withdrawals and consumes the caller's quotas", async () => {
+    const intents = [fullWithdrawal(), partialWithdrawal(5n * GWEI_PER_ETH)];
     const fee = await withdrawalVault.getWithdrawalRequestFee();
 
     const tx = gateway.connect(requester).triggerWithdrawals(intents, requester.address, {
       value: fee * BigInt(intents.length),
     });
 
-    await expect(tx).to.emit(gateway, "WithdrawalsTriggered").withArgs(requester.address, intents.length, weightGwei);
+    await expect(tx)
+      .to.emit(gateway, "WithdrawalsTriggered")
+      .withArgs(requester.address, 1, 5n * GWEI_PER_ETH, 1);
     for (const intent of intents) {
       await expect(tx)
         .to.emit(withdrawalVault, "WithdrawalRequestAdded")
         .withArgs(encodeEIP7002Payload(intent.pubkey, intent.amount));
     }
 
-    expect(await currentLimit()).to.equal(limitBefore - weightGwei);
+    expect(await currentLimits(requester.address)).to.deep.equal({
+      pwr: PWR_LIMIT_GWEI - 5n * GWEI_PER_ETH,
+      fwr: FWR_LIMIT - 1n,
+    });
 
     const requests = await readWithdrawalRequests();
     expect(requests.map(({ pubkey, amount }) => ({ pubkey, amount }))).to.deep.equal(intents);
   });
 
-  it("shares the withdrawal limit with the bus", async () => {
-    await setTriggerableWithdrawalsGatewayLimit(ctx, 3_000n * GWEI_PER_ETH);
+  it("rejects partial withdrawals of a consumer with PWRs disabled, as for a module ejector", async () => {
+    await setTriggerableWithdrawalsConsumerLimits(
+      ctx,
+      requester.address,
+      DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT,
+      fixedTriggerableWithdrawalsLimit(FWR_LIMIT),
+    );
     const fee = await withdrawalVault.getWithdrawalRequestFee();
 
-    await gateway
-      .connect(requester)
-      .triggerWithdrawals([{ amount: 0n, pubkey: randomValidatorPubkey() }], requester.address, { value: fee });
-    const remaining = await currentLimit();
-    expect(remaining).to.equal(3_000n * GWEI_PER_ETH - FULL_WITHDRAWAL_WEIGHT_GWEI);
+    await expect(
+      gateway
+        .connect(requester)
+        .triggerWithdrawals([partialWithdrawal(5n * GWEI_PER_ETH)], requester.address, { value: fee }),
+    )
+      .to.be.revertedWithCustomError(gateway, "PwrLimitExceeded")
+      .withArgs(5n * GWEI_PER_ETH, 0);
+
+    await expect(
+      gateway.connect(requester).triggerWithdrawals([fullWithdrawal()], requester.address, { value: fee }),
+    ).to.emit(gateway, "WithdrawalsTriggered");
+  });
+
+  it("does not touch the quota of the bus", async () => {
+    await setTriggerableWithdrawalsConsumerLimits(
+      ctx,
+      requester.address,
+      DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT,
+      fixedTriggerableWithdrawalsLimit(1n),
+    );
+    const fee = await withdrawalVault.getWithdrawalRequestFee();
+    const busAddress = await bus.getAddress();
+    const busLimitsBefore = await currentLimits(busAddress);
+
+    await gateway.connect(requester).triggerWithdrawals([fullWithdrawal()], requester.address, { value: fee });
+    await expect(gateway.connect(requester).triggerWithdrawals([fullWithdrawal()], requester.address, { value: fee }))
+      .to.be.revertedWithCustomError(gateway, "FwrLimitExceeded")
+      .withArgs(1, 0);
+
+    expect(await currentLimits(busAddress)).to.deep.equal(busLimitsBefore);
 
     const oracle = await impersonate(await ctx.contracts.validatorsExitBusOracle.getAddress(), ether("10"));
-    await bus.connect(oracle).addWithdrawalIntents([{ amount: 0n, pubkey: randomValidatorPubkey() }]);
+    await bus.connect(oracle).addWithdrawalIntents([fullWithdrawal()]);
+    const queued = await bus.unprocessedIntentsCount();
 
-    await expect(bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: fee }))
-      .to.be.revertedWithCustomError(gateway, "WithdrawalLimitExceeded")
-      .withArgs(FULL_WITHDRAWAL_WEIGHT_GWEI, remaining);
+    await expect(
+      bus.connect(executor).processWithdrawalIntents(queued, executor.address, { value: fee * queued }),
+    ).to.emit(gateway, "WithdrawalsTriggered");
   });
 
   it("stops both paths while paused", async () => {
@@ -127,13 +166,11 @@ describe("Integration: TriggerableWithdrawalsGateway module path", () => {
     const fee = await withdrawalVault.getWithdrawalRequestFee();
 
     await expect(
-      gateway
-        .connect(requester)
-        .triggerWithdrawals([{ amount: 0n, pubkey: randomValidatorPubkey() }], requester.address, { value: fee }),
+      gateway.connect(requester).triggerWithdrawals([fullWithdrawal()], requester.address, { value: fee }),
     ).to.be.revertedWithCustomError(gateway, "ResumedExpected");
 
     const oracle = await impersonate(await ctx.contracts.validatorsExitBusOracle.getAddress(), ether("10"));
-    await bus.connect(oracle).addWithdrawalIntents([{ amount: 0n, pubkey: randomValidatorPubkey() }]);
+    await bus.connect(oracle).addWithdrawalIntents([fullWithdrawal()]);
 
     await expect(
       bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: fee }),
