@@ -26,6 +26,10 @@ import {WithdrawalIntent, MAX_PWR_AMOUNT_GWEI} from "contracts/common/interfaces
  *
  * Intents cannot be reordered, skipped or dismissed one by one. The only way to stop queued intents is
  * `clearWithdrawalIntents`, which drops the whole queue (CLEAR_WITHDRAWAL_INTENTS_ROLE).
+ *
+ * Storage of processed and dropped intents is never cleared. Intents added to an empty queue start again
+ * from index 0 and overwrite it, as the EIP-7002 predeploy reuses its request queue: rewriting a non-zero
+ * slot creates no new state (EIP-8037), so a refilled queue does not pay state creation gas again.
  */
 contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlEnumerableUpgradeable {
     /// @notice role that allows to append withdrawal intents to the queue
@@ -46,7 +50,7 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
     /// @custom:storage-location erc7201:lido.TriggerableWithdrawalsBus.storage
     struct Storage {
         uint128 head; // queue index of the next intent to process
-        uint128 tail; // queue index the next added intent is stored at
+        uint128 tail; // queue index the next added intent is stored at, unless the queue is empty (then 0)
         mapping(uint256 index => PackedIntent) intents;
     }
 
@@ -82,6 +86,13 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
 
         Storage storage $ = _storage();
         uint256 firstIndex = $.tail;
+
+        // An empty queue starts again from index 0 to reuse the slots of processed and dropped intents.
+        // Resetting here, not on draining, keeps the head/tail slot non-zero once it is written.
+        if ($.head == firstIndex) {
+            firstIndex = 0;
+            $.head = 0;
+        }
 
         for (uint256 i = 0; i < count; ++i) {
             bytes calldata pubkey = intents[i].pubkey;
@@ -120,9 +131,7 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
 
         WithdrawalIntent[] memory intents = new WithdrawalIntent[](count);
         for (uint256 i = 0; i < count; ++i) {
-            uint256 index = head + i;
-            intents[i] = _unpack($.intents[index]);
-            delete $.intents[index];
+            intents[i] = _unpack($.intents[head + i]);
         }
 
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -146,7 +155,7 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
      * @dev Emergency measure: a DAO vote grants CLEAR_WITHDRAWAL_INTENTS_ROLE, calls this and revokes the role.
      *      Does not revert on an empty queue, so such a vote does not fail if the queue was drained before enactment.
      *      The storage of dropped intents is not cleared, so the call costs the same for any queue length;
-     *      queue indices only grow, so it is never read again.
+     *      the next added intents overwrite it.
      */
     function clearWithdrawalIntents() external onlyRole(CLEAR_WITHDRAWAL_INTENTS_ROLE) {
         Storage storage $ = _storage();
@@ -222,8 +231,9 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
 
     /**
      * @notice Emitted when intents are appended to the queue
-     * @param firstIndex Queue index of the first added intent
+     * @param firstIndex Queue index of the first added intent; `0` when the queue was empty
      * @param count Number of added intents
+     * @dev Queue indices are reused after the queue empties, so they do not identify an intent over time.
      */
     event WithdrawalIntentsAdded(uint256 firstIndex, uint256 count);
 

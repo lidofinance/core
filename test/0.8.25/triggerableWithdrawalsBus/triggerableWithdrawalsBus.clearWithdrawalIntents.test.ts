@@ -132,11 +132,12 @@ describe("TriggerableWithdrawalsBus.sol: clearWithdrawalIntents", () => {
       await bus.connect(clearer).clearWithdrawalIntents();
     });
 
-    it("continues queue indices for new intents", async () => {
+    it("restarts queue indices from zero for new intents and hides the dropped ones", async () => {
       await expect(bus.connect(publisher).addWithdrawalIntents(NEW))
         .to.emit(bus, "WithdrawalIntentsAdded")
-        .withArgs(QUEUED.length, NEW.length);
+        .withArgs(0, NEW.length);
 
+      // NEW is shorter than QUEUED: dropped intents still in storage past the new tail stay invisible
       expect(await bus.unprocessedIntentsCount()).to.equal(NEW.length);
       expect(toIntents(await bus.getWithdrawalIntents(0, 10))).to.deep.equal(NEW);
     });
@@ -146,7 +147,7 @@ describe("TriggerableWithdrawalsBus.sol: clearWithdrawalIntents", () => {
 
       const tx = bus.connect(executor).processWithdrawalIntents(NEW.length, executor.address, { value: 10n });
 
-      await expect(tx).to.emit(bus, "WithdrawalIntentsProcessed").withArgs(QUEUED.length, NEW.length);
+      await expect(tx).to.emit(bus, "WithdrawalIntentsProcessed").withArgs(0, NEW.length);
 
       const gatewayAddress = await gateway.getAddress();
       const forwarded = (await (await tx).wait())!.logs
