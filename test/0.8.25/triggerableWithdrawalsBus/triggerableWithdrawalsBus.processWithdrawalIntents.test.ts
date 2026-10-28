@@ -17,7 +17,7 @@ import { Snapshot } from "test/suite";
 
 import {
   fullWithdrawal,
-  MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI,
+  MAX_PWR_AMOUNT_GWEI,
   partialWithdrawal,
   toIntents,
   WithdrawalIntent,
@@ -37,7 +37,7 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
     partialWithdrawal(1, 1n),
     partialWithdrawal(2, 32n * 10n ** 9n),
     fullWithdrawal(3),
-    partialWithdrawal(4, MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI),
+    partialWithdrawal(4, MAX_PWR_AMOUNT_GWEI),
   ];
 
   let originalState: string;
@@ -77,18 +77,29 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
     });
 
     it("reverts if the queue is empty", async () => {
-      await expect(
-        bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }),
-      ).to.be.revertedWithCustomError(bus, "NoWithdrawalIntents");
+      await expect(bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }))
+        .to.be.revertedWithCustomError(bus, "InsufficientWithdrawalIntents")
+        .withArgs(1, 0);
     });
 
     it("reverts once all intents are processed", async () => {
       await addQueued();
       await bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
 
-      await expect(
-        bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }),
-      ).to.be.revertedWithCustomError(bus, "NoWithdrawalIntents");
+      await expect(bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n }))
+        .to.be.revertedWithCustomError(bus, "InsufficientWithdrawalIntents")
+        .withArgs(1, 0);
+    });
+
+    it("reverts if count exceeds the queue length and leaves the queue unchanged", async () => {
+      await addQueued();
+
+      await expect(bus.connect(executor).processWithdrawalIntents(QUEUED.length + 1, executor.address, { value: 10n }))
+        .to.be.revertedWithCustomError(bus, "InsufficientWithdrawalIntents")
+        .withArgs(QUEUED.length + 1, QUEUED.length);
+
+      expect(await bus.unprocessedIntentsCount()).to.equal(QUEUED.length);
+      expect(toIntents(await bus.getWithdrawalIntents(0, QUEUED.length))).to.deep.equal(QUEUED);
     });
   });
 
@@ -118,14 +129,8 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
       expect(toIntents(await bus.getWithdrawalIntents(0, QUEUED.length))).to.deep.equal(QUEUED.slice(4));
     });
 
-    it("processes only the queued intents if count exceeds the queue length", async () => {
-      const count = QUEUED.length + 10;
-
-      expect(
-        await bus.connect(executor).processWithdrawalIntents.staticCall(count, executor.address, { value: 10n }),
-      ).to.equal(QUEUED.length);
-
-      const tx = bus.connect(executor).processWithdrawalIntents(count, executor.address, { value: 10n });
+    it("processes the whole queue if count equals the queue length", async () => {
+      const tx = bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
 
       await expect(tx).to.emit(bus, "WithdrawalIntentsProcessed").withArgs(0, QUEUED.length);
       await expectForwarded(tx, QUEUED);
@@ -133,21 +138,36 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
       expect(await bus.getWithdrawalIntents(0, 10)).to.deep.equal([]);
     });
 
-    it("returns the processed count", async () => {
-      expect(
-        await bus.connect(executor).processWithdrawalIntents.staticCall(2, executor.address, { value: 10n }),
-      ).to.equal(2);
-    });
-
-    it("keeps queue indices growing after the queue is drained and refilled", async () => {
-      await bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
+    it("continues queue indices while the queue is not empty", async () => {
+      await bus.connect(executor).processWithdrawalIntents(2, executor.address, { value: 10n });
 
       await expect(bus.connect(publisher).addWithdrawalIntents([fullWithdrawal(7)]))
         .to.emit(bus, "WithdrawalIntentsAdded")
         .withArgs(QUEUED.length, 1);
 
+      const tx = bus.connect(executor).processWithdrawalIntents(QUEUED.length - 1, executor.address, { value: 10n });
+      await expect(tx)
+        .to.emit(bus, "WithdrawalIntentsProcessed")
+        .withArgs(2, QUEUED.length - 1);
+      await expectForwarded(tx, [...QUEUED.slice(2), fullWithdrawal(7)]);
+    });
+
+    it("restarts queue indices from zero when the drained queue is refilled", async () => {
+      await bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
+
+      await expect(bus.connect(publisher).addWithdrawalIntents([fullWithdrawal(7)]))
+        .to.emit(bus, "WithdrawalIntentsAdded")
+        .withArgs(0, 1);
+
+      // Processed intents still in storage past the new tail are not part of the queue
+      expect(await bus.unprocessedIntentsCount()).to.equal(1);
+      expect(toIntents(await bus.getWithdrawalIntents(0, QUEUED.length))).to.deep.equal([fullWithdrawal(7)]);
+      await expect(bus.connect(executor).processWithdrawalIntents(2, executor.address, { value: 10n }))
+        .to.be.revertedWithCustomError(bus, "InsufficientWithdrawalIntents")
+        .withArgs(2, 1);
+
       const tx = bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n });
-      await expect(tx).to.emit(bus, "WithdrawalIntentsProcessed").withArgs(QUEUED.length, 1);
+      await expect(tx).to.emit(bus, "WithdrawalIntentsProcessed").withArgs(0, 1);
       await expectForwarded(tx, [fullWithdrawal(7)]);
     });
 
@@ -159,18 +179,30 @@ describe("TriggerableWithdrawalsBus.sol: processWithdrawalIntents", () => {
         .withArgs(0, 1);
     });
 
-    it("clears storage of processed intents", async () => {
+    context("storage reuse", () => {
+      // ERC-7201 slot of the bus storage struct: head/tail at +0, intents mapping at +1
       const storageBase = BigInt("0x9e1225a4f3b25c5ccb4127158e802e544055b00f6ae9908793cdfb52b5dd5100");
-      const mappingSlot = ethers.toBeHex(storageBase + 1n, 32);
-      const entrySlot = BigInt(ethers.keccak256(ethers.concat([ethers.toBeHex(0, 32), mappingSlot])));
-      const busAddress = await bus.getAddress();
+      const entrySlot = (index: number) =>
+        BigInt(ethers.keccak256(ethers.concat([ethers.toBeHex(index, 32), ethers.toBeHex(storageBase + 1n, 32)])));
+      const readSlot = async (slot: bigint) => ethers.provider.getStorage(await bus.getAddress(), slot);
 
-      expect(await ethers.provider.getStorage(busAddress, entrySlot)).to.not.equal(ethers.ZeroHash);
+      it("keeps the slots of processed intents and overwrites them on refill", async () => {
+        const processedWord = await readSlot(entrySlot(0));
 
-      await bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: 10n });
+        await bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
+        expect(await readSlot(entrySlot(0))).to.equal(processedWord);
 
-      expect(await ethers.provider.getStorage(busAddress, entrySlot)).to.equal(ethers.ZeroHash);
-      expect(await ethers.provider.getStorage(busAddress, entrySlot + 1n)).to.equal(ethers.ZeroHash);
+        await bus.connect(publisher).addWithdrawalIntents([fullWithdrawal(7)]);
+        expect(await readSlot(entrySlot(0))).to.equal(ethers.dataSlice(fullWithdrawal(7).pubkey, 0, 32));
+      });
+
+      it("keeps the head/tail slot non-zero after the queue is drained and refilled", async () => {
+        await bus.connect(executor).processWithdrawalIntents(QUEUED.length, executor.address, { value: 10n });
+        expect(await readSlot(storageBase)).to.not.equal(ethers.ZeroHash);
+
+        await bus.connect(publisher).addWithdrawalIntents([fullWithdrawal(7)]);
+        expect(await readSlot(storageBase)).to.not.equal(ethers.ZeroHash);
+      });
     });
   });
 

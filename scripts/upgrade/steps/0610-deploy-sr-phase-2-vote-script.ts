@@ -7,7 +7,10 @@ import {
   SRPhase2UpgradeTemplate__factory,
   SRPhase2UpgradeVoteScript__factory,
 } from "typechain-types";
-import { SRPhase2UpgradeParametersStruct } from "typechain-types/contracts/upgrade/sr-phase-2/SRPhase2UpgradeTemplate";
+import {
+  GatewayConsumerLimitsStruct,
+  SRPhase2UpgradeParametersStruct,
+} from "typechain-types/contracts/upgrade/sr-phase-2/SRPhase2UpgradeTemplate";
 import { SRPhase2UpgradeVoteScript } from "typechain-types/contracts/upgrade/sr-phase-2/SRPhase2UpgradeVoteScript";
 
 import {
@@ -58,6 +61,14 @@ export async function main() {
   // The template's constructor rejects a mismatch against `block.chainid`; ask the node rather than the config
   const { chainId } = await ethers.provider.getNetwork();
 
+  // The vote sets these limits on the new gateway: the bus first, then the staking module ejectors
+  const triggerableWithdrawalsBusAddress = getAddress(Sk.triggerableWithdrawalsBus, state);
+  const { busLimits, ejectors } = parameters.triggerableWithdrawalsGateway;
+  const gatewayConsumers: GatewayConsumerLimitsStruct[] = [
+    { consumer: triggerableWithdrawalsBusAddress, pwrLimit: busLimits.pwr, fwrLimit: busLimits.fwr },
+    ...ejectors.map((ejector) => ({ consumer: ejector.address, pwrLimit: ejector.pwr, fwrLimit: ejector.fwr })),
+  ];
+
   const upgradeParams: SRPhase2UpgradeParametersStruct = {
     chainId,
 
@@ -82,13 +93,11 @@ export async function main() {
 
     oldTriggerableWithdrawalsGateway: await locator.triggerableWithdrawalsGateway(),
     newTriggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
-    triggerableWithdrawalsBus: getAddress(Sk.triggerableWithdrawalsBus, state),
+    triggerableWithdrawalsBus: triggerableWithdrawalsBusAddress,
 
     validatorExitDelayVerifier: await liveLocator.validatorExitDelayVerifier(),
 
-    maxWithdrawalLimitGwei: parameters.triggerableWithdrawalsGateway.maxWithdrawalLimitGwei,
-    withdrawalLimitPerFrameGwei: parameters.triggerableWithdrawalsGateway.withdrawalLimitPerFrameGwei,
-    withdrawalLimitFrameDurationInSec: parameters.triggerableWithdrawalsGateway.frameDurationInSec,
+    gatewayConsumers,
   };
 
   const templateConstructorArgs: ConstructorArgs<SRPhase2UpgradeTemplate__factory> = [

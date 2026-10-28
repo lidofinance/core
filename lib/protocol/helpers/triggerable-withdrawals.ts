@@ -34,14 +34,41 @@ export const ensureRoleFromAgent = async (
   await (await contract.connect(agent).grantRole(role, address)).wait();
 };
 
+/** Parameters of a gateway quota, as `ITriggerableWithdrawalsGateway.LimitConfig`. */
+export type TriggerableWithdrawalsLimitConfig = { maxLimit: bigint; limitPerFrame: bigint; frameDurationInSec: bigint };
+
+/** A disabled gateway quota. */
+export const DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT: TriggerableWithdrawalsLimitConfig = {
+  maxLimit: 0n,
+  limitPerFrame: 0n,
+  frameDurationInSec: 0n,
+};
+
 /**
- * Sets the gateway withdrawal limit, in gwei, with a long frame, so nothing is restored during a test and the
- * consumed quota can be checked exactly.
+ * A gateway quota with a long frame, so nothing is restored during a test and the consumed quota can be
+ * checked exactly.
  */
-export const setTriggerableWithdrawalsGatewayLimit = async (ctx: ProtocolContext, maxWithdrawalLimitGwei: bigint) => {
+export const fixedTriggerableWithdrawalsLimit = (maxLimit: bigint): TriggerableWithdrawalsLimitConfig => ({
+  maxLimit,
+  limitPerFrame: 1n,
+  frameDurationInSec: 365n * 24n * 3600n,
+});
+
+/**
+ * Sets the gateway limits of `consumer` from the Agent and starts both quotas full: the limits are disabled
+ * first, so no consumed quota is carried over.
+ */
+export const setTriggerableWithdrawalsConsumerLimits = async (
+  ctx: ProtocolContext,
+  consumer: string,
+  pwrLimit: TriggerableWithdrawalsLimitConfig,
+  fwrLimit: TriggerableWithdrawalsLimitConfig,
+) => {
   const gateway = ctx.contracts.triggerableWithdrawalsGateway;
   const agent = await ctx.getSigner("agent");
+  const disabled = DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT;
 
   await ensureRoleFromAgent(ctx, gateway, await gateway.TW_EXIT_LIMIT_MANAGER_ROLE(), agent);
-  await (await gateway.connect(agent).setWithdrawalLimit(maxWithdrawalLimitGwei, 1n, 365n * 24n * 3600n)).wait();
+  await (await gateway.connect(agent).setConsumerLimits(consumer, disabled, disabled)).wait();
+  await (await gateway.connect(agent).setConsumerLimits(consumer, pwrLimit, fwrLimit)).wait();
 };

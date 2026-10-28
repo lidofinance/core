@@ -12,7 +12,9 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {IUpgradeTemplate} from "../interfaces/IUpgradeTemplate.sol";
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
 import {
+    GatewayConsumerLimits,
     SRPhase2UpgradeParameters,
+    IDualGovernanceTiebreaker,
     ILidoLocatorWithVerifier,
     IStakingRouter,
     ITriggerableWithdrawalsBus,
@@ -24,7 +26,8 @@ import {
 /// @title SRPhase2UpgradeTemplate
 /// @notice Pre/post checks wrapping the SR phase 2 (LIP-38) upgrade vote.
 /// @dev `startUpgrade` and `finishUpgrade` must run in the same transaction, so the whole vote
-///      reverts if the observed state does not match what was deployed.
+///      reverts if the observed state does not match what was deployed. The Dual Governance calls of the vote
+///      run between them, so both checks cover the tiebreaker sealable withdrawal blockers too.
 contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
     event UpgradeStarted();
     event UpgradeFinished();
@@ -41,13 +44,15 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
     error InvalidUint(bytes32 field, uint256 actual, uint256 expected);
     error InvalidFlag(bytes32 field, address subject);
     error LocatorChangedBeyondUpgrade();
+    error ConsumerLimitsAlreadySet(address consumer);
+    error InvalidConsumerLimits(address consumer);
 
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
-    bytes32 internal constant ADD_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_WITHDRAWAL_REQUEST_ROLE");
     bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
     bytes32 internal constant ADD_WITHDRAWAL_INTENTS_ROLE = keccak256("ADD_WITHDRAWAL_INTENTS_ROLE");
+    bytes32 internal constant CLEAR_WITHDRAWAL_INTENTS_ROLE = keccak256("CLEAR_WITHDRAWAL_INTENTS_ROLE");
     bytes32 internal constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE =
         keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE =
@@ -180,15 +185,24 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         _assertSingleRoleHolder("new-gateway-admin", gatewayAcl, DEFAULT_ADMIN_ROLE, agent);
         _assertUint("new-gateway-pause-members", gatewayAcl.getRoleMemberCount(PAUSE_ROLE), 0);
         _assertUint("new-gateway-resume-members", gatewayAcl.getRoleMemberCount(RESUME_ROLE), 0);
-        _assertUint("new-gateway-request-members", gatewayAcl.getRoleMemberCount(ADD_WITHDRAWAL_REQUEST_ROLE), 0);
         _assertUint("new-gateway-limit-members", gatewayAcl.getRoleMemberCount(TW_EXIT_LIMIT_MANAGER_ROLE), 0);
         _assertAddress("new-gateway-pauser", ICircuitBreaker(config.CIRCUIT_BREAKER()).getPauser(newGateway), address(0));
 
-        // slither-disable-next-line unused-return
-        (uint256 maxGwei, uint256 perFrameGwei, uint256 frameDuration, , ) = gateway.getWithdrawalLimitFullInfo();
-        _assertUint("new-gateway-max-limit", maxGwei, config.MAX_WITHDRAWAL_LIMIT_GWEI());
-        _assertUint("new-gateway-per-frame", perFrameGwei, config.WITHDRAWAL_LIMIT_PER_FRAME_GWEI());
-        _assertUint("new-gateway-frame-duration", frameDuration, config.WITHDRAWAL_LIMIT_FRAME_DURATION_IN_SEC());
+        // No consumer has limits yet, so each one the vote configures starts with a full quota
+        GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
+        for (uint256 i = 0; i < consumers.length; ++i) {
+            (
+                ITriggerableWithdrawalsGateway.LimitInfo memory pwrLimit,
+                ITriggerableWithdrawalsGateway.LimitInfo memory fwrLimit
+            ) = gateway.getConsumerLimitsFullInfo(consumers[i].consumer);
+            if (pwrLimit.maxLimit != 0 || fwrLimit.maxLimit != 0) {
+                revert ConsumerLimitsAlreadySet(consumers[i].consumer);
+            }
+        }
+
+        // --- Dual Governance: the old gateway is a tiebreaker sealable withdrawal blocker, the new one is not ---
+        _assertTiebreakerBlocker("tiebreaker-old-gateway", config.DUAL_GOVERNANCE(), oldGateway, true);
+        _assertTiebreakerBlocker("tiebreaker-new-gateway", config.DUAL_GOVERNANCE(), newGateway, false);
 
         // --- Bus: initialized behind a proxy owned by the Agent, empty, no publisher yet ---
         _assertAddress("bus-proxy-admin", IOssifiableProxy(bus).proxy__getAdmin(), agent);
@@ -198,11 +212,13 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         IAccessControlEnumerable busAcl = IAccessControlEnumerable(bus);
         _assertSingleRoleHolder("bus-admin", busAcl, DEFAULT_ADMIN_ROLE, agent);
         _assertUint("bus-publisher-members", busAcl.getRoleMemberCount(ADD_WITHDRAWAL_INTENTS_ROLE), 0);
+        _assertUint("bus-clear-members", busAcl.getRoleMemberCount(CLEAR_WITHDRAWAL_INTENTS_ROLE), 0);
     }
 
     function _validatePostUpgradeState(SRPhase2UpgradeConfig config) internal virtual {
         address agent = config.AGENT();
         address locatorAddr = config.LOCATOR();
+        address oldGateway = config.OLD_TRIGGERABLE_WITHDRAWALS_GATEWAY();
         address newGateway = config.NEW_TRIGGERABLE_WITHDRAWALS_GATEWAY();
         address bus = config.TRIGGERABLE_WITHDRAWALS_BUS();
         address circuitBreaker = config.CIRCUIT_BREAKER();
@@ -257,21 +273,33 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         _assertTwoRoleHolders("new-gateway-pause", gatewayAcl, PAUSE_ROLE, circuitBreaker, resealManager);
         _assertSingleRoleHolder("new-gateway-resume", gatewayAcl, RESUME_ROLE, resealManager);
         _assertSingleRoleHolder("new-gateway-limit-manager", gatewayAcl, TW_EXIT_LIMIT_MANAGER_ROLE, agent);
-        // Staking modules' ejectors are granted the same role by their own items, so only the bus is pinned here.
-        if (!gatewayAcl.hasRole(ADD_WITHDRAWAL_REQUEST_ROLE, bus)) revert InvalidFlag("new-gateway-request-bus", bus);
         _assertAddress(
             "new-gateway-pauser",
             ICircuitBreaker(circuitBreaker).getPauser(newGateway),
             config.CIRCUIT_BREAKER_COMMITTEE()
         );
 
+        // Every consumer got exactly the configured limits, and its quota is still full
+        GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
+        for (uint256 i = 0; i < consumers.length; ++i) {
+            (
+                ITriggerableWithdrawalsGateway.LimitInfo memory pwrLimit,
+                ITriggerableWithdrawalsGateway.LimitInfo memory fwrLimit
+            ) = ITriggerableWithdrawalsGateway(newGateway).getConsumerLimitsFullInfo(consumers[i].consumer);
+            if (!_isFullLimit(pwrLimit, consumers[i].pwrLimit) || !_isFullLimit(fwrLimit, consumers[i].fwrLimit)) {
+                revert InvalidConsumerLimits(consumers[i].consumer);
+            }
+        }
+
+        // --- Dual Governance: the new gateway replaced the old one as a tiebreaker sealable withdrawal blocker ---
+        _assertTiebreakerBlocker("tiebreaker-old-gateway", config.DUAL_GOVERNANCE(), oldGateway, false);
+        _assertTiebreakerBlocker("tiebreaker-new-gateway", config.DUAL_GOVERNANCE(), newGateway, true);
+
         // --- Bus ---
-        _assertSingleRoleHolder(
-            "bus-publisher",
-            IAccessControlEnumerable(bus),
-            ADD_WITHDRAWAL_INTENTS_ROLE,
-            config.VALIDATORS_EXIT_BUS_ORACLE()
-        );
+        IAccessControlEnumerable busAcl = IAccessControlEnumerable(bus);
+        _assertSingleRoleHolder("bus-publisher", busAcl, ADD_WITHDRAWAL_INTENTS_ROLE, config.VALIDATORS_EXIT_BUS_ORACLE());
+        // Only a DAO vote that clears the queue may hold this role, and only within that vote
+        _assertUint("bus-clear-members", busAcl.getRoleMemberCount(CLEAR_WITHDRAWAL_INTENTS_ROLE), 0);
     }
 
     /// @dev Addresses the vote must leave untouched; checked identically before and after.
@@ -327,6 +355,32 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         _assertUint(field, acl.getRoleMemberCount(role), 2);
         if (!acl.hasRole(role, first)) revert InvalidFlag(field, first);
         if (!acl.hasRole(role, second)) revert InvalidFlag(field, second);
+    }
+
+    function _assertTiebreakerBlocker(bytes32 field, address dualGovernance, address sealable, bool expected) private view {
+        address[] memory blockers =
+            IDualGovernanceTiebreaker(dualGovernance).getTiebreakerDetails().sealableWithdrawalBlockers;
+
+        bool isBlocker = false;
+        for (uint256 i = 0; i < blockers.length; ++i) {
+            if (blockers[i] == sealable) {
+                isBlocker = true;
+                break;
+            }
+        }
+
+        if (isBlocker != expected) revert InvalidFlag(field, sealable);
+    }
+
+    function _isFullLimit(
+        ITriggerableWithdrawalsGateway.LimitInfo memory actual,
+        ITriggerableWithdrawalsGateway.LimitConfig memory expected
+    ) private pure returns (bool) {
+        return
+            actual.maxLimit == expected.maxLimit &&
+            actual.limitPerFrame == expected.limitPerFrame &&
+            actual.frameDurationInSec == expected.frameDurationInSec &&
+            actual.currentLimit == expected.maxLimit;
     }
 
     function _assertNotYetUpgraded(bytes32 field, address current, address newImpl) private pure {

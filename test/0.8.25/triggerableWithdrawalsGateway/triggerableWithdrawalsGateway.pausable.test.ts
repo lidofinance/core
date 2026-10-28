@@ -10,7 +10,7 @@ import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
 import { deployTriggerableWithdrawalsGateway } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { fullWithdrawal } from "../triggerable-withdrawals-helpers";
+import { DEFAULT_CONSUMER_LIMITS, fullWithdrawal } from "../triggerable-withdrawals-helpers";
 
 describe("TriggerableWithdrawalsGateway.sol: pausable", () => {
   let gateway: TriggerableWithdrawalsGateway;
@@ -31,7 +31,10 @@ describe("TriggerableWithdrawalsGateway.sol: pausable", () => {
 
     await gateway.connect(admin).grantRole(await gateway.PAUSE_ROLE(), pauser.address);
     await gateway.connect(admin).grantRole(await gateway.RESUME_ROLE(), resumer.address);
-    await gateway.connect(admin).grantRole(await gateway.ADD_WITHDRAWAL_REQUEST_ROLE(), requester.address);
+    await gateway.connect(admin).grantRole(await gateway.TW_EXIT_LIMIT_MANAGER_ROLE(), admin.address);
+    await gateway
+      .connect(admin)
+      .setConsumerLimits(requester.address, DEFAULT_CONSUMER_LIMITS.pwr, DEFAULT_CONSUMER_LIMITS.fwr);
 
     PAUSE_INFINITELY = await gateway.PAUSE_INFINITELY();
   });

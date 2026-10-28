@@ -3,15 +3,17 @@
 
 pragma solidity 0.8.25;
 
-import {SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
+import {GatewayConsumerLimits, SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
 
 /// @title SRPhase2UpgradeConfig
 /// @notice Immutable address book for the SR phase 2 (LIP-38) upgrade, validated once at deployment.
+/// @dev The gateway consumer limits are a list, so they live in storage; nothing changes them after deployment.
 contract SRPhase2UpgradeConfig {
     error ZeroAddress(string field);
-    error ZeroValue(string field);
     error InvalidChainId(uint256 chainId);
     error NotReplaced(string field, address value);
+    error BusLimitsMissing();
+    error DuplicateGatewayConsumer(address consumer);
 
     uint256 public immutable CHAIN_ID;
 
@@ -40,9 +42,7 @@ contract SRPhase2UpgradeConfig {
 
     address public immutable VALIDATOR_EXIT_DELAY_VERIFIER;
 
-    uint256 public immutable MAX_WITHDRAWAL_LIMIT_GWEI;
-    uint256 public immutable WITHDRAWAL_LIMIT_PER_FRAME_GWEI;
-    uint256 public immutable WITHDRAWAL_LIMIT_FRAME_DURATION_IN_SEC;
+    GatewayConsumerLimits[] internal _gatewayConsumers;
 
     constructor(SRPhase2UpgradeParameters memory params) {
         if (params.chainId == 0) revert InvalidChainId(params.chainId);
@@ -75,11 +75,7 @@ contract SRPhase2UpgradeConfig {
 
         VALIDATOR_EXIT_DELAY_VERIFIER = _nonZero(params.validatorExitDelayVerifier, "validatorExitDelayVerifier");
 
-        MAX_WITHDRAWAL_LIMIT_GWEI = _nonZeroValue(params.maxWithdrawalLimitGwei, "maxWithdrawalLimitGwei");
-        WITHDRAWAL_LIMIT_PER_FRAME_GWEI =
-            _nonZeroValue(params.withdrawalLimitPerFrameGwei, "withdrawalLimitPerFrameGwei");
-        WITHDRAWAL_LIMIT_FRAME_DURATION_IN_SEC =
-            _nonZeroValue(params.withdrawalLimitFrameDurationInSec, "withdrawalLimitFrameDurationInSec");
+        _setGatewayConsumers(params.gatewayConsumers, params.triggerableWithdrawalsBus);
 
         // A parameters file that repeats an address on both sides would make the vote a no-op
         // and the template's pre/post checks contradictory, so reject it here.
@@ -91,17 +87,31 @@ contract SRPhase2UpgradeConfig {
         );
     }
 
+    /// @notice Limits the vote sets on the new gateway: the bus first, then the staking module ejectors.
+    function getGatewayConsumers() external view returns (GatewayConsumerLimits[] memory) {
+        return _gatewayConsumers;
+    }
+
+    /// @dev The limit values are checked by the gateway itself when the vote sets them.
+    function _setGatewayConsumers(GatewayConsumerLimits[] memory consumers, address bus) private {
+        // The bus is the consumer of the oracle path, and LIP-38 requires its limits
+        if (consumers.length == 0 || consumers[0].consumer != bus) revert BusLimitsMissing();
+
+        for (uint256 i = 0; i < consumers.length; ++i) {
+            address consumer = _nonZero(consumers[i].consumer, "gatewayConsumer");
+            for (uint256 j = 0; j < i; ++j) {
+                if (consumers[j].consumer == consumer) revert DuplicateGatewayConsumer(consumer);
+            }
+            _gatewayConsumers.push(consumers[i]);
+        }
+    }
+
     function _replaced(string memory field, address oldValue, address newValue) private pure {
         if (oldValue == newValue) revert NotReplaced(field, oldValue);
     }
 
     function _nonZero(address value, string memory field) private pure returns (address) {
         if (value == address(0)) revert ZeroAddress(field);
-        return value;
-    }
-
-    function _nonZeroValue(uint256 value, string memory field) private pure returns (uint256) {
-        if (value == 0) revert ZeroValue(field);
         return value;
     }
 }

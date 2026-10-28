@@ -5,14 +5,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { TriggerableWithdrawalsGateway, WithdrawalVault__MockForTriggerableWithdrawalsGateway } from "typechain-types";
 
-import { DEFAULT_TWG_LIMIT, deployTriggerableWithdrawalsGateway } from "test/deploy";
+import { deployTriggerableWithdrawalsGateway } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import {
-  FULL_WITHDRAWAL_WEIGHT_GWEI,
+  DEFAULT_CONSUMER_LIMITS,
   fullWithdrawal,
   GWEI_PER_ETH,
-  MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI,
+  MAX_PWR_AMOUNT_GWEI,
   partialWithdrawal,
   WithdrawalIntent,
 } from "../triggerable-withdrawals-helpers";
@@ -23,31 +23,30 @@ describe("TriggerableWithdrawalsGateway.sol: triggerWithdrawals", () => {
   let admin: HardhatEthersSigner;
   let requester: HardhatEthersSigner;
   let refundRecipient: HardhatEthersSigner;
-  let stranger: HardhatEthersSigner;
 
   let originalState: string;
 
   before(async () => {
-    [admin, requester, refundRecipient, stranger] = await ethers.getSigners();
+    [admin, requester, refundRecipient] = await ethers.getSigners();
 
     ({ gateway, withdrawalVault } = await deployTriggerableWithdrawalsGateway(admin));
 
-    await gateway.connect(admin).grantRole(await gateway.ADD_WITHDRAWAL_REQUEST_ROLE(), requester.address);
+    await gateway.connect(admin).grantRole(await gateway.TW_EXIT_LIMIT_MANAGER_ROLE(), admin.address);
+    await gateway
+      .connect(admin)
+      .setConsumerLimits(requester.address, DEFAULT_CONSUMER_LIMITS.pwr, DEFAULT_CONSUMER_LIMITS.fwr);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  const currentLimit = async () => (await gateway.getWithdrawalLimitFullInfo()).currentWithdrawalLimitGwei;
+  const currentLimits = async () => {
+    const { pwrLimit, fwrLimit } = await gateway.getConsumerLimitsFullInfo(requester.address);
+    return { pwr: pwrLimit.currentLimit, fwr: fwrLimit.currentLimit };
+  };
 
   context("validation", () => {
-    it("reverts if caller has no ADD_WITHDRAWAL_REQUEST_ROLE", async () => {
-      await expect(gateway.connect(stranger).triggerWithdrawals([fullWithdrawal(0)], stranger.address, { value: 1n }))
-        .to.be.revertedWithCustomError(gateway, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, await gateway.ADD_WITHDRAWAL_REQUEST_ROLE());
-    });
-
     it("reverts if msg.value is zero", async () => {
       await expect(gateway.connect(requester).triggerWithdrawals([fullWithdrawal(0)], requester.address))
         .to.be.revertedWithCustomError(gateway, "ZeroArgument")
@@ -60,16 +59,14 @@ describe("TriggerableWithdrawalsGateway.sol: triggerWithdrawals", () => {
         .withArgs("intents");
     });
 
-    it("reverts on a partial withdrawal above the max amount and reports its index", async () => {
-      const tooLarge = MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI + 1n;
+    it("does not cap a single partial withdrawal amount: the PWR limit bounds it", async () => {
+      const amount = MAX_PWR_AMOUNT_GWEI + 1n;
 
       await expect(
-        gateway
-          .connect(requester)
-          .triggerWithdrawals([fullWithdrawal(0), partialWithdrawal(1, tooLarge)], requester.address, { value: 2n }),
+        gateway.connect(requester).triggerWithdrawals([partialWithdrawal(0, amount)], requester.address, { value: 1n }),
       )
-        .to.be.revertedWithCustomError(gateway, "WithdrawalAmountTooLarge")
-        .withArgs(1, tooLarge);
+        .to.emit(gateway, "WithdrawalsTriggered")
+        .withArgs(requester.address, 1, amount, 0);
     });
 
     it("reverts if the fee is insufficient", async () => {
@@ -99,12 +96,12 @@ describe("TriggerableWithdrawalsGateway.sol: triggerWithdrawals", () => {
         );
     });
 
-    it("emits WithdrawalsTriggered with the consumed weight", async () => {
-      const intents = [fullWithdrawal(0), partialWithdrawal(1, 5n * GWEI_PER_ETH)];
+    it("emits WithdrawalsTriggered with the consumed quotas", async () => {
+      const intents = [fullWithdrawal(0), partialWithdrawal(1, 5n * GWEI_PER_ETH), fullWithdrawal(2)];
 
-      await expect(gateway.connect(requester).triggerWithdrawals(intents, requester.address, { value: 2n }))
+      await expect(gateway.connect(requester).triggerWithdrawals(intents, requester.address, { value: 3n }))
         .to.emit(gateway, "WithdrawalsTriggered")
-        .withArgs(requester.address, 2, FULL_WITHDRAWAL_WEIGHT_GWEI + 5n * GWEI_PER_ETH);
+        .withArgs(requester.address, 1, 5n * GWEI_PER_ETH, 2);
     });
 
     it("does not notify the StakingRouter", async () => {
@@ -118,19 +115,21 @@ describe("TriggerableWithdrawalsGateway.sol: triggerWithdrawals", () => {
     });
   });
 
-  context("weights", () => {
-    const cases: { name: string; intents: WithdrawalIntent[]; weightGwei: bigint }[] = [
-      { name: "full withdrawal", intents: [fullWithdrawal(0)], weightGwei: FULL_WITHDRAWAL_WEIGHT_GWEI },
-      { name: "1 gwei partial withdrawal", intents: [partialWithdrawal(0, 1n)], weightGwei: 1n },
+  context("consumed quotas", () => {
+    const cases: { name: string; intents: WithdrawalIntent[]; pwrAmountGwei: bigint; fwrCount: bigint }[] = [
+      { name: "full withdrawal", intents: [fullWithdrawal(0)], pwrAmountGwei: 0n, fwrCount: 1n },
+      { name: "1 gwei partial withdrawal", intents: [partialWithdrawal(0, 1n)], pwrAmountGwei: 1n, fwrCount: 0n },
       {
         name: "1 ETH + 1 gwei partial withdrawal",
         intents: [partialWithdrawal(0, GWEI_PER_ETH + 1n)],
-        weightGwei: GWEI_PER_ETH + 1n,
+        pwrAmountGwei: GWEI_PER_ETH + 1n,
+        fwrCount: 0n,
       },
       {
         name: "max partial withdrawal",
-        intents: [partialWithdrawal(0, MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI)],
-        weightGwei: FULL_WITHDRAWAL_WEIGHT_GWEI,
+        intents: [partialWithdrawal(0, MAX_PWR_AMOUNT_GWEI)],
+        pwrAmountGwei: MAX_PWR_AMOUNT_GWEI,
+        fwrCount: 0n,
       },
       {
         name: "mixed batch",
@@ -139,20 +138,27 @@ describe("TriggerableWithdrawalsGateway.sol: triggerWithdrawals", () => {
           partialWithdrawal(1, 1n),
           fullWithdrawal(2),
           partialWithdrawal(3, 31n * GWEI_PER_ETH + 1n),
+          fullWithdrawal(4),
         ],
-        weightGwei: GWEI_PER_ETH / 2n + 1n + FULL_WITHDRAWAL_WEIGHT_GWEI + 31n * GWEI_PER_ETH + 1n,
+        pwrAmountGwei: GWEI_PER_ETH / 2n + 1n + 31n * GWEI_PER_ETH + 1n,
+        fwrCount: 2n,
       },
     ];
 
-    for (const { name, intents, weightGwei } of cases) {
-      it(`consumes ${weightGwei} gwei of the limit for ${name}`, async () => {
+    for (const { name, intents, pwrAmountGwei, fwrCount } of cases) {
+      it(`consumes ${pwrAmountGwei} gwei of the PWR limit and ${fwrCount} of the FWR limit for ${name}`, async () => {
+        const pwrCount = BigInt(intents.length) - fwrCount;
+
         await expect(
           gateway.connect(requester).triggerWithdrawals(intents, requester.address, { value: BigInt(intents.length) }),
         )
           .to.emit(gateway, "WithdrawalsTriggered")
-          .withArgs(requester.address, intents.length, weightGwei);
+          .withArgs(requester.address, pwrCount, pwrAmountGwei, fwrCount);
 
-        expect(await currentLimit()).to.equal(DEFAULT_TWG_LIMIT.maxWithdrawalLimitGwei - weightGwei);
+        expect(await currentLimits()).to.deep.equal({
+          pwr: DEFAULT_CONSUMER_LIMITS.pwr.maxLimit - pwrAmountGwei,
+          fwr: DEFAULT_CONSUMER_LIMITS.fwr.maxLimit - fwrCount,
+        });
       });
     }
   });

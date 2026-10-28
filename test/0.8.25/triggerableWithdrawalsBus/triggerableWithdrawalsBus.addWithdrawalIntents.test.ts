@@ -12,7 +12,7 @@ import { Snapshot } from "test/suite";
 
 import {
   fullWithdrawal,
-  MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI,
+  MAX_PWR_AMOUNT_GWEI,
   partialWithdrawal,
   pubkeyAt,
   toIntents,
@@ -73,11 +73,19 @@ describe("TriggerableWithdrawalsBus.sol: addWithdrawalIntents", () => {
     }
 
     it("reverts on a partial withdrawal above the max amount and reports its index", async () => {
-      const tooLarge = MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI + 1n;
+      const tooLarge = MAX_PWR_AMOUNT_GWEI + 1n;
 
       await expect(bus.connect(publisher).addWithdrawalIntents([partialWithdrawal(0, tooLarge), fullWithdrawal(1)]))
         .to.be.revertedWithCustomError(bus, "WithdrawalAmountTooLarge")
         .withArgs(0, tooLarge);
+    });
+
+    it("reverts on a partial withdrawal of the max effective balance (2048 ETH)", async () => {
+      const maxEffectiveBalanceGwei = 2048n * 10n ** 9n;
+
+      await expect(bus.connect(publisher).addWithdrawalIntents([partialWithdrawal(0, maxEffectiveBalanceGwei)]))
+        .to.be.revertedWithCustomError(bus, "WithdrawalAmountTooLarge")
+        .withArgs(0, maxEffectiveBalanceGwei);
     });
 
     it("reverts on the max uint64 amount", async () => {
@@ -105,7 +113,7 @@ describe("TriggerableWithdrawalsBus.sol: addWithdrawalIntents", () => {
         fullWithdrawal(0),
         partialWithdrawal(1, 1n),
         partialWithdrawal(2, 32n * 10n ** 9n),
-        partialWithdrawal(3, MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI),
+        partialWithdrawal(3, MAX_PWR_AMOUNT_GWEI),
       ];
 
       await expect(bus.connect(publisher).addWithdrawalIntents(intents))
@@ -120,7 +128,7 @@ describe("TriggerableWithdrawalsBus.sol: addWithdrawalIntents", () => {
       const pubkey = ethers.concat([ethers.ZeroHash, "0x" + "ff".repeat(16)]);
       const edgeIntents = [
         { amount: 0n, pubkey },
-        { amount: MAX_PARTIAL_WITHDRAWAL_AMOUNT_GWEI, pubkey: "0x" + "ff".repeat(48) },
+        { amount: MAX_PWR_AMOUNT_GWEI, pubkey: "0x" + "ff".repeat(48) },
         { amount: 1n, pubkey: "0x" + "00".repeat(48) },
       ];
 

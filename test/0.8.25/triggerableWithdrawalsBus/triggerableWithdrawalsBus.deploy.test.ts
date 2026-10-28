@@ -29,6 +29,8 @@ describe("TriggerableWithdrawalsBus.sol: deployment", () => {
     expect(await bus.hasRole(await bus.DEFAULT_ADMIN_ROLE(), admin.address)).to.be.true;
     expect(await bus.getRoleMemberCount(await bus.DEFAULT_ADMIN_ROLE())).to.equal(1);
     expect(await bus.ADD_WITHDRAWAL_INTENTS_ROLE()).to.equal(streccak("ADD_WITHDRAWAL_INTENTS_ROLE"));
+    expect(await bus.CLEAR_WITHDRAWAL_INTENTS_ROLE()).to.equal(streccak("CLEAR_WITHDRAWAL_INTENTS_ROLE"));
+    expect(await bus.getRoleMemberCount(await bus.CLEAR_WITHDRAWAL_INTENTS_ROLE())).to.equal(0);
     expect(await bus.unprocessedIntentsCount()).to.equal(0);
     expect(await bus.getWithdrawalIntents(0, 10)).to.deep.equal([]);
   });

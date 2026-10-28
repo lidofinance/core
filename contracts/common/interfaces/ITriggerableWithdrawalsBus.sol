@@ -20,15 +20,13 @@ interface ITriggerableWithdrawalsBus {
     function addWithdrawalIntents(WithdrawalIntent[] calldata intents) external;
 
     /**
-     * @notice Pops up to `count` intents from the head of the queue and executes them as withdrawal requests.
-     * @param count Maximum number of intents to process
+     * @notice Pops exactly `count` intents from the head of the queue and executes them as withdrawal requests.
+     * @param count Number of intents to process
      * @param refundRecipient Receiver of the unused fee; `address(0)` refunds to `msg.sender`
-     * @return processedCount Number of intents processed, less than `count` if the queue holds fewer intents
+     * @dev Reverts if the queue holds fewer than `count` intents, or if the batch exceeds the remaining
+     *      gateway limits of this contract.
      */
-    function processWithdrawalIntents(
-        uint256 count,
-        address refundRecipient
-    ) external payable returns (uint256 processedCount);
+    function processWithdrawalIntents(uint256 count, address refundRecipient) external payable;
 
     /**
      * @notice Returns the number of intents waiting in the queue.
@@ -41,4 +39,9 @@ interface ITriggerableWithdrawalsBus {
      * @param limit Maximum number of intents to return
      */
     function getWithdrawalIntents(uint256 offset, uint256 limit) external view returns (WithdrawalIntent[] memory);
+
+    /**
+     * @notice Drops all unprocessed intents. Nothing is sent to the gateway and no gateway limit is consumed.
+     */
+    function clearWithdrawalIntents() external;
 }
