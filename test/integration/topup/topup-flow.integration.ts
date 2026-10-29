@@ -10,6 +10,7 @@ import {
   buildTopUpData,
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
+  cmv2HasTopUpAllocationPause,
   CMv2OperatorKeys,
   cmv2SuiteEnabled,
   depositEventAmountWei,
@@ -175,8 +176,9 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
       // All pulled ether is deposited: buffer decreases by exactly the total
       expect(bufferedBefore - (await lido.getBufferedEther())).to.equal(expectedTotal);
 
-      // Module nonce moves (allocateDeposits ran on the real module)
-      expect(await stakingRouter.getStakingModuleNonce(moduleId)).to.equal(nonceBefore + 1n);
+      // Module nonce: CMv2 bumped it on a top-up allocation until staking-modules#910 removed the bump
+      const expectedNonce = (await cmv2HasTopUpAllocationPause(ctx)) ? nonceBefore : nonceBefore + 1n;
+      expect(await stakingRouter.getStakingModuleNonce(moduleId)).to.equal(expectedNonce);
 
       // A successful (non-zero) top-up advances the rate-limit window
       const gatewayEvents = ctx.getEvents(receipt!, "LastTopUpChanged");
