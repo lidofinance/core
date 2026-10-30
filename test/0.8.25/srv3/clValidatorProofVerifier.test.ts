@@ -1,14 +1,15 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain-types";
+import { CLValidatorVerifier__Harness } from "typechain-types";
 
-import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "lib/pdg";
-import { prepareLocalMerkleTree } from "lib/top-ups";
+import { generateBeaconHeader, generateValidator, setBeaconBlockRoot } from "lib/pdg";
+import { buildBeaconHeaderProof, buildValidatorStateProofs, ValidatorContainer } from "lib/top-ups";
+
+const MAX_UINT64 = (1n << 64n) - 1n;
 
 const STATIC_VALIDATOR = {
   blockRoot: "0xbe928e3a9fa76b916df79d78a8b67237f9b133269bb421f37490b7624abad452",
-  gIFirstValidator: "0x0000000000000000000000000000000000000000000000000096000000000028",
   beaconRootData: {
     childBlockTimestamp: 1769723675n,
     slot: 13574970n,
@@ -147,377 +148,166 @@ const STATIC_VALIDATOR = {
 };
 
 describe("CLTopUpProofVerifier", () => {
-  let sszMerkleTree: SSZValidatorsMerkleTree;
-  let gIFirstValidator: string;
-  let firstValidatorLeafIndex: bigint;
+  const SLOT = 3200; // epoch 100
+  const WRONG_WC = "0x" + "11".repeat(32);
+
+  let baseValidators: ValidatorContainer[];
   let verifier: CLValidatorVerifier__Harness;
 
   before(async () => {
-    // 1) Build a local SSZ tree once
-    const localTree = await prepareLocalMerkleTree();
-    sszMerkleTree = localTree.stateTree;
-    gIFirstValidator = localTree.gIFirstValidator;
-    firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
+    // A populated registry so proven validators do not sit at index zero.
+    baseValidators = Array.from({ length: 100 }, () => generateValidator().container);
 
-    // populate merkle tree with validators
-    for (let i = 1; i < 100; i++) {
-      const v = generateValidator().container;
-      await sszMerkleTree.addValidatorsLeaf(v);
-    }
-
-    // 2) Deploy the verifier (same GI for prev/curr, no pivot)
-    verifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      gIFirstValidator, // GI_FIRST_VALIDATOR_PREV
-      gIFirstValidator, // GI_FIRST_VALIDATOR_CURR
-      0, // PIVOT_SLOT
-    ]);
+    // MAX_UINT64 keeps this verifier on the pre-Gloas path for every slot.
+    verifier = await ethers.deployContract("CLValidatorVerifier__Harness", [MAX_UINT64]);
   });
 
-  it("verifies full Validator container at head under EIP-4788", async () => {
-    // 1) Create an 'active' validator at the target epoch
-    const v = generateValidator();
-    const FAR_FUTURE = (1n << 64n) - 1n;
+  /** A validator that passes every witness check at epoch(SLOT) = 100 unless overridden. */
+  const activeValidator = (overrides: Partial<ValidatorContainer> = {}): ValidatorContainer => ({
+    ...generateValidator().container,
+    slashed: false,
+    activationEligibilityEpoch: 1n,
+    activationEpoch: 2n,
+    exitEpoch: MAX_UINT64,
+    withdrawableEpoch: MAX_UINT64,
+    ...overrides,
+  });
 
-    v.container.slashed = false;
-    v.container.activationEligibilityEpoch = 1n;
-    v.container.activationEpoch = 2n;
-    v.container.exitEpoch = FAR_FUTURE;
-    v.container.withdrawableEpoch = FAR_FUTURE;
+  /** The gateway's ValidatorWitness struct for a container and its combined Merkle proof. */
+  const toWitness = (container: ValidatorContainer, proofValidator: string[]) => ({
+    proofValidator,
+    pubkey: container.pubkey,
+    effectiveBalance: container.effectiveBalance,
+    slashed: container.slashed,
+    activationEligibilityEpoch: container.activationEligibilityEpoch,
+    activationEpoch: container.activationEpoch,
+    exitEpoch: container.exitEpoch,
+    withdrawableEpoch: container.withdrawableEpoch,
+  });
 
-    const expectedWC = v.container.withdrawalCredentials;
-
-    // Insert validator into the local SSZ tree
-    await sszMerkleTree.addValidatorsLeaf(v.container);
-
-    // Compute its index in validators[i]
-    const leafCount = await sszMerkleTree.leafCount();
-    // Index = (current leaves - 1) - firstValidatorLeafIndex
-    const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
-
-    // Anchor the current state_root into EIP-4788 via a header at SLOT
-    const SLOT = 3200; // epoch = 100 (greater than activationEpoch)
-    const stateRoot = await sszMerkleTree.getStateRoot();
-    const beaconBlockHeader = await generateBeaconHeader(stateRoot, SLOT);
-    const headerHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(beaconBlockHeader);
-    const childBlockTimestamp = await setBeaconBlockRoot(headerHash);
-
-    // Build proof:
-    //    - stateProof: validators[i] → validators_root → state_root
-    //    - headerProof: state_root → … → beacon_block_root (contains parent(slot, proposer) node)
-    const validator_proofs = await sszMerkleTree.getValidatorProof(firstValidatorLeafIndex + BigInt(validatorIndex));
-
-    // state_root -> beacon_block_root
-    const headerMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(beaconBlockHeader);
-    const proofValidator = [...validator_proofs, ...headerMerkle.proof];
-
-    const beaconRootData = {
-      childBlockTimestamp,
-      slot: beaconBlockHeader.slot,
-      proposerIndex: beaconBlockHeader.proposerIndex,
+  /** Publishes a beacon header for the state root via EIP-4788 and returns the gateway inputs. */
+  const anchorState = async (stateRoot: string, slot: number) => {
+    const header = generateBeaconHeader(stateRoot, slot);
+    const { root, proof } = await buildBeaconHeaderProof(header);
+    const childBlockTimestamp = await setBeaconBlockRoot(root);
+    return {
+      headerProof: proof,
+      beaconRootData: { childBlockTimestamp, slot: header.slot, proposerIndex: header.proposerIndex },
     };
+  };
 
-    // 2) Validator witness (validator container only)
-    const validatorWitness = {
-      proofValidator,
-      pubkey: v.container.pubkey,
-      effectiveBalance: v.container.effectiveBalance,
-      slashed: v.container.slashed,
-      exitEpoch: v.container.exitEpoch,
-      activationEligibilityEpoch: v.container.activationEligibilityEpoch,
-      activationEpoch: v.container.activationEpoch,
-      withdrawableEpoch: v.container.withdrawableEpoch,
+  /** Proves `container` as the last validator of a fresh pre-Gloas state anchored at `slot`. */
+  const proveValidator = async (container: ValidatorContainer, slot = SLOT) => {
+    const validators = [...baseValidators, container];
+    const validatorIndex = validators.length - 1;
+    const state = await buildValidatorStateProofs(validators);
+    const { headerProof, beaconRootData } = await anchorState(state.root, slot);
+    return {
+      validatorIndex,
+      beaconRootData,
+      witness: toWitness(container, [...state.proofs[validatorIndex], ...headerProof]),
     };
+  };
 
-    // 4) Call harness
-    await verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, expectedWC);
+  it("verifies an active validator and rejects a wrong withdrawal credential", async () => {
+    const container = activeValidator();
+    const { validatorIndex, beaconRootData, witness } = await proveValidator(container);
 
-    // 5) Negative: wrong WC must fail
-    const wrongWC = "0x" + "11".repeat(32);
-    await expect(verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, wrongWC)).to.be
+    await verifier.TEST_verifyValidator(beaconRootData, witness, validatorIndex, container.withdrawalCredentials);
+
+    await expect(verifier.TEST_verifyValidator(beaconRootData, witness, validatorIndex, WRONG_WC)).to.be.reverted;
+  });
+
+  // The verifier only authenticates the witness; these states are filtered (or allowed) elsewhere.
+  for (const [name, overrides] of [
+    ["a slashed validator", { slashed: true }],
+    ["activationEpoch above the proven epoch", { activationEpoch: 101n }],
+    ["activationEpoch equal to the proven epoch", { activationEpoch: 100n }],
+    ["an exiting validator", { activationEligibilityEpoch: 70n, activationEpoch: 90n, exitEpoch: 101n }],
+  ] as const) {
+    it(`accepts a correct proof of ${name}`, async () => {
+      const container = activeValidator(overrides);
+      const { validatorIndex, beaconRootData, witness } = await proveValidator(container);
+
+      await verifier.TEST_verifyValidator(beaconRootData, witness, validatorIndex, container.withdrawalCredentials);
+    });
+  }
+
+  it("uses the same pre-Gloas validator paths as Lodestar's Electra BeaconState", async () => {
+    const state = await buildValidatorStateProofs(baseValidators);
+
+    for (const index of [0, 1, baseValidators.length - 1]) {
+      expect(await verifier.TEST_getValidatorGI(index, SLOT)).to.equal(state.gindices[index]);
+    }
+  });
+
+  // Proofs captured from a real mainnet block; they guard against regressions relative to production data.
+  const staticBeaconRootData = async () => ({
+    ...STATIC_VALIDATOR.beaconRootData,
+    childBlockTimestamp: await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot),
+  });
+
+  const STATIC_WC = [
+    "0x010000000000000000000000ddc6ed6e6a9c1e55c87b155b9a40bac4721a6dac",
+    "0x010000000000000000000000210b3cb99fa1de0a64085fa80e18c22fe4722a1b",
+  ];
+
+  for (const [i, v] of STATIC_VALIDATOR.validators.entries()) {
+    it(`verifies static mainnet validator ${v.index}`, async () => {
+      await verifier.TEST_verifyValidator(await staticBeaconRootData(), v.witness, v.index, STATIC_WC[i]);
+    });
+  }
+
+  it("rejects a static mainnet witness with wrong withdrawal credentials", async () => {
+    const v = STATIC_VALIDATOR.validators[0];
+
+    await expect(verifier.TEST_verifyValidator(await staticBeaconRootData(), v.witness, v.index, WRONG_WC)).to.be
       .reverted;
   });
 
-  it("don't revert with ValidatorIsSlashed when slashed = true", async () => {
-    const v = generateValidator();
-    const FAR_FUTURE = (1n << 64n) - 1n;
-
-    v.container.slashed = true;
-    v.container.activationEligibilityEpoch = 1n;
-    v.container.activationEpoch = 2n;
-    v.container.exitEpoch = FAR_FUTURE;
-    v.container.withdrawableEpoch = FAR_FUTURE;
-
-    const expectedWC = v.container.withdrawalCredentials;
-
-    await sszMerkleTree.addValidatorsLeaf(v.container);
-
-    const leafCount = await sszMerkleTree.leafCount();
-    const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
-
-    const SLOT = 3200; // epoch = 100
-    const stateRoot = await sszMerkleTree.getStateRoot();
-    const header = await generateBeaconHeader(stateRoot, SLOT);
-    const headerHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(header);
-    const childBlockTimestamp = await setBeaconBlockRoot(headerHash);
-
-    // validator[i] -> validators_root -> state_root'
-    const validator_proofs = await sszMerkleTree.getValidatorProof(firstValidatorLeafIndex + BigInt(validatorIndex));
-
-    const headerMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(header);
-
-    const proofValidator = [...validator_proofs, ...headerMerkle.proof];
-
-    const beaconRootData = {
-      childBlockTimestamp,
-      slot: header.slot,
-      proposerIndex: header.proposerIndex,
-    };
-
-    const validatorWitness = {
-      proofValidator,
-      pubkey: v.container.pubkey,
-      effectiveBalance: v.container.effectiveBalance,
-      slashed: v.container.slashed,
-      exitEpoch: v.container.exitEpoch,
-      activationEligibilityEpoch: v.container.activationEligibilityEpoch,
-      activationEpoch: v.container.activationEpoch,
-      withdrawableEpoch: v.container.withdrawableEpoch,
-    };
-
-    await expect(verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, expectedWC)).to.not.be
-      .rejected;
-  });
-
-  it("don't revert when activationEpoch > epoch(slot)", async () => {
-    const v = generateValidator();
-    const FAR_FUTURE = (1n << 64n) - 1n;
-
-    v.container.slashed = false;
-    v.container.activationEligibilityEpoch = 1n;
-    v.container.activationEpoch = 101n; // > epoch(slot=3200)=100
-    v.container.exitEpoch = FAR_FUTURE;
-    v.container.withdrawableEpoch = FAR_FUTURE;
-
-    const expectedWC = v.container.withdrawalCredentials;
-
-    await sszMerkleTree.addValidatorsLeaf(v.container);
-
-    const leafCount = await sszMerkleTree.leafCount();
-    const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
-
-    const SLOT = 3200;
-    const stateRoot = await sszMerkleTree.getStateRoot();
-    const header = await generateBeaconHeader(stateRoot, SLOT);
-    const headerHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(header);
-    const childBlockTimestamp = await setBeaconBlockRoot(headerHash);
-
-    const validator_proofs = await sszMerkleTree.getValidatorProof(firstValidatorLeafIndex + BigInt(validatorIndex));
-    const headerMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(header);
-
-    const proofValidator = [...validator_proofs, ...headerMerkle.proof];
-
-    const beaconRootData = {
-      childBlockTimestamp,
-      slot: header.slot,
-      proposerIndex: header.proposerIndex,
-    };
-
-    const validatorWitness = {
-      proofValidator,
-      pubkey: v.container.pubkey,
-      effectiveBalance: v.container.effectiveBalance,
-      slashed: v.container.slashed,
-      exitEpoch: v.container.exitEpoch,
-      activationEligibilityEpoch: v.container.activationEligibilityEpoch,
-      activationEpoch: v.container.activationEpoch,
-      withdrawableEpoch: v.container.withdrawableEpoch,
-    };
-
-    await verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, expectedWC);
-  });
-
-  it("don't reverts when activationEpoch == epoch(slot)", async () => {
-    const v = generateValidator();
-    const FAR_FUTURE = (1n << 64n) - 1n;
-    v.container.slashed = false;
-    v.container.activationEligibilityEpoch = 1n;
-    v.container.activationEpoch = 100n; // == epoch(slot)
-    v.container.exitEpoch = FAR_FUTURE;
-    v.container.withdrawableEpoch = FAR_FUTURE;
-    const expectedWC = v.container.withdrawalCredentials;
-    await sszMerkleTree.addValidatorsLeaf(v.container);
-    const leafCount = await sszMerkleTree.leafCount();
-    const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
-    const SLOT = 3200; // epoch=100
-    const stateRoot = await sszMerkleTree.getStateRoot();
-    const header = await generateBeaconHeader(stateRoot, SLOT);
-    const headerHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(header);
-    const childBlockTimestamp = await setBeaconBlockRoot(headerHash);
-    const validator_proofs = await sszMerkleTree.getValidatorProof(firstValidatorLeafIndex + BigInt(validatorIndex));
-    const headerMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(header);
-    const proofValidator = [...validator_proofs, ...headerMerkle.proof];
-    const beaconRootData = {
-      childBlockTimestamp,
-      slot: header.slot,
-      proposerIndex: header.proposerIndex,
-    };
-    const validatorWitness = {
-      proofValidator,
-      pubkey: v.container.pubkey,
-      effectiveBalance: v.container.effectiveBalance,
-      slashed: v.container.slashed,
-      exitEpoch: v.container.exitEpoch,
-      activationEligibilityEpoch: v.container.activationEligibilityEpoch,
-      activationEpoch: v.container.activationEpoch,
-      withdrawableEpoch: v.container.withdrawableEpoch,
-    };
-
-    await verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, expectedWC);
-  });
-
-  it("don't revert when a validator with non-FAR_FUTURE exitEpoch (proof mismatch)", async () => {
-    const v = generateValidator();
-    const FAR_FUTURE = (1n << 64n) - 1n;
-    v.container.slashed = false;
-    v.container.activationEligibilityEpoch = 70n;
-    v.container.activationEpoch = 90n;
-    const SLOT = 3200; // epoch(slot) = 100
-    v.container.exitEpoch = 101n; //
-    v.container.withdrawableEpoch = FAR_FUTURE;
-    const expectedWC = v.container.withdrawalCredentials;
-    await sszMerkleTree.addValidatorsLeaf(v.container);
-    const leafCount = await sszMerkleTree.leafCount();
-    const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
-    const stateRoot = await sszMerkleTree.getStateRoot();
-    const header = await generateBeaconHeader(stateRoot, SLOT);
-    const headerHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(header);
-    const childBlockTimestamp = await setBeaconBlockRoot(headerHash);
-    const validator_proofs = await sszMerkleTree.getValidatorProof(firstValidatorLeafIndex + BigInt(validatorIndex));
-    const headerMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(header);
-    const proofValidator = [...validator_proofs, ...headerMerkle.proof];
-    const beaconRootData = {
-      childBlockTimestamp,
-      slot: header.slot,
-      proposerIndex: header.proposerIndex,
-    };
-    const validatorWitness = {
-      proofValidator,
-      pubkey: v.container.pubkey,
-      effectiveBalance: v.container.effectiveBalance,
-      slashed: v.container.slashed,
-      exitEpoch: v.container.exitEpoch,
-      activationEligibilityEpoch: v.container.activationEligibilityEpoch,
-      activationEpoch: v.container.activationEpoch,
-      withdrawableEpoch: v.container.withdrawableEpoch,
-    };
-
-    await verifier.TEST_verifyValidator(beaconRootData, validatorWitness, validatorIndex, expectedWC);
-  });
-
-  it("should verify static validator 12345 with real mainnet proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
-    ]);
-
-    const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
-
+  it("rejects a static mainnet witness with a tampered proof", async () => {
     const v = STATIC_VALIDATOR.validators[0];
-    const beaconRootData = {
-      ...STATIC_VALIDATOR.beaconRootData,
-      childBlockTimestamp: timestamp,
-    };
+    const tampered = { ...v.witness, proofValidator: [...v.witness.proofValidator] };
+    tampered.proofValidator[0] = "0x" + "aa".repeat(32);
 
-    await staticVerifier.TEST_verifyValidator(
-      beaconRootData,
-      v.witness,
-      v.index,
-      "0x010000000000000000000000ddc6ed6e6a9c1e55c87b155b9a40bac4721a6dac",
-    );
+    await expect(verifier.TEST_verifyValidator(await staticBeaconRootData(), tampered, v.index, STATIC_WC[0])).to.be
+      .reverted;
   });
 
-  it("should verify static validator 67890 with real mainnet proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
-    ]);
+  it("should change gIndex on Gloas slot", async () => {
+    const gloasSlot = 1000;
 
-    const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
-
-    const v = STATIC_VALIDATOR.validators[1];
-    const beaconRootData = {
-      ...STATIC_VALIDATOR.beaconRootData,
-      childBlockTimestamp: timestamp,
-    };
-
-    await staticVerifier.TEST_verifyValidator(
-      beaconRootData,
-      v.witness,
-      v.index,
-      "0x010000000000000000000000210b3cb99fa1de0a64085fa80e18c22fe4722a1b",
-    );
+    const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [gloasSlot], {});
+    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot - 1)).to.equal(0x960000000001n);
+    expect(await proofVerifier.TEST_getValidatorGI(0n, gloasSlot)).to.equal(0x598n);
+    expect(await proofVerifier.TEST_getValidatorGI(1n, gloasSlot + 1)).to.equal(0x2cc8n);
   });
 
-  it("should reject static validator with wrong withdrawal credentials", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
-    ]);
+  // The fork switch above only shows that the index moves. This proves real containers against the
+  // progressive-list layout, where the proof depth varies per chunk — a layout mismatch surfaces as
+  // an SSZ branch-length revert rather than a wrong index.
+  it("verifies validators across Gloas progressive-list chunk boundaries", async () => {
+    const GLOAS_SLOT = 1000;
+    const slot = GLOAS_SLOT + 2200; // after the fork; epoch past activation
+    const gloasVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [GLOAS_SLOT]);
 
-    const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
+    // 22 validators cover the 1-, 4- and 16-wide chunks plus the start of the 64-wide chunk.
+    const containers = Array.from({ length: 22 }, () => activeValidator());
+    const state = await buildValidatorStateProofs(containers, { gloas: true });
 
-    const v = STATIC_VALIDATOR.validators[0];
-    const beaconRootData = {
-      ...STATIC_VALIDATOR.beaconRootData,
-      childBlockTimestamp: timestamp,
-    };
+    const { headerProof, beaconRootData } = await anchorState(state.root, slot);
 
-    const wrongWC = "0x" + "11".repeat(32);
-    await expect(staticVerifier.TEST_verifyValidator(beaconRootData, v.witness, v.index, wrongWC)).to.be.reverted;
-  });
+    // The first and last validator of each chunk.
+    for (const index of [0, 1, 4, 5, 20, 21]) {
+      expect(await gloasVerifier.TEST_getValidatorGI(index, slot)).to.equal(state.gindices[index]);
 
-  it("should reject static validator with fake proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
-    ]);
+      const witness = toWitness(containers[index], [...state.proofs[index], ...headerProof]);
+      await gloasVerifier.TEST_verifyValidator(beaconRootData, witness, index, containers[index].withdrawalCredentials);
+    }
 
-    const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
-
-    const v = STATIC_VALIDATOR.validators[0];
-    const beaconRootData = {
-      ...STATIC_VALIDATOR.beaconRootData,
-      childBlockTimestamp: timestamp,
-    };
-
-    const tamperedWitness = {
-      ...v.witness,
-      proofValidator: [...v.witness.proofValidator],
-    };
-    tamperedWitness.proofValidator[0] = "0x" + "aa".repeat(32);
-
-    await expect(
-      staticVerifier.TEST_verifyValidator(
-        beaconRootData,
-        tamperedWitness,
-        v.index,
-        "0x010000000000000000000000ddc6ed6e6a9c1e55c87b155b9a40bac4721a6dac",
-      ),
-    ).to.be.reverted;
-  });
-
-  it("should change gIndex on pivot slot", async () => {
-    const pivotSlot = 1000;
-    const giPrev = randomBytes32();
-    const giCurr = randomBytes32();
-
-    const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [giPrev, giCurr, pivotSlot], {});
-    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot - 1)).to.equal(giPrev);
-    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(giCurr);
-    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot + 1)).to.equal(giCurr);
+    // The same witness must not verify on the pre-Gloas layout: the path and depth differ.
+    const witness = toWitness(containers[1], [...state.proofs[1], ...headerProof]);
+    await expect(verifier.TEST_verifyValidator(beaconRootData, witness, 1, containers[1].withdrawalCredentials)).to.be
+      .reverted;
   });
 });

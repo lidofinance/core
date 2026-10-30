@@ -19,7 +19,7 @@ export type ValidatorState = {
 };
 
 export type ValidatorStateProof = {
-  firstValidatorGI: string;
+  validatorsGI: bigint;
   beaconBlockHeaderRoot: string;
   beaconBlockHeader: BlockHeader;
   futureBeaconBlockHeaderRoot: string;
@@ -48,7 +48,7 @@ export const ACTIVE_VALIDATOR_PROOF: ValidatorStateProof = {
     bodyRoot: "0xca4f98890bc98a59f015d06375a5e00546b8f2ac1e88d31b1774ea28d4b3e7d1",
   },
 
-  firstValidatorGI: "0x0000000000000000000000000000000000000000000000000096000000000028",
+  validatorsGI: 0x4bn,
   validator: {
     pubkey: "0xaffd606a767b69df617169824f10baf992c407b059e18d8db2cf4f8cc7432dfe36477e94c9a14e87e1d13e5b22202b92",
     withdrawalCredentials: "0x010000000000000000000000b3e29c46ee1745724417c0c51eb2351a1c01cf36",

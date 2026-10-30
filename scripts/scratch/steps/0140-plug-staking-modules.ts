@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
-import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "lib";
+import { ether, impersonate, WithdrawalCredentialsType } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { streccak } from "lib/keccak";
@@ -199,8 +199,11 @@ async function enableExternalModule(
     agentSigner,
   );
   const [initialEpoch] = await hashConsensus.getFrameConfig();
-  if (BigInt(initialEpoch) === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
-    await makeTx(hashConsensus, "updateInitialEpoch", [await getCurrentEpoch(hashConsensus)], { from: agent });
+  const currentEpoch = await getCurrentEpoch(hashConsensus);
+  // Same condition as HashConsensus.updateInitialEpoch: the initial epoch must still be in the future.
+  // The far-future sentinel set by the constructor depends on genesisTime, so it can't be matched by a constant.
+  if (BigInt(initialEpoch) > currentEpoch) {
+    await makeTx(hashConsensus, "updateInitialEpoch", [currentEpoch], { from: agent });
   }
 
   const circuitBreakerAddress = state[Sk.circuitBreaker]?.address;
