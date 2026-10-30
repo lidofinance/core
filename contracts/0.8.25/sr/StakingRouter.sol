@@ -24,7 +24,6 @@ import {
     StakingModuleStatus,
     StakingModuleConfig,
     ValidatorsCountsCorrection,
-    ValidatorExitData,
     StakingModule,
     StakingModuleSummary,
     NodeOperatorSummary,
@@ -48,8 +47,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     bytes32 public constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
-    bytes32 public constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
-    bytes32 public constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
 
@@ -142,8 +139,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             STAKING_MODULE_MANAGE_ROLE,
             STAKING_MODULE_UNVETTING_ROLE,
             REPORT_EXITED_VALIDATORS_ROLE,
-            REPORT_VALIDATOR_EXITING_STATUS_ROLE,
-            REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE,
+            keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE"),
+            keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE"),
             UNSAFE_SET_EXITED_VALIDATORS_ROLE,
             REPORT_REWARDS_MINTED_ROLE
         ];
@@ -337,28 +334,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         SRLib._decreaseStakingModuleVettedKeysCountByNodeOperator(
             _stakingModuleId, _nodeOperatorIds, _vettedSigningKeysCounts
         );
-    }
-
-    /// @dev See {SRLib._reportValidatorExitDelay}.
-    function reportValidatorExitDelay(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes calldata _publicKey,
-        uint256 _eligibleToExitInSec
-    ) external onlyRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE) {
-        SRLib._reportValidatorExitDelay(
-            _stakingModuleId, _nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec
-        );
-    }
-
-    /// @dev See {SRLib._onValidatorExitTriggered}.
-    function onValidatorExitTriggered(
-        ValidatorExitData[] calldata validatorExitData,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) external onlyRole(REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE) {
-        SRLib._onValidatorExitTriggered(validatorExitData, _withdrawalRequestPaidFee, _exitType);
     }
 
     /// @notice Returns all registered staking modules.

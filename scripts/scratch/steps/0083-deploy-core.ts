@@ -6,6 +6,7 @@ import {
   ConsolidationMigrator,
   StakingRouter,
   TopUpGateway,
+  TriggerableWithdrawalsBus,
   TriggerableWithdrawalsGateway,
 } from "typechain-types";
 
@@ -24,14 +25,7 @@ import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 import { en0x } from "lib/string";
 
-import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
-
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
-
-export const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
-export const GLOAS_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
-export const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
-export const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -46,7 +40,6 @@ export async function main() {
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
-  const validatorExitDelayVerifierParams = state[Sk.validatorExitDelayVerifier].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -196,7 +189,6 @@ export async function main() {
       maxTopUpPerBlockGwei,
     ]),
   );
-  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
 
   //
   // Deploy or use predefined DepositSecurityModule
@@ -348,28 +340,50 @@ export async function main() {
     Sk.triggerableWithdrawalsGateway,
     "TriggerableWithdrawalsGateway",
     deployer,
-    [
-      admin,
-      locator.address,
-      triggerableWithdrawalsGatewayParams.maxExitRequestsLimit,
-      triggerableWithdrawalsGatewayParams.exitsPerFrame,
-      triggerableWithdrawalsGatewayParams.frameDurationInSec,
-    ],
-  );
-  await makeTx(
-    stakingRouter,
-    "grantRole",
-    [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGateway_.address],
-    { from: deployer },
+    [admin, locator.address],
   );
   const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
     "TriggerableWithdrawalsGateway",
     triggerableWithdrawalsGateway_.address,
   );
+
+  //
+  // Deploy Triggerable Withdrawals Bus
+  //
+
+  const triggerableWithdrawalsBus_ = await deployBehindOssifiableProxy(
+    Sk.triggerableWithdrawalsBus,
+    "TriggerableWithdrawalsBus",
+    proxyContractsOwner,
+    deployer,
+    [locator.address],
+  );
+  const triggerableWithdrawalsBus = await loadContract<TriggerableWithdrawalsBus>(
+    "TriggerableWithdrawalsBus",
+    triggerableWithdrawalsBus_.address,
+  );
+
+  await makeTx(triggerableWithdrawalsBus, "initialize", [admin], { from: deployer });
+
+  // The deployer sets the consumer limits until `0150` hands TW_EXIT_LIMIT_MANAGER_ROLE over to the Agent.
+  // A consumer without limits cannot submit requests, so this also lets the bus call the gateway.
   await makeTx(
     triggerableWithdrawalsGateway,
     "grantRole",
-    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracle.address],
+    [await triggerableWithdrawalsGateway.TW_EXIT_LIMIT_MANAGER_ROLE(), deployer],
+    { from: deployer },
+  );
+  const { busLimits } = triggerableWithdrawalsGatewayParams;
+  await makeTx(
+    triggerableWithdrawalsGateway,
+    "setConsumerLimits",
+    [triggerableWithdrawalsBus_.address, busLimits.pwr, busLimits.fwr],
+    { from: deployer },
+  );
+  await makeTx(
+    triggerableWithdrawalsBus,
+    "grantRole",
+    [await triggerableWithdrawalsBus.ADD_WITHDRAWAL_INTENTS_ROLE(), validatorsExitBusOracle.address],
     { from: deployer },
   );
 
@@ -475,50 +489,13 @@ export async function main() {
   });
 
   //
-  // Deploy ValidatorExitDelayVerifier
-  //
-
-  const validatorExitDelayVerifierCtorArgs = [
-    locator.address,
-    validatorExitDelayVerifierParams.firstSupportedSlot,
-    validatorExitDelayVerifierParams.gloasSlot,
-    validatorExitDelayVerifierParams.capellaSlot,
-    validatorExitDelayVerifierParams.slotsPerHistoricalRoot,
-    chainSpec.slotsPerEpoch,
-    chainSpec.secondsPerSlot,
-    chainSpec.genesisTime,
-    validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
-  ];
-
-  // Sanity check: firstSupportedSlot must not be in the future on the target chain, otherwise every
-  // proof reverts with UnsupportedSlot until the verifier is redeployed with a chain-specific profile.
-  const latestBlockTimestamp = (await ethers.provider.getBlock("latest"))!.timestamp;
-  const firstSupportedSlotTimestamp =
-    BigInt(chainSpec.genesisTime) +
-    BigInt(validatorExitDelayVerifierParams.firstSupportedSlot) * BigInt(chainSpec.secondsPerSlot);
-  if (firstSupportedSlotTimestamp > BigInt(latestBlockTimestamp)) {
-    throw new Error(
-      `ValidatorExitDelayVerifier firstSupportedSlot (${validatorExitDelayVerifierParams.firstSupportedSlot}) ` +
-        `maps to timestamp ${firstSupportedSlotTimestamp}, which is in the future for the target chain ` +
-        `(latest block timestamp ${latestBlockTimestamp}). The deploy parameters profile does not match the chain.`,
-    );
-  }
-
-  await deployWithoutProxy(
-    Sk.validatorExitDelayVerifier,
-    "ValidatorExitDelayVerifier",
-    deployer,
-    validatorExitDelayVerifierCtorArgs,
-  );
-
-  //
   // Deploy WithdrawalVault
   //
 
   const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
     lidoAddress,
     treasuryAddress,
-    triggerableWithdrawalsGateway.address,
+    triggerableWithdrawalsGateway_.address,
     consolidationGateway.address,
     EIP7002_ADDRESS,
     EIP7251_ADDRESS,

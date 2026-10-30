@@ -18,6 +18,7 @@ const ChainSpecSchema = z.object({
   secondsPerSlot: PositiveIntSchema,
   genesisTime: z.number().int().optional(),
   depositContract: EthereumAddressSchema.optional(),
+  capellaSlot: NonNegativeIntSchema.optional(),
 });
 
 // Validator exit delay verifier schema
@@ -72,11 +73,48 @@ const WithdrawalVaultSchema = z.object({
   consolidationRequestContract: EthereumAddressSchema,
 });
 
-// Triggerable withdrawals gateway schema (used in scratch configs)
+// A quota of the triggerable withdrawals gateway (`LimitConfig`): all zero disables it
+const TriggerableWithdrawalsLimitSchema = z
+  .object({
+    maxLimit: NonNegativeIntSchema,
+    limitPerFrame: NonNegativeIntSchema,
+    frameDurationInSec: NonNegativeIntSchema,
+  })
+  .refine(
+    ({ maxLimit, limitPerFrame, frameDurationInSec }) =>
+      maxLimit === 0
+        ? limitPerFrame === 0 && frameDurationInSec === 0
+        : limitPerFrame > 0 && limitPerFrame <= maxLimit && frameDurationInSec > 0,
+    { message: "a limit is either all zero (disabled) or has 0 < limitPerFrame <= maxLimit and a non-zero frame" },
+  );
+
+// Max partial withdrawal amount in gwei (LIP-38 MAX_PWR_AMOUNT): an enabled PWR limit must hold it
+const MAX_PWR_AMOUNT_GWEI = 2016 * 1e9;
+
+// Limits of one gateway consumer: partial withdrawals in gwei, full withdrawals in validators (LIP-38)
+const TriggerableWithdrawalsConsumerLimitsSchema = z.object({
+  pwr: TriggerableWithdrawalsLimitSchema.refine(({ maxLimit }) => maxLimit === 0 || maxLimit >= MAX_PWR_AMOUNT_GWEI, {
+    message: "an enabled PWR limit must be at least 2016 ETH in gwei",
+  }),
+  fwr: TriggerableWithdrawalsLimitSchema,
+});
+
+// Scratch: gateway limits of the bus, and default limits of a staking module ejector by WC type
 const TriggerableWithdrawalsGatewaySchema = z.object({
-  maxExitRequestsLimit: PositiveIntSchema,
-  exitsPerFrame: PositiveIntSchema,
-  frameDurationInSec: PositiveIntSchema,
+  busLimits: TriggerableWithdrawalsConsumerLimitsSchema,
+  ejectorLimitsWC0x01: TriggerableWithdrawalsConsumerLimitsSchema,
+  ejectorLimitsWC0x02: TriggerableWithdrawalsConsumerLimitsSchema,
+});
+
+// Upgrade: gateway limits the vote sets for the bus and each staking module ejector (LIP-38 "Initial limits")
+const TriggerableWithdrawalsGatewayUpgradeSchema = z.object({
+  busLimits: TriggerableWithdrawalsConsumerLimitsSchema,
+  ejectors: z.array(
+    TriggerableWithdrawalsConsumerLimitsSchema.extend({
+      name: z.string(),
+      address: EthereumAddressSchema,
+    }),
+  ),
 });
 
 // Consolidation gateway schema
@@ -372,7 +410,6 @@ export const ScratchParametersSchema = z.object({
   nodeOperatorsRegistry: StakingModuleSchema,
   simpleDvt: StakingModuleSchema,
   withdrawalQueueERC721: WithdrawalQueueERC721Schema,
-  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
@@ -396,7 +433,7 @@ export const UpgradeParametersSchema = z.object({
   topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
   withdrawalVault: WithdrawalVaultSchema,
-  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewayUpgradeSchema,
   accountingOracle: OracleSchema,
   validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
@@ -409,6 +446,7 @@ export const UpgradeParametersSchema = z.object({
   curatedModule: CuratedModuleConfigSchema,
 
   upgradeVoteScript: UpgradeVoteScriptSchema,
+  srPhase2UpgradeVoteScript: UpgradeVoteScriptSchema,
 
   // old and optional
   vaultHub: VaultHubSchema.optional(),

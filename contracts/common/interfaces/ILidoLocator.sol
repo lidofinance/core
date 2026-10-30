@@ -27,8 +27,8 @@ interface ILidoLocator {
     function lazyOracle() external view returns (address);
     function operatorGrid() external view returns (address);
     function topUpGateway() external view returns (address);
-    function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
+    function triggerableWithdrawalsBus() external view returns (address);
     function consolidationGateway() external view returns (address);
 
     /// @notice Returns core Lido protocol component addresses in a single call

@@ -25,10 +25,10 @@ import {
   PredepositGuarantee,
   StakingRouter,
   TopUpGateway,
+  TriggerableWithdrawalsBus,
   TriggerableWithdrawalsGateway,
   UpgradeableBeacon,
   ValidatorConsolidationRequests,
-  ValidatorExitDelayVerifier,
   ValidatorsExitBusOracle,
   VaultFactory,
   VaultHub,
@@ -57,9 +57,9 @@ export type ProtocolNetworkItems = {
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
-  validatorExitDelayVerifier: string;
   validatorsExitBusOracle: string;
   triggerableWithdrawalsGateway: string;
+  triggerableWithdrawalsBus: string;
   consolidationGateway: string;
   consolidationBus: string;
   consolidationMigrator: string;
@@ -98,7 +98,6 @@ export interface ContractTypes {
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
-  ValidatorExitDelayVerifier: ValidatorExitDelayVerifier;
   ValidatorsExitBusOracle: ValidatorsExitBusOracle;
   WithdrawalQueueERC721: WithdrawalQueueERC721;
   WithdrawalVault: WithdrawalVault;
@@ -110,6 +109,7 @@ export interface ContractTypes {
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
   TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
+  TriggerableWithdrawalsBus: TriggerableWithdrawalsBus;
   ConsolidationGateway: ConsolidationGateway;
   ConsolidationBus: ConsolidationBus;
   ConsolidationMigrator: ConsolidationMigrator;
@@ -141,13 +141,13 @@ export type CoreContracts = {
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
-  validatorExitDelayVerifier: LoadedContract<ValidatorExitDelayVerifier>;
   validatorsExitBusOracle: LoadedContract<ValidatorsExitBusOracle>;
   withdrawalQueue: LoadedContract<WithdrawalQueueERC721>;
   withdrawalVault: LoadedContract<WithdrawalVault>;
   oracleDaemonConfig: LoadedContract<OracleDaemonConfig>;
   wstETH: LoadedContract<WstETH>;
   triggerableWithdrawalsGateway: LoadedContract<TriggerableWithdrawalsGateway>;
+  triggerableWithdrawalsBus: LoadedContract<TriggerableWithdrawalsBus>;
   consolidationGateway: LoadedContract<ConsolidationGateway>;
   consolidationBus: LoadedContract<ConsolidationBus>;
   consolidationMigrator: LoadedContract<ConsolidationMigrator>;

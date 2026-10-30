@@ -11,7 +11,7 @@ import {
   writeUpgradeParameterAddresses,
 } from "scripts/utils/upgrade";
 
-import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
+import { HashConsensus } from "typechain-types";
 
 import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
@@ -338,11 +338,8 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
   const slotsPerEpoch = Number(chainSpec.slotsPerEpoch);
   const genesisTime = Number(chainSpec.genesisTime);
 
-  const validatorExitDelayVerifier = await loadContract<ValidatorExitDelayVerifier>(
-    "ValidatorExitDelayVerifier",
-    getAddress(Sk.validatorExitDelayVerifier, state),
-  );
-  const capellaSlot = Number(await validatorExitDelayVerifier.CAPELLA_SLOT());
+  // Only the local devnet deploy scripts of the external repo read the Capella epoch
+  const capellaSlot = Number(chainSpec.capellaSlot ?? 0);
   const capellaEpoch = Math.floor(capellaSlot / slotsPerEpoch);
   const hashConsensus = await loadContract<HashConsensus>(
     "HashConsensus",

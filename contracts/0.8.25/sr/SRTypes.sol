@@ -273,9 +273,3 @@ struct ValidatorsCountsCorrection {
     /// @notice The corrected number of exited validators of the node operator.
     uint256 newNodeOperatorExitedValidatorsCount;
 }
-
-struct ValidatorExitData {
-    uint256 stakingModuleId;
-    uint256 nodeOperatorId;
-    bytes pubkey;
-}
