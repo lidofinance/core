@@ -4,6 +4,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { certainAddress, ether, impersonate, log } from "lib";
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01 } from "lib/constants";
 import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "lib/pdg";
 import { prepareLocalMerkleTree } from "lib/top-ups";
 
@@ -202,19 +203,20 @@ export const topUpEnsureDepositableEther = async (ctx: ProtocolContext, minWei: 
  * Make sure the router allocates at least `minWei` of top-up capacity to the module.
  *
  * On forks the module's stake share limit may cap the allocation; raise it to 100%
- * through the manager role when the current allocation is not enough. Reverts if the
- * allocation is still short afterwards (e.g. module capacity itself is the limit).
+ * through the manager role when the current allocation is not enough. Other 0x02 modules
+ * with free top-up capacity share the depositable ether, so submit the shortfall until the
+ * module gets enough. Reverts if the allocation is still short afterwards (e.g. module
+ * capacity itself is the limit).
  */
 export const topUpEnsureModuleAllocation = async (ctx: ProtocolContext, moduleId: bigint, minWei: bigint) => {
   const { lido, stakingRouter } = ctx.contracts;
 
-  const depositable = await lido.getDepositableEther();
   const moduleIds = await stakingRouter.getStakingModuleIds();
   const moduleIndex = moduleIds.findIndex((id) => id === moduleId);
   if (moduleIndex === -1) throw new Error(`Staking module ${moduleId} is not registered`);
 
   const allocationOf = async () => {
-    const { allocated } = await stakingRouter.getDepositAllocations(depositable, true);
+    const { allocated } = await stakingRouter.getDepositAllocations(await lido.getDepositableEther(), true);
     return allocated[moduleIndex] ?? 0n;
   };
 
@@ -222,7 +224,16 @@ export const topUpEnsureModuleAllocation = async (ctx: ProtocolContext, moduleId
 
   await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
 
-  const allocation = await allocationOf();
+  let allocation = await allocationOf();
+  for (let attempt = 0; attempt < 5 && allocation < minWei; attempt++) {
+    // The router allocates in 32 ETH units: add one unit on top of the shortfall
+    const shortfall = minWei - allocation + MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+    await topUpEnsureDepositableEther(ctx, (await lido.getDepositableEther()) + shortfall);
+    const increased = await allocationOf();
+    if (increased === allocation) break;
+    allocation = increased;
+  }
+
   if (allocation < minWei) {
     throw new Error(`Top-up allocation for module ${moduleId} is ${allocation}, expected at least ${minWei}`);
   }

@@ -509,6 +509,8 @@ describe("Integration: Accounting", () => {
 
     await ensureFirstPostMigrationReport(ctx);
     await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    // The request must be older than the margin at the refSlot, as the sanity checker requires.
+    await waitNextAvailableReportTime(ctx);
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
 
     const dryRunParams = {
