@@ -2,6 +2,9 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+import { HDNodeWallet } from "ethers";
+import { ethers, network as hardhatNetwork } from "hardhat";
+
 // Foundry 1.7.1 then estimates each transaction via RPC after its predecessor is mined.
 export const RPC_GAS_ARGS = ["--skip-simulation"];
 
@@ -23,4 +26,31 @@ export function prepareExternalProject(name: string, repository: string, ref: st
   console.log(JSON.stringify({ event: "external-project", name, ref, directory }));
   for (const [command, ...args] of install) run(command, args);
   return directory;
+}
+
+/** The RPC URL of the Hardhat network, for external Foundry deploys. */
+export function getRpcUrl() {
+  const networkConfig = hardhatNetwork.config;
+  const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
+  if (!rpcUrl) throw new Error("RPC URL is not available");
+  return rpcUrl;
+}
+
+/** The deployer private key of the Hardhat network, for external Foundry deploys. */
+export function getPrivateKey() {
+  const accounts = hardhatNetwork.config.accounts;
+  if (Array.isArray(accounts) && accounts.length > 0) {
+    return accounts[0] as string;
+  }
+
+  if (typeof accounts === "object" && "mnemonic" in accounts) {
+    const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
+    return wallet.privateKey;
+  }
+
+  const wallet = HDNodeWallet.fromMnemonic(
+    ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
+    `m/44'/60'/0'/0/0`,
+  );
+  return wallet.privateKey;
 }

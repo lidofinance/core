@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { AgentCall, executeScratchAgentCalls } from "scripts/utils/scratch-governance";
+import { DaoCall, executeScratchDecision } from "scripts/utils/scratch-governance";
 
 import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
@@ -170,7 +170,7 @@ async function enableExternalModule(
   deployer: string,
 ) {
   const agent = state[Sk.appAgent].proxy.address;
-  const calls: AgentCall[] = [];
+  const calls: DaoCall[] = [];
   const add = (contract: ReturnType<typeof externalContract>, method: string, args: unknown[]) => {
     calls.push({ to: contract.address, data: contract.interface.encodeFunctionData(method, args) });
   };
@@ -228,7 +228,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const agentCalls: AgentCall[] = [];
+  const agentCalls: DaoCall[] = [];
 
   // Get contract instances
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", state.stakingRouter.proxy.address);
@@ -346,7 +346,7 @@ export async function main() {
     }
   }
 
-  await executeScratchAgentCalls(agentCalls, state);
+  await executeScratchDecision({ description: "Scratch module activation", agent: agentCalls }, state);
 
   // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.
   await makeTx(

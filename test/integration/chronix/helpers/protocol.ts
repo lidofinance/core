@@ -8,10 +8,8 @@ import {
   concat,
   ContractTransactionReceipt,
   ContractTransactionResponse,
-  dataLength,
   getBytes,
   hexlify,
-  Interface,
   keccak256,
   toBeHex,
   zeroPadValue,
@@ -38,6 +36,7 @@ import {
 } from "typechain-types";
 
 import { Chronix } from "lib/chronix";
+import { DaoRunner, executeDaoDecision } from "lib/dao";
 import { getAddress, Sk } from "lib/state-file";
 
 import { deployScratch } from "./deploy";
@@ -86,8 +85,6 @@ const headerInput = (h: BeaconHeader) => ({
   stateRoot: h.state_root,
   bodyRoot: h.body_root,
 });
-const script = (calls: Call[]): string =>
-  concat(["0x00000001", ...calls.flatMap((c) => [c.to, toBeHex(dataLength(c.data), 4), c.data])]);
 
 export interface ChronixProtocolContracts {
   predepositGuarantee: PredepositGuarantee;
@@ -245,38 +242,20 @@ export async function recordTransaction(
   return receipt;
 }
 
-async function executeVote(ctx: ChronixProtocolContext, calls: Call[]) {
-  const { tokenManager, voting } = ctx.contracts;
-  const agent = ctx.deployment.state[Sk.appAgent].proxy.address;
-  const abi = new Interface(["function execute(address,uint256,bytes)"]);
-  const execution = script(
-    calls.map((call) => ({ to: agent, data: abi.encodeFunctionData("execute", [call.to, 0, call.data]) })),
-  );
-  const receipt = await recordTransaction(
-    ctx,
-    tokenManager.forward(
-      script([
-        {
-          to: String(voting.target),
-          data: voting.interface.encodeFunctionData("newVote(bytes,string)", [execution, "Chronix verifier fixture"]),
-        },
-      ]),
-    ),
-  );
-  const event = receipt.logs
-    .filter((log) => log.address.toLowerCase() === String(voting.target).toLowerCase())
-    .map((log) => voting.interface.parseLog(log))
-    .find((log) => log?.name === "StartVote");
-  assert.ok(event, "Real DAO vote was created");
-  const voteId = event.args.voteId;
-  await recordTransaction(ctx, voting.vote(voteId, true, false));
-  const voted = await voting.getVote(voteId);
-  const target = voted.startDate + (await voting.voteTime());
-  const now = BigInt((await ctx.chronix.status()).el.timestamp);
-  await ctx.chronix.advanceSlots(Number((target - now + 11n) / 12n));
-  assert.equal(await voting.canExecute(voteId), true);
-  await recordTransaction(ctx, voting.executeVote(voteId));
-  assert.equal((await voting.getVote(voteId)).executed, true);
+/** DAO decisions of the fixture: through the vote, or through Dual Governance when it governs the Agent. */
+function daoRunner(ctx: ChronixProtocolContext): DaoRunner {
+  return {
+    signer: ctx.signer,
+    send: (tx) => recordTransaction(ctx, tx),
+    async waitUntil(time, ready) {
+      const now = BigInt((await ctx.chronix.status()).el.timestamp);
+      if (time > now) await ctx.chronix.advanceSlots(Number((time - now + 11n) / 12n));
+      for (let slot = 0; !(await ready()); slot++) {
+        assert.ok(slot < 32, `The DAO decision is not ready at time ${time}`);
+        await ctx.chronix.advanceSlots(1);
+      }
+    },
+  };
 }
 
 async function enableVerifierCalls(ctx: ChronixProtocolContext) {
@@ -313,7 +292,11 @@ async function enableVerifierCalls(ctx: ChronixProtocolContext) {
     calls.push({ to: String(lido.target), data: lido.interface.encodeFunctionData("resume") });
   else if (await lido.isStakingPaused())
     calls.push({ to: String(lido.target), data: lido.interface.encodeFunctionData("resumeStaking") });
-  await executeVote(ctx, calls);
+  await executeDaoDecision(
+    { description: "Chronix verifier fixture", agent: calls },
+    ctx.deployment.state,
+    daoRunner(ctx),
+  );
   assert.equal(await lido.canDeposit(), true);
 }
 

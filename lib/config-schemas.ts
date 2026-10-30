@@ -223,6 +223,50 @@ const CircuitBreakerSchema = z.object({
   initialHeartbeatInterval: PositiveIntSchema,
 });
 
+// Dual Governance schema (optional, for scratch deployment).
+// Durations are in seconds; rage quit support values are PercentD16 (1e16 = 1%).
+const DualGovernanceSchema = z.object({
+  tiebreakerActivationTimeout: PositiveIntSchema,
+  sanityCheckParams: z.object({
+    minWithdrawalsBatchSize: PositiveIntSchema,
+    minTiebreakerActivationTimeout: PositiveIntSchema,
+    maxTiebreakerActivationTimeout: PositiveIntSchema,
+    maxSealableWithdrawalBlockersCount: PositiveIntSchema,
+    maxMinAssetsLockDuration: PositiveIntSchema,
+  }),
+  configProvider: z.object({
+    firstSealRageQuitSupport: BigIntStringSchema,
+    secondSealRageQuitSupport: BigIntStringSchema,
+    minAssetsLockDuration: PositiveIntSchema,
+    vetoSignallingMinDuration: PositiveIntSchema,
+    vetoSignallingMinActiveDuration: PositiveIntSchema,
+    vetoSignallingMaxDuration: PositiveIntSchema,
+    vetoSignallingDeactivationMaxDuration: PositiveIntSchema,
+    vetoCooldownDuration: PositiveIntSchema,
+    rageQuitExtensionPeriodDuration: PositiveIntSchema,
+    rageQuitEthWithdrawalsMinDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsMaxDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsDelayGrowth: PositiveIntSchema,
+  }),
+  timelock: z.object({
+    afterSubmitDelay: NonNegativeIntSchema,
+    afterScheduleDelay: NonNegativeIntSchema,
+    sanityCheckParams: z.object({
+      minExecutionDelay: NonNegativeIntSchema,
+      maxAfterSubmitDelay: PositiveIntSchema,
+      maxAfterScheduleDelay: PositiveIntSchema,
+      maxEmergencyModeDuration: PositiveIntSchema,
+      maxEmergencyProtectionDuration: PositiveIntSchema,
+    }),
+    emergencyModeDuration: PositiveIntSchema,
+    // The emergency protection end date is the deploy block timestamp plus this duration
+    emergencyProtectionDuration: PositiveIntSchema,
+  }),
+  tiebreaker: z.object({
+    executionDelay: PositiveIntSchema,
+  }),
+});
+
 // DAO schema
 const DaoSchema = z.object({
   aragonId: z.string().min(1),
@@ -350,6 +394,7 @@ const LidoSchema = z.object({
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
   circuitBreaker: CircuitBreakerSchema,
+  dualGovernance: DualGovernanceSchema.optional(),
   lidoApm: LidoApmSchema,
   lido: LidoSchema.optional(),
   dao: DaoSchema,

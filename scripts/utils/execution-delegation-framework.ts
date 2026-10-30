@@ -1,5 +1,4 @@
 import { execFileSync } from "child_process";
-import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
 import path from "path";
@@ -7,7 +6,7 @@ import path from "path";
 import { cy, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
-import { prepareExternalProject, RPC_GAS_ARGS } from "./external-project";
+import { getPrivateKey, getRpcUrl, prepareExternalProject, RPC_GAS_ARGS } from "./external-project";
 
 export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
 // Pinned commit of lidofinance/execution-delegation-framework `main` (2026-08-10).
@@ -20,31 +19,6 @@ type ExternalDeployArtifact = {
   "DelegationFactory"?: string;
   "git-ref"?: string;
 };
-
-function getRpcUrl() {
-  const networkConfig = hardhatNetwork.config;
-  const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
-  if (!rpcUrl) throw new Error("RPC URL is not available");
-  return rpcUrl;
-}
-
-function getPrivateKey() {
-  const accounts = hardhatNetwork.config.accounts;
-  if (Array.isArray(accounts) && accounts.length > 0) {
-    return accounts[0] as string;
-  }
-
-  if (typeof accounts === "object" && "mnemonic" in accounts) {
-    const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
-    return wallet.privateKey;
-  }
-
-  const wallet = HDNodeWallet.fromMnemonic(
-    ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
-    `m/44'/60'/0'/0/0`,
-  );
-  return wallet.privateKey;
-}
 
 function getRpcHostPort(rpcUrl: string) {
   const url = new URL(rpcUrl);
