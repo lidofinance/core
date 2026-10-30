@@ -40,9 +40,9 @@ consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
 # Limits the SR phase 2 vote sets on the new triggerable withdrawals gateway (LIP-38 "Initial limits"):
 # `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators; all zero disables a limit.
-[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: one VEBO report of either kind per 8 hours
-pwr = { maxLimit = 19_200_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 19,200 ETH, 32 ETH per 48 s
-fwr = { maxLimit = 500, limitPerFrame = 5, frameDurationInSec = 288 }                             # 500 validators, 5 per 288 s
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full VEBO report of either kind restores within 8 hours
+pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
 
 # Staking module ejectors: the ejectors that hold ADD_FULL_WITHDRAWAL_REQUEST_ROLE on the live gateway
 # (read on-chain on 2026-10-27). Replace them if the CSM release deploys new ejectors that call `triggerWithdrawals`.
@@ -50,7 +50,7 @@ fwr = { maxLimit = 500, limitPerFrame = 5, frameDurationInSec = 288 }           
 name = "CSM"   # staking module 4, 0x01
 address = "0xCAe028378d69D54dc8bF809e6C44CF751F997b80"
 pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
-fwr = { maxLimit = 500, limitPerFrame = 1, frameDurationInSec = 192 }
+fwr = { maxLimit = 400, limitPerFrame = 1, frameDurationInSec = 192 }
 
 [[triggerableWithdrawalsGateway.ejectors]]
 name = "CSM 0x02"   # staking module 6, 0x02
