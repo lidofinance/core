@@ -78,6 +78,7 @@ interface ISRBase {
     error WrongPubkeyLength();
     error AmountNotAlignedToGwei();
     error AllocationExceedsLimit();
+    error TopUpAllocationNotSupported();
     error ZeroDeposits();
 
     // Staking module

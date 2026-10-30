@@ -46,6 +46,7 @@ library SRLib {
         uint16 shareLimit;
         StakingModuleStatus status;
         uint8 wcType;
+        uint256 moduleId;
     }
 
     /// @notice One-time migration from old storage layout to new RouterState struct.
@@ -385,14 +386,16 @@ library SRLib {
     /// @param _cfg - protocol-level constants
     /// @param _allocateAmount - Eth amount that should be allocated into modules
     /// @param _isTopUp - flag indicating whether the allocation is for top-up deposits
+    /// @param _topUpModuleId - id of the module being topped up; read only when `_isTopUp` is true
     /// @return totalAllocated - amount actually allocated
     /// @return allocated - Array of newly allocated amounts for each module
     /// @return newAllocations - Array of new allocation amounts for each module
-    function _getDepositAllocations(Config calldata _cfg, uint256 _allocateAmount, bool _isTopUp)
-        public
-        view
-        returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
-    {
+    function _getDepositAllocations(
+        Config calldata _cfg,
+        uint256 _allocateAmount,
+        bool _isTopUp,
+        uint256 _topUpModuleId
+    ) public view returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations) {
         uint256 modulesCount = SRStorage.getModulesCount();
         if (modulesCount == 0) {
             return (0, new uint256[](0), new uint256[](0));
@@ -405,7 +408,8 @@ library SRLib {
         // get current allocations and capacities in validators equivalent
         uint256[] memory capacities;
         // @dev using output parameter as temporary storage for current allocations
-        (allocated, capacities) = _getModulesAllocationAndCapacity(_cfg, depositsToAllocate, _isTopUp);
+        (allocated, capacities) =
+            _getModulesAllocationAndCapacity(_cfg, depositsToAllocate, _isTopUp, _topUpModuleId);
 
         // If no deposits to allocate, return current state
         if (depositsToAllocate > 0) {
@@ -437,7 +441,7 @@ library SRLib {
         uint256 _allocateAmount,
         bool _isTopUp
     ) public view returns (uint256 allocation) {
-        (, uint256[] memory allocated,) = _getDepositAllocations(_cfg, _allocateAmount, _isTopUp);
+        (, uint256[] memory allocated,) = _getDepositAllocations(_cfg, _allocateAmount, _isTopUp, _moduleId);
         uint256 moduleIdx = SRUtils._getModuleIndexById(_moduleId);
         allocation = allocated[moduleIdx];
     }
@@ -445,7 +449,7 @@ library SRLib {
     /**
      * @notice calculate allocation amounts for all modules
      * @dev If `_isTopUp` is `true`, allocation is performed for top-up deposits targeting
-     *      WC type `0x02` validators. In this case, `_cfg.maxEBType2` used
+     *      the 0x02 module `_topUpModuleId`. In this case, `_cfg.maxEBType2` used
      *      to correctly calculate the module's capacity.
      *
      * @dev The Allocation logic must preserve the same priority between modules
@@ -462,7 +466,7 @@ library SRLib {
      *      1. Top-ups are only possible for modules with keys type 0x02.
      *      2. The total top-up amount is limited by the unused capacity of already active keys.
      *      3. The method call with the flag `isTopUp = true` is used only when calculating
-     *         top-up allocations. In other words, the values returned for modules 0x01
+     *         the top-up allocation of one module. The values returned for other modules
      *         are ignored by the caller.
      *
      *      Since allocation uses the MinFirstAllocationStrategy, we must not exclude
@@ -479,22 +483,28 @@ library SRLib {
      *        Formally, these modules cannot receive top-ups, but they must remain
      *        visible to the allocation strategy to preserve priority ordering.
      *
-     *      - For modules 0x02 the capacity is set only to the remaining unused capacity
-     *        of already active keys.
+     *      - For the module being topped up the capacity is set only to the remaining
+     *        unused capacity of its already active keys.
      *
-     *      At first glance this may appear to prioritize deposits into modules 0x01.
-     *      However, taking fact #3 into account, the returned allocations for modules
-     *      0x01 are never used. They are only an artifact of the MinFirstAllocationStrategy.
+     *      - Other modules 0x02 also keep the same capacity as for regular seed deposits.
+     *        The router counts their deposited keys as active while the keys wait for
+     *        activation on the consensus layer, so their top-up capacity would take
+     *        the allocation of the module being topped up.
+     *
+     *      At first glance this may appear to prioritize deposits into other modules.
+     *      However, taking fact #3 into account, the returned allocations for other
+     *      modules are never used. They are only an artifact of the MinFirstAllocationStrategy.
      *
      *      This design preserves the correct global priority between modules while
      *      still allowing the system to fully utilize the available top-up capacity
-     *      of modules with keys type 0x02.
+     *      of the module being topped up.
      */
-    function _getModulesAllocationAndCapacity(Config calldata _cfg, uint256 depositsToAllocate, bool _isTopUp)
-        internal
-        view
-        returns (uint256[] memory _allocations, uint256[] memory _capacities)
-    {
+    function _getModulesAllocationAndCapacity(
+        Config calldata _cfg,
+        uint256 depositsToAllocate,
+        bool _isTopUp,
+        uint256 _topUpModuleId
+    ) internal view returns (uint256[] memory _allocations, uint256[] memory _capacities) {
         uint256 modulesCount = SRStorage.getModulesCount();
         _allocations = new uint256[](modulesCount);
 
@@ -513,6 +523,7 @@ library SRLib {
             cache[i].shareLimit = stateConfig.stakeShareLimit;
             cache[i].status = stateConfig.status;
             cache[i].wcType = stateConfig.withdrawalCredentialsType;
+            cache[i].moduleId = moduleId;
             (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount, uint256 depositableValidatorsCount) =
                 _getStakingModuleSummary(moduleId.getIStakingModule());
             cache[i].depositableCount = depositableValidatorsCount;
@@ -540,7 +551,10 @@ library SRLib {
             // module initial capacity = current allocation
             uint256 validatorsCapacity = _allocations[i];
             if (cache[i].status == StakingModuleStatus.Active) {
-                if (_isTopUp && WithdrawalCredentials.isType2(cache[i].wcType)) {
+                if (
+                    _isTopUp && WithdrawalCredentials.isType2(cache[i].wcType)
+                        && cache[i].moduleId == _topUpModuleId
+                ) {
                     // max eth capacity of active validators = n * maxEB,
                     // so capacity in validators equivalent = n * maxEBType2 / maxEBType1
                     validatorsCapacity = cache[i].activeCount * maxEBType2 / maxEBType1;
