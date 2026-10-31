@@ -1,8 +1,9 @@
 import { ethers } from "hardhat";
+import { DaoCall, executeScratchDecision } from "scripts/utils/scratch-governance";
 
 import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
-import { ether, impersonate, WithdrawalCredentialsType } from "lib";
+import { WithdrawalCredentialsType } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { streccak } from "lib/keccak";
@@ -142,13 +143,8 @@ function getExternalModuleSetup(
   };
 }
 
-function externalContract(
-  name: string,
-  address: string,
-  abi: string[],
-  signer: Awaited<ReturnType<typeof impersonate>>,
-) {
-  const contract = new ethers.Contract(address, abi, signer);
+function externalContract(name: string, address: string, abi: string[]) {
+  const contract = new ethers.Contract(address, abi, ethers.provider);
   return Object.assign(contract, {
     name,
     address,
@@ -170,7 +166,10 @@ async function enableExternalModule(
   deployer: string,
 ) {
   const agent = state[Sk.appAgent].proxy.address;
-  const agentSigner = await impersonate(agent, ether("1"));
+  const calls: DaoCall[] = [];
+  const add = (contract: ReturnType<typeof externalContract>, method: string, args: unknown[]) => {
+    calls.push({ to: contract.address, data: contract.interface.encodeFunctionData(method, args) });
+  };
 
   const burner = await loadContract<Burner>("Burner", state[Sk.burner].proxy.address);
   const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
@@ -186,51 +185,48 @@ async function enableExternalModule(
     { from: deployer },
   );
 
-  const module = externalContract(setup.moduleLabel, setup.module, EXTERNAL_ACCESS_CONTROL_ABI, agentSigner);
+  const module = externalContract(setup.moduleLabel, setup.module, EXTERNAL_ACCESS_CONTROL_ABI);
   const resumeRole = await module.RESUME_ROLE();
-  await makeTx(module, "grantRole", [resumeRole, agent], { from: agent });
-  await makeTx(module, "resume", [], { from: agent });
-  await makeTx(module, "revokeRole", [resumeRole, agent], { from: agent });
+  add(module, "grantRole", [resumeRole, agent]);
+  add(module, "resume", []);
+  add(module, "revokeRole", [resumeRole, agent]);
 
   const hashConsensus = externalContract(
     `${setup.moduleLabel} HashConsensus`,
     setup.hashConsensus,
     EXTERNAL_HASH_CONSENSUS_ABI,
-    agentSigner,
   );
   const [initialEpoch] = await hashConsensus.getFrameConfig();
   const currentEpoch = await getCurrentEpoch(hashConsensus);
   // Same condition as HashConsensus.updateInitialEpoch: the initial epoch must still be in the future.
   // The far-future sentinel set by the constructor depends on genesisTime, so it can't be matched by a constant.
   if (BigInt(initialEpoch) > currentEpoch) {
-    await makeTx(hashConsensus, "updateInitialEpoch", [currentEpoch], { from: agent });
+    add(hashConsensus, "updateInitialEpoch", [currentEpoch]);
   }
 
   const circuitBreakerAddress = state[Sk.circuitBreaker]?.address;
   if (circuitBreakerAddress) {
     const circuitBreakerPauser = ethers.getAddress(agent);
-    const circuitBreaker = externalContract(
-      "CircuitBreaker",
-      circuitBreakerAddress,
-      EXTERNAL_CIRCUIT_BREAKER_ABI,
-      agentSigner,
-    );
+    const circuitBreaker = externalContract("CircuitBreaker", circuitBreakerAddress, EXTERNAL_CIRCUIT_BREAKER_ABI);
 
     for (const pausable of setup.pausableContracts) {
-      const contract = externalContract(pausable.label, pausable.address, EXTERNAL_ACCESS_CONTROL_ABI, agentSigner);
-      await makeTx(contract, "grantRole", [await contract.PAUSE_ROLE(), circuitBreakerAddress], { from: agent });
+      const contract = externalContract(pausable.label, pausable.address, EXTERNAL_ACCESS_CONTROL_ABI);
+      add(contract, "grantRole", [await contract.PAUSE_ROLE(), circuitBreakerAddress]);
 
       const currentPauser = ethers.getAddress(await circuitBreaker.getPauser(pausable.address));
       if (currentPauser !== circuitBreakerPauser) {
-        await makeTx(circuitBreaker, "registerPauser", [pausable.address, circuitBreakerPauser], { from: agent });
+        add(circuitBreaker, "registerPauser", [pausable.address, circuitBreakerPauser]);
       }
     }
   }
+  return calls;
 }
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
+
+  const agentCalls: DaoCall[] = [];
 
   // Get contract instances
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", state.stakingRouter.proxy.address);
@@ -301,7 +297,7 @@ export async function main() {
       ],
       { from: deployer },
     );
-    await enableExternalModule(setup, state, deployer);
+    agentCalls.push(...(await enableExternalModule(setup, state, deployer)));
   }
 
   if (state[Sk.sm_CM]?.proxy?.address) {
@@ -324,7 +320,7 @@ export async function main() {
       ],
       { from: deployer },
     );
-    await enableExternalModule(setup, state, deployer);
+    agentCalls.push(...(await enableExternalModule(setup, state, deployer)));
 
     // ConsolidationMigrator is deployed earlier (0083) with an immutable target module id
     // predicted from deploy params. Verify the id actually assigned to CMv2 matches it.
@@ -347,6 +343,8 @@ export async function main() {
       );
     }
   }
+
+  await executeScratchDecision({ description: "Scratch module activation", agent: agentCalls }, state);
 
   // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.
   await makeTx(

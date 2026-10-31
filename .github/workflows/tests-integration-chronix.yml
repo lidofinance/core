@@ -1,0 +1,91 @@
+name: Integration Tests Chronix
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Published Gloas image tag or digest (latest falls back to v0.1.0 if missing)
+        required: true
+        type: string
+        default: ghcr.io/lidofinance/chronix-gloas:latest
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.select.outputs.image }}
+    steps:
+      - id: select
+        env:
+          CHRONIX_IMAGE: ${{ inputs.image || 'ghcr.io/lidofinance/chronix-gloas:latest' }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [[ "$CHRONIX_IMAGE" =~ ^ghcr\.io/lidofinance/chronix-gloas(:(latest|v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)|@sha256:[a-f0-9]{64})$ ]]
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if [[ "$CHRONIX_IMAGE" == ghcr.io/lidofinance/chronix-gloas:latest ]]; then
+            if docker manifest inspect "$CHRONIX_IMAGE" > /dev/null 2> "$RUNNER_TEMP/chronix-manifest-error"; then
+              echo "Using published Chronix latest"
+            else
+              cat "$RUNNER_TEMP/chronix-manifest-error" >&2
+              exit 1
+            fi
+          fi
+          echo "image=$CHRONIX_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Chronix service image: \`$CHRONIX_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: select
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CHRONIX_URL: http://127.0.0.1:18547
+      CHRONIX_BEACON_URL: http://127.0.0.1:5052
+      NODE_OPTIONS: --max_old_space_size=10240
+    services:
+      chronix:
+        image: ${{ needs.select.outputs.image }}
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 127.0.0.1:18547:8545
+          - 127.0.0.1:5052:5052
+          - 127.0.0.1:5062:5062
+        options: --privileged --stop-timeout 120 --label io.chronix.id=lido-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Common setup
+        uses: ./.github/workflows/setup
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.7.1
+      - name: Install just
+        run: cargo install just --locked
+      - run: cp .env.example .env
+      # The suite checks block zero and owns deployment, warmup, automine and time controls.
+      - name: Run existing Chronix integration suite
+        run: yarn test:integration:chronix --bail
+      - name: Save Chronix service and client logs
+        if: failure()
+        env:
+          SERVICE_ID: ${{ job.services.chronix.id }}
+        run: |
+          mkdir -p .local/chronix
+          docker logs "$SERVICE_ID" > .local/chronix/service.log 2>&1 || true
+          for client in el cl vc; do
+            docker exec "$SERVICE_ID" chronix logs "$client" --tail 2000 \
+              > ".local/chronix/$client.log" 2>&1 || true
+          done
+      - name: Upload Chronix evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: chronix-integration-${{ github.run_attempt }}
+          path: .local/chronix/
+          retention-days: 7

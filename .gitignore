@@ -46,3 +46,5 @@ deployed-*-upgrade.json
 .local/
 .tmp/
 .dev/
+
+.cache/external-deploy/
