@@ -55,6 +55,15 @@ const CSM_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 30;
 const CSM_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
 const CSM_WITHDRAWAL_TYPE = WithdrawalCredentialsType.WC0x01;
 
+const CSM0X02_STAKING_MODULE_NAME = "Community Staking 0x02";
+const CSM0X02_STAKING_MODULE_TARGET_SHARE_BP = 1; // 0.01%
+const CSM0X02_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 240; // 2.4%
+const CSM0X02_STAKING_MODULE_MODULE_FEE_BP = 200; // 2%
+const CSM0X02_STAKING_MODULE_TREASURY_FEE_BP = 800; // 8%
+const CSM0X02_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 30;
+const CSM0X02_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
+const CSM0X02_WITHDRAWAL_TYPE = WithdrawalCredentialsType.WC0x02;
+
 const CMV2_STAKING_MODULE_NAME = "curated-onchain-v2";
 const CMV2_STAKING_MODULE_TARGET_SHARE_BP = 10000; // 100%
 const CMV2_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
@@ -343,6 +352,30 @@ export async function main() {
           `Update [consolidationMigrator].targetModuleId in the scratch deploy params.`,
       );
     }
+  }
+
+  // Keep CMv2 at module ID 4: CSM 0x02 must be plugged after it.
+  if (state[Sk.sm_CSM0x02]?.proxy?.address) {
+    const setup = getExternalModuleSetup(state, Sk.sm_CSM0x02, CSM0X02_STAKING_MODULE_NAME, "CSModule");
+    await makeTx(
+      stakingRouter,
+      "addStakingModule",
+      [
+        CSM0X02_STAKING_MODULE_NAME,
+        state[Sk.sm_CSM0x02].proxy.address,
+        {
+          stakeShareLimit: CSM0X02_STAKING_MODULE_TARGET_SHARE_BP,
+          priorityExitShareThreshold: CSM0X02_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
+          stakingModuleFee: CSM0X02_STAKING_MODULE_MODULE_FEE_BP,
+          treasuryFee: CSM0X02_STAKING_MODULE_TREASURY_FEE_BP,
+          maxDepositsPerBlock: CSM0X02_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+          minDepositBlockDistance: CSM0X02_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+          withdrawalCredentialsType: CSM0X02_WITHDRAWAL_TYPE,
+        },
+      ],
+      { from: deployer },
+    );
+    await enableExternalModule(setup, state, deployer);
   }
 
   // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.
