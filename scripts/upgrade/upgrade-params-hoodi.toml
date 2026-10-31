@@ -56,7 +56,7 @@ frameDurationInSec = 48
 consensusVersion = 5
 
 [validatorExitDelayVerifier]
-firstSupportedSlot = 1
+firstSupportedSlot = 65536 # ELECTRA_FORK_EPOCH 2048 * 32, @see https://github.com/eth-clients/hoodi/blob/main/metadata/config.yaml#L41
 gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
 capellaSlot = 0
 slotsPerHistoricalRoot = 8192

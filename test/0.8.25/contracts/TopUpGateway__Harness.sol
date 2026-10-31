@@ -8,8 +8,10 @@ contract TopUpGateway__Harness is TopUpGateway {
     constructor(
         address _lidoLocator,
         uint64 _gloasSlot,
-        uint256 _slotsPerEpoch
-    ) TopUpGateway(_lidoLocator, _gloasSlot, _slotsPerEpoch) {}
+        uint256 _slotsPerEpoch,
+        uint32 _secondsPerSlot,
+        uint64 _genesisTime
+    ) TopUpGateway(_lidoLocator, _gloasSlot, _slotsPerEpoch, _secondsPerSlot, _genesisTime) {}
 
     function harness_setLastTopUpData() external {
         _setLastTopUpData();

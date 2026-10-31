@@ -34,6 +34,12 @@ const CMV2_MODULE_ABI = [
   "function getNodeOperatorSummary(uint256 nodeOperatorId) view returns (uint256 targetLimitMode, uint256 targetValidatorsCount, uint256 stuckValidatorsCount, uint256 refundedValidatorsCount, uint256 stuckPenaltyEndTimestamp, uint256 totalExitedValidators, uint256 totalDepositedValidators, uint256 depositableValidatorsCount)",
   "function addValidatorKeysETH(address from, uint256 nodeOperatorId, uint256 keysCount, bytes publicKeys, bytes signatures) payable",
   "function batchDepositInfoUpdate(uint256 maxCount) returns (uint256 operatorsLeft)",
+  "function DEFAULT_ADMIN_ROLE() view returns (bytes32)",
+  "function hasRole(bytes32 role, address account) view returns (bool)",
+  "function grantRole(bytes32 role, address account)",
+  "function ENABLE_TOP_UP_ALLOCATION_ROLE() view returns (bytes32)",
+  "function isTopUpAllocationEnabled(uint256 nodeOperatorId) view returns (bool)",
+  "function enableTopUpAllocation(uint256 nodeOperatorId)",
 ];
 
 const CURATED_GATE_ABI = [
@@ -289,6 +295,49 @@ export const cmv2CreateOperatorWithKeys = async (
 };
 
 /**
+ * Whether the deployed CMv2 implementation has the top-up allocation pause
+ * (staking-modules#910): per-operator allocation flags, and no module nonce bump on a
+ * top-up allocation. Implementations before it have no `isTopUpAllocationEnabled`.
+ */
+export const cmv2HasTopUpAllocationPause = async (ctx: ProtocolContext): Promise<boolean> => {
+  try {
+    await getCMv2Module(ctx).isTopUpAllocationEnabled(0n);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Enable CMv2 top-up allocation for `operatorId`.
+ *
+ * Since the CMv2 top-up allocation pause (staking-modules#910), the top-up allocator
+ * skips operators whose allocation is not enabled. `finalizeUpgradeV2` enables only the
+ * operators that had deposited keys at the upgrade; operators created later stay
+ * disabled until a holder of ENABLE_TOP_UP_ALLOCATION_ROLE enables them. A module
+ * implementation without the feature is left as it is.
+ */
+const cmv2EnableTopUpAllocation = async (ctx: ProtocolContext, operatorId: bigint) => {
+  if (!(await cmv2HasTopUpAllocationPause(ctx))) return;
+
+  const module = getCMv2Module(ctx);
+  if (await module.isTopUpAllocationEnabled(operatorId)) return;
+
+  // Use the real role holder (the CM committee on Hoodi); otherwise the module admin grants the role
+  const role = await module.ENABLE_TOP_UP_ALLOCATION_ROLE();
+  let enabler: HardhatEthersSigner;
+  if ((await module.getRoleMemberCount(role)) > 0n) {
+    enabler = await impersonate(await module.getRoleMember(role, 0), ether("100"));
+  } else {
+    enabler = await impersonate(await module.getRoleMember(await module.DEFAULT_ADMIN_ROLE(), 0), ether("100"));
+    await connectSigner(module, enabler).grantRole(role, enabler.address);
+  }
+
+  await connectSigner(module, enabler).enableTopUpAllocation(operatorId);
+  expect(await module.isTopUpAllocationEnabled(operatorId)).to.equal(true);
+};
+
+/**
  * Normalize the CMv2 top-up allocation baseline so `keepOperatorId` is the only
  * operator with a non-zero allocation weight.
  *
@@ -298,7 +347,8 @@ export const cmv2CreateOperatorWithKeys = async (
  * group in the MetaRegistry (the same real path the registry admin would use), which
  * zeroes those operators' effective weights. The kept operator then holds 100% of the
  * weight, its allocation target covers the entire requested amount, and expected
- * top-up amounts become exact on any fork state.
+ * top-up amounts become exact on any fork state. It also enables top-up allocation for
+ * the kept operator, which a module with the allocation pause requires.
  *
  * Use this only as explicit test setup.
  */
@@ -356,6 +406,8 @@ export const cmv2NormalizeTopUpAllocationBaseline = async (ctx: ProtocolContext,
       throw new Error(`Operator ${operatorId} still has non-zero weight ${weight} after normalization`);
     }
   }
+
+  await cmv2EnableTopUpAllocation(ctx, keepOperatorId);
 
   log.debug("Normalized CMv2 top-up allocation baseline", {
     "Kept operator": keepOperatorId,

@@ -6,7 +6,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ConsolidationBus } from "typechain-types";
 
 import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
-import { addressToWC, LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg";
+import {
+  addressToWC,
+  firstValidatorGIndexPreGloas,
+  LocalMerkleTree,
+  prepareLocalMerkleTree,
+  unpackLegacyGIndex,
+} from "lib/pdg";
 
 import { ProtocolContext } from "../types";
 
@@ -66,14 +72,17 @@ export const prepareConsolidationTargetWitnesses = async (
   }
 
   // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS SLOT.
+  // The legacy gateway returns the gindex packed in the `index << 8 | pow` format.
   const gIFirstValidator =
     gloasSlot === 0n
-      ? await new ethers.Contract(
-          await consolidationGateway.getAddress(),
-          ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
-          ethers.provider,
-        ).GI_FIRST_VALIDATOR_CURR()
-      : await consolidationGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
+      ? unpackLegacyGIndex(
+          await new ethers.Contract(
+            await consolidationGateway.getAddress(),
+            ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+            ethers.provider,
+          ).GI_FIRST_VALIDATOR_CURR(),
+        )
+      : firstValidatorGIndexPreGloas(await consolidationGateway.GI_VALIDATORS_PRE_GLOAS());
 
   const merkleTree = await prepareLocalMerkleTree(gIFirstValidator);
   const withdrawalCredentials = addressToWC(await withdrawalVault.getAddress(), 2);

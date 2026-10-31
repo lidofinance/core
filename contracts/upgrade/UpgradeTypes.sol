@@ -102,3 +102,15 @@ interface IWithdrawalVault {
 interface IGloasForkAware {
     function GLOAS_SLOT() external view returns (uint64);
 }
+
+/// @dev The chain profile the new `TopUpGateway` implementation derives slot timestamps from.
+///      A wrong value would not revert; it would silently shift the gateway's root-age and
+///      root-staleness checks, so the template diffs it against the exit-delay verifier, which
+///      is pinned to the same chain.
+interface ITopUpGateway {
+    function GENESIS_TIME() external view returns (uint64);
+
+    function SLOTS_PER_EPOCH() external view returns (uint256);
+
+    function SECONDS_PER_SLOT() external view returns (uint32);
+}

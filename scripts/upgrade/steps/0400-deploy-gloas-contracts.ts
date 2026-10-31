@@ -2,6 +2,7 @@ import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   ConsolidationBus__factory,
+  ConsolidationGateway,
   ConsolidationGateway__factory,
   LidoLocator,
   LidoLocator__factory,
@@ -13,6 +14,7 @@ import {
 
 import {
   ConstructorArgs,
+  DEFAULT_ADMIN_ROLE,
   deployImplementation,
   deployWithoutProxy,
   getAddress,
@@ -22,6 +24,7 @@ import {
   logConfirmReview,
   logScriptHeader,
   logStartReview,
+  makeTx,
   readNetworkState,
   Sk,
 } from "lib";
@@ -49,6 +52,9 @@ export async function main() {
   const chainSpec = state[Sk.chainSpec];
   const locatorAddress = getAddress(Sk.lidoLocator, state);
   const agentAddress = getAddress(Sk.appAgent, state);
+  const circuitBreakerAddress = getAddress(Sk.circuitBreaker, state);
+  const resealManagerAddress = getAddress(Sk.resealManager, state);
+  const consolidationBusAddress = getAddress(Sk.consolidationBus, state);
   const lidoAddress = getAddress(Sk.appLido, state);
 
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
@@ -69,10 +75,10 @@ export async function main() {
     parameters.validatorExitDelayVerifier.shardCommitteePeriodInSeconds,
   ];
 
-  // The Agent is the admin from birth: unlike SRv3 there is no UpgradeTemporaryAdmin, the vote
-  // itself executes as the Agent and grants the remaining roles.
+  // The deployer is the admin until the roles are granted below: unlike SRv3 there is no
+  // UpgradeTemporaryAdmin, the deployer hands the admin role to the Agent itself.
   const consolidationGatewayConstructorArgs: ConstructorArgs<ConsolidationGateway__factory> = [
-    agentAddress,
+    deployer,
     locatorAddress,
     parameters.consolidationGateway.maxConsolidationRequestsLimit,
     parameters.consolidationGateway.consolidationsPerFrame,
@@ -89,6 +95,8 @@ export async function main() {
     locatorAddress,
     parameters.topUpGateway.gloasSlot,
     chainSpec.slotsPerEpoch,
+    chainSpec.secondsPerSlot,
+    chainSpec.genesisTime,
   ];
 
   logStartReview();
@@ -115,8 +123,40 @@ export async function main() {
     consolidationGatewayConstructorArgs,
   );
 
+  const consolidationGatewayContract = await loadContract<ConsolidationGateway>(
+    "ConsolidationGateway",
+    consolidationGateway.address,
+  );
+
+  await makeTx(
+    consolidationGatewayContract,
+    "grantRole",
+    [await consolidationGatewayContract.PAUSE_ROLE(), circuitBreakerAddress],
+    { from: deployer },
+  );
+  await makeTx(
+    consolidationGatewayContract,
+    "grantRole",
+    [await consolidationGatewayContract.PAUSE_ROLE(), resealManagerAddress],
+    { from: deployer },
+  );
+  await makeTx(
+    consolidationGatewayContract,
+    "grantRole",
+    [await consolidationGatewayContract.RESUME_ROLE(), resealManagerAddress],
+    { from: deployer },
+  );
+  await makeTx(
+    consolidationGatewayContract,
+    "grantRole",
+    [await consolidationGatewayContract.ADD_CONSOLIDATION_REQUEST_ROLE(), consolidationBusAddress],
+    { from: deployer },
+  );
+  await makeTx(consolidationGatewayContract, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(consolidationGatewayContract, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
   //
-  // Deploy the implementations that only change their Gloas fork switch
+  // Deploy the Gloas-aware implementations
   //
   await deployImplementation(
     Sk.predepositGuarantee,

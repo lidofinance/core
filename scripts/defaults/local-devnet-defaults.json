@@ -88,7 +88,7 @@
   },
   "accountingOracle": {
     "deployParameters": {
-      "consensusVersion": 6
+      "consensusVersion": 7
     }
   },
   "hashConsensusForValidatorsExitBusOracle": {
@@ -103,7 +103,7 @@
       "maxExitBalanceEth": 416000,
       "balancePerFrameEth": 32,
       "frameDurationInSec": 48,
-      "consensusVersion": 5
+      "consensusVersion": 6
     }
   },
   "depositSecurityModule": {

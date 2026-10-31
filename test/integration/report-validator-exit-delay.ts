@@ -87,9 +87,7 @@ describe("Integration: Report Validator Exit Delay", () => {
       .grantRole(await stakingRouter.REPORT_VALIDATOR_EXITING_STATUS_ROLE(), validatorExitDelayVerifier.address);
 
     // Ensure that the validatorExitDelayVerifier contract and provided proof use same GI
-    expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PRE_GLOAS()).to.equal(
-      ACTIVE_VALIDATOR_PROOF.firstValidatorGI,
-    );
+    expect(await validatorExitDelayVerifier.GI_VALIDATORS_PRE_GLOAS()).to.equal(ACTIVE_VALIDATOR_PROOF.validatorsGI);
 
     // Ensure that nor is a first module in staking router
     expect((await stakingRouter.getStakingModule(moduleId)).stakingModuleAddress).to.equal(nor.address);

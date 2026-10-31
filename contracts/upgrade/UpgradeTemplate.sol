@@ -16,6 +16,7 @@ import {
     IConsolidationBus,
     IConsolidationGateway,
     IGloasForkAware,
+    ITopUpGateway,
     IValidatorExitDelayVerifier,
     IWithdrawalsManagerProxy,
     IWithdrawalVault
@@ -164,6 +165,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         _assertUnchangedVerifierProfile(config);
 
+        _assertTopUpGatewayChainProfile(config);
+
         IAccessControlEnumerable stakingRouter = IAccessControlEnumerable(stakingRouterAddr);
         if (!stakingRouter.hasRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE, oldVerifierAddr)) {
             revert InvalidFlag("old-verifier-report-role", oldVerifierAddr);
@@ -172,20 +175,34 @@ contract UpgradeTemplate is IUpgradeTemplate {
             revert InvalidFlag("new-verifier-no-report-role", newVerifierAddr);
         }
 
-        // The new gateway is deployed with the Agent as its admin and no other role granted yet.
+        // The new gateway is deployed with the Agent as its admin and every operational role already
+        // granted, so each role must have exactly the expected holders.
         IAccessControlEnumerable gateway = IAccessControlEnumerable(newGatewayAddr);
         if (!gateway.hasRole(DEFAULT_ADMIN_ROLE, agent)) {
             revert InvalidFlag("new-gateway-admin", agent);
         }
-        _assertUint("new-gateway-pause-members", gateway.getRoleMemberCount(PAUSE_ROLE), 0);
-        _assertUint("new-gateway-resume-members", gateway.getRoleMemberCount(RESUME_ROLE), 0);
-        _assertUint("new-gateway-add-request-members", gateway.getRoleMemberCount(ADD_CONSOLIDATION_REQUEST_ROLE), 0);
+        _assertUint("new-gateway-admin-members", gateway.getRoleMemberCount(DEFAULT_ADMIN_ROLE), 1);
+        if (!gateway.hasRole(PAUSE_ROLE, circuitBreaker)) {
+            revert InvalidFlag("new-gateway-pause-cb", circuitBreaker);
+        }
+        if (!gateway.hasRole(PAUSE_ROLE, resealManager)) {
+            revert InvalidFlag("new-gateway-pause-reseal", resealManager);
+        }
+        _assertUint("new-gateway-pause-members", gateway.getRoleMemberCount(PAUSE_ROLE), 2);
+        if (!gateway.hasRole(RESUME_ROLE, resealManager)) {
+            revert InvalidFlag("new-gateway-resume-reseal", resealManager);
+        }
+        _assertUint("new-gateway-resume-members", gateway.getRoleMemberCount(RESUME_ROLE), 1);
+        if (!gateway.hasRole(ADD_CONSOLIDATION_REQUEST_ROLE, consolidationBus)) {
+            revert InvalidFlag("new-gateway-add-request-bus", consolidationBus);
+        }
+        _assertUint("new-gateway-add-request-members", gateway.getRoleMemberCount(ADD_CONSOLIDATION_REQUEST_ROLE), 1);
 
         _assertAddress(
             "new-gateway-pauser", ICircuitBreaker(circuitBreaker).getPauser(newGatewayAddr), address(0)
         );
 
-        // The grants below are replayed onto the new gateway from the config, so the config has to
+        // The new gateway's holders above are checked against the config, so the config has to
         // agree with the gateway that is actually in use today — otherwise a stale parameters file
         // would wire the replacement to addresses that no longer control anything, and the
         // post-checks, which read the same config, would happily confirm it.
@@ -203,7 +220,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             revert InvalidFlag("old-gateway-add-request-bus", consolidationBus);
         }
         // Member counts too: an extra holder on the live gateway would be silently dropped by a
-        // vote that only replays the four grants above.
+        // deployment that only grants these four roles.
         _assertUint("old-gateway-pause-members", oldGateway.getRoleMemberCount(PAUSE_ROLE), 2);
         _assertUint("old-gateway-resume-members", oldGateway.getRoleMemberCount(RESUME_ROLE), 1);
         _assertUint("old-gateway-add-request-members", oldGateway.getRoleMemberCount(ADD_CONSOLIDATION_REQUEST_ROLE), 1);
@@ -324,6 +341,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     /// @dev Everything the verifier is pinned to except the Gloas switch itself. The chain is the
     ///      same one, so the incoming deployment must agree with the outgoing one field for field.
+    ///      The one exception is `FIRST_SUPPORTED_SLOT`: it may move forward, never back (Hoodi
+    ///      raises it from 1 to the Electra fork slot).
     function _assertUnchangedVerifierProfile(UpgradeConfig config) private view {
         IValidatorExitDelayVerifier oldVerifier = IValidatorExitDelayVerifier(
             config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER()
@@ -342,17 +361,35 @@ contract UpgradeTemplate is IUpgradeTemplate {
             newVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS(),
             oldVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS()
         );
-        _assertUint(
-            "verifier-first-supported-slot",
-            newVerifier.FIRST_SUPPORTED_SLOT(),
-            oldVerifier.FIRST_SUPPORTED_SLOT()
-        );
+        if (newVerifier.FIRST_SUPPORTED_SLOT() < oldVerifier.FIRST_SUPPORTED_SLOT()) {
+            revert InvalidUint(
+                "verifier-first-supported-slot",
+                newVerifier.FIRST_SUPPORTED_SLOT(),
+                oldVerifier.FIRST_SUPPORTED_SLOT()
+            );
+        }
         _assertUint("verifier-capella-slot", newVerifier.CAPELLA_SLOT(), oldVerifier.CAPELLA_SLOT());
         _assertUint(
             "verifier-slots-per-hist-root",
             newVerifier.SLOTS_PER_HISTORICAL_ROOT(),
             oldVerifier.SLOTS_PER_HISTORICAL_ROOT()
         );
+    }
+
+    /// @dev The new gateway implementation derives slot timestamps from these immutables (this
+    ///      upgrade introduces them), so they must match the chain profile the exit-delay verifier
+    ///      is pinned to — which `_assertUnchangedVerifierProfile` has already diffed against the
+    ///      live deployment. A mismatch would not revert on-chain; it would silently shift the
+    ///      gateway's root-age and root-staleness checks.
+    function _assertTopUpGatewayChainProfile(UpgradeConfig config) private view {
+        IValidatorExitDelayVerifier verifier = IValidatorExitDelayVerifier(
+            config.NEW_VALIDATOR_EXIT_DELAY_VERIFIER()
+        );
+        ITopUpGateway gateway = ITopUpGateway(config.NEW_TOP_UP_GATEWAY_IMPL());
+
+        _assertUint("gateway-genesis-time", gateway.GENESIS_TIME(), verifier.GENESIS_TIME());
+        _assertUint("gateway-slots-per-epoch", gateway.SLOTS_PER_EPOCH(), verifier.SLOTS_PER_EPOCH());
+        _assertUint("gateway-seconds-per-slot", gateway.SECONDS_PER_SLOT(), verifier.SECONDS_PER_SLOT());
     }
 
     function _assertConsistentGloasSlot(UpgradeConfig config) private view {

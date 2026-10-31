@@ -152,16 +152,12 @@ function externalContract(name: string, address: string, abi: string[]) {
   });
 }
 
-async function getEpochs(hashConsensus: ReturnType<typeof externalContract>) {
+async function getCurrentEpoch(hashConsensus: ReturnType<typeof externalContract>) {
   const latestBlock = await ethers.provider.getBlock("latest");
   if (!latestBlock) throw new Error("Failed to read latest block");
 
   const [slotsPerEpoch, secondsPerSlot, genesisTime] = await hashConsensus.getChainConfig();
-  const secondsPerEpoch = BigInt(slotsPerEpoch) * BigInt(secondsPerSlot);
-  return {
-    currentEpoch: (BigInt(latestBlock.timestamp) - BigInt(genesisTime)) / secondsPerEpoch,
-    farFutureEpoch: (2n ** 64n - 1n - BigInt(genesisTime)) / secondsPerEpoch,
-  };
+  return (BigInt(latestBlock.timestamp) - BigInt(genesisTime)) / (BigInt(slotsPerEpoch) * BigInt(secondsPerSlot));
 }
 
 async function enableExternalModule(
@@ -201,8 +197,10 @@ async function enableExternalModule(
     EXTERNAL_HASH_CONSENSUS_ABI,
   );
   const [initialEpoch] = await hashConsensus.getFrameConfig();
-  const { currentEpoch, farFutureEpoch } = await getEpochs(hashConsensus);
-  if (BigInt(initialEpoch) === farFutureEpoch) {
+  const currentEpoch = await getCurrentEpoch(hashConsensus);
+  // Same condition as HashConsensus.updateInitialEpoch: the initial epoch must still be in the future.
+  // The far-future sentinel set by the constructor depends on genesisTime, so it can't be matched by a constant.
+  if (BigInt(initialEpoch) > currentEpoch) {
     add(hashConsensus, "updateInitialEpoch", [currentEpoch]);
   }
 

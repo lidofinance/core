@@ -4,7 +4,7 @@
 pragma solidity 0.8.25;
 
 import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
-import {GIndex, pack, fls, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
+import {GIndex, staticListNodeGIndex, vectorNodeGIndex, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 
@@ -84,21 +84,21 @@ contract ValidatorExitDelayVerifier {
     uint32 public immutable SECONDS_PER_SLOT;
     uint32 public immutable SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
-    /// @dev This index is relative to a pre-Gloas state like: `BeaconState.validators[0]`.
-    GIndex public constant GI_FIRST_VALIDATOR_PRE_GLOAS = CLGIndices.FIRST_VALIDATOR_PRE_GLOAS;
+    /// @dev This index is relative to a pre-Gloas state like: `BeaconState.validators`.
+    GIndex public constant GI_VALIDATORS_PRE_GLOAS = CLGIndices.VALIDATORS_PRE_GLOAS;
 
     /// @dev This index is relative to a Gloas state like: `BeaconState.validators`.
     GIndex public constant GI_VALIDATORS = CLGIndices.VALIDATORS;
 
-    /// @dev This index is relative to a pre-Gloas state like: `BeaconState.historical_summaries[0]`.
-    GIndex public constant GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS = CLGIndices.FIRST_HISTORICAL_SUMMARY_PRE_GLOAS;
+    /// @dev This index is relative to a pre-Gloas state like: `BeaconState.historical_summaries`.
+    GIndex public constant GI_HISTORICAL_SUMMARIES_PRE_GLOAS = CLGIndices.HISTORICAL_SUMMARIES_PRE_GLOAS;
 
-    /// @dev This index is relative to a Gloas state like: `BeaconState.historical_summaries[0]`.
-    GIndex public constant GI_FIRST_HISTORICAL_SUMMARY = CLGIndices.FIRST_HISTORICAL_SUMMARY;
+    /// @dev This index is relative to a Gloas state like: `BeaconState.historical_summaries`.
+    GIndex public constant GI_HISTORICAL_SUMMARIES = CLGIndices.HISTORICAL_SUMMARIES;
 
     /// @dev HistoricalSummary is a plain container whose layout does not vary across forks.
-    ///      This index is relative to HistoricalSummary like: HistoricalSummary.blockRoots[0].
-    GIndex public immutable GI_FIRST_BLOCK_ROOT_IN_SUMMARY;
+    ///      This index is relative to HistoricalSummary like: HistoricalSummary.block_summary_root.
+    GIndex public constant GI_BLOCK_ROOT_IN_SUMMARY = CLGIndices.BLOCK_ROOT_IN_SUMMARY;
 
     /// @notice The first slot this verifier will accept proofs for.
     uint64 public immutable FIRST_SUPPORTED_SLOT;
@@ -160,8 +160,6 @@ contract ValidatorExitDelayVerifier {
         if (capellaSlot % slotsPerHistoricalRoot != 0) revert InvalidCapellaSlot();
 
         LOCATOR = ILidoLocator(lidoLocator);
-
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY = _firstBlockRootInSummaryGI(slotsPerHistoricalRoot);
 
         FIRST_SUPPORTED_SLOT = firstSupportedSlot;
         GLOAS_SLOT = gloasSlot;
@@ -348,7 +346,7 @@ contract ValidatorExitDelayVerifier {
 
     function _getValidatorGI(uint256 offset, uint64 stateSlot) internal view returns (GIndex) {
         if (stateSlot < GLOAS_SLOT) {
-            return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(offset);
+            return GI_VALIDATORS_PRE_GLOAS.concat(staticListNodeGIndex(offset, CLGIndices.VALIDATORS_DEPTH_PRE_GLOAS));
         }
         return GI_VALIDATORS.concat(progressiveListNodeGIndex(offset));
     }
@@ -363,13 +361,14 @@ contract ValidatorExitDelayVerifier {
             revert HistoricalSummaryDoesNotExist();
         }
 
-        gI = recentSlot < GLOAS_SLOT
-            ? GI_FIRST_HISTORICAL_SUMMARY_PRE_GLOAS
-            : GI_FIRST_HISTORICAL_SUMMARY;
+        gI = recentSlot < GLOAS_SLOT ? GI_HISTORICAL_SUMMARIES_PRE_GLOAS : GI_HISTORICAL_SUMMARIES;
 
-        gI = gI.shr(summaryIndex); // historicalSummaries[summaryIndex]
-        gI = gI.concat(GI_FIRST_BLOCK_ROOT_IN_SUMMARY); // historicalSummaries[summaryIndex].blockRoots[0]
-        gI = gI.shr(rootIndex); // historicalSummaries[summaryIndex].blockRoots[rootIndex]
+        // historical_summaries[summaryIndex]
+        gI = gI.concat(staticListNodeGIndex(summaryIndex, CLGIndices.HISTORICAL_SUMMARIES_DEPTH));
+        // historical_summaries[summaryIndex].block_summary_root
+        gI = gI.concat(GI_BLOCK_ROOT_IN_SUMMARY);
+        // historical_summaries[summaryIndex].block_summary_root[rootIndex]
+        gI = gI.concat(vectorNodeGIndex(rootIndex, SLOTS_PER_HISTORICAL_ROOT));
     }
 
     function _getExitRequestDeliveryTimestamp(
@@ -387,10 +386,5 @@ contract ValidatorExitDelayVerifier {
     /// @dev Returns true if `value` is a non-zero power of two, i.e. exactly one bit is set.
     function _isPowerOfTwo(uint64 value) internal pure returns (bool) {
         return value != 0 && (value & (value - 1)) == 0;
-    }
-
-    /// @dev `block_roots` is the first field in HistoricalSummary, followed by a vector of the given width.
-    function _firstBlockRootInSummaryGI(uint64 slotsPerHistoricalRoot) private pure returns (GIndex) {
-        return pack(uint256(slotsPerHistoricalRoot) << 1, uint8(fls(slotsPerHistoricalRoot)));
     }
 }

@@ -27,11 +27,8 @@ contract UpgradeVoteScript is OmnibusBase {
 
     uint256 public constant DG_ITEMS_COUNT = 1;
     uint256 public constant VOTING_ITEMS_COUNT = 0;
-    uint256 public constant RAW_ACTIONS_COUNT = 15;
+    uint256 public constant RAW_ACTIONS_COUNT = 11;
 
-    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
-    bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
-    bytes32 internal constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE =
         keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
 
@@ -143,28 +140,6 @@ contract UpgradeVoteScript is OmnibusBase {
         );
 
         // --- New ConsolidationGateway ---
-        // Mirrors UpgradeTemporaryAdmin._setupConsolidationGateway from SRv3; DEFAULT_ADMIN_ROLE
-        // needs no item because the gateway is deployed with the Agent as its admin.
-        items[i++] = _item(
-            "Grant PAUSE_ROLE on the new ConsolidationGateway to the CircuitBreaker",
-            config.NEW_CONSOLIDATION_GATEWAY(),
-            abi.encodeCall(IAccessControl.grantRole, (PAUSE_ROLE, config.CIRCUIT_BREAKER()))
-        );
-        items[i++] = _item(
-            "Grant PAUSE_ROLE on the new ConsolidationGateway to the ResealManager",
-            config.NEW_CONSOLIDATION_GATEWAY(),
-            abi.encodeCall(IAccessControl.grantRole, (PAUSE_ROLE, config.RESEAL_MANAGER()))
-        );
-        items[i++] = _item(
-            "Grant RESUME_ROLE on the new ConsolidationGateway to the ResealManager",
-            config.NEW_CONSOLIDATION_GATEWAY(),
-            abi.encodeCall(IAccessControl.grantRole, (RESUME_ROLE, config.RESEAL_MANAGER()))
-        );
-        items[i++] = _item(
-            "Grant ADD_CONSOLIDATION_REQUEST_ROLE on the new ConsolidationGateway to the ConsolidationBus",
-            config.NEW_CONSOLIDATION_GATEWAY(),
-            abi.encodeCall(IAccessControl.grantRole, (ADD_CONSOLIDATION_REQUEST_ROLE, config.CONSOLIDATION_BUS()))
-        );
         items[i++] = _item(
             "Register CircuitBreaker pauser for the new ConsolidationGateway",
             config.CIRCUIT_BREAKER(),
