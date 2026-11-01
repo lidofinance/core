@@ -88,7 +88,7 @@
   },
   "accountingOracle": {
     "deployParameters": {
-      "consensusVersion": 6
+      "consensusVersion": 7
     }
   },
   "hashConsensusForValidatorsExitBusOracle": {
@@ -103,7 +103,7 @@
       "maxExitBalanceEth": 416000,
       "balancePerFrameEth": 32,
       "frameDurationInSec": 48,
-      "consensusVersion": 5
+      "consensusVersion": 6
     }
   },
   "depositSecurityModule": {
@@ -165,9 +165,7 @@
   },
   "predepositGuarantee": {
     "deployParameters": {
-      "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
-      "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
-      "changeSlot": 0
+      "gloasSlot": "18446744073709551615"
     }
   }
 }

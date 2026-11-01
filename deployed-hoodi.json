@@ -365,22 +365,20 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/consolidation/ConsolidationBus.sol",
-      "address": "0x2908c4B32548D8799fDc601C1a75E7d5C2FbC556",
-      "constructorArgs": ["0xC9991Bb865d025364BCbBd99f36e85889Fb68e69"]
+      "address": "0x95a435Bbae97685d4a9B77d77E23e2a827a717a5",
+      "constructorArgs": ["0x0718B7DE68ee5A82ebb17a86cF99371881154E51"]
     }
   },
   "consolidationGateway": {
     "contract": "contracts/0.8.25/consolidation/ConsolidationGateway.sol",
-    "address": "0xC9991Bb865d025364BCbBd99f36e85889Fb68e69",
+    "address": "0x0718B7DE68ee5A82ebb17a86cF99371881154E51",
     "constructorArgs": [
-      "0xC676167aAea6de6Af3e1ED34C0595de449E0de7b",
+      "0x47B420f0924d5c649193916C9f6A55B5279EEA98",
       "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
       2900,
       1,
       30,
-      "0x0000000000000000000000000000000000000000000000000096000000000028",
-      "0x0000000000000000000000000000000000000000000000000096000000000028",
-      0
+      "4235264"
     ]
   },
   "consolidationMigrator": {
@@ -752,7 +750,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x546d76dd8D4BC0c6a26Cb71a39De5d78E222Cbf8",
+      "address": "0x101430e537EFfA1385CC74838EbD43a91D58a722",
       "constructorArgs": [
         {
           "accountingOracle": "0xcb883B1bD0a41512b42D2dB267F2A2cd919FB216",
@@ -768,9 +766,9 @@
           "withdrawalQueue": "0xfe56573178f1bcdf53F01A6E9977670dcBBD9186",
           "withdrawalVault": "0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2",
           "oracleDaemonConfig": "0x2a833402e3F46fFC1ecAb3598c599147a78731a9",
-          "validatorExitDelayVerifier": "0xa5F5A9360275390fF9728262a29384399f38d2f0",
+          "validatorExitDelayVerifier": "0x34eFB78e7e4241269D6fe96042Eaa0c5715C7Ba4",
           "triggerableWithdrawalsGateway": "0x6679090D92b08a2a686eF8614feECD8cDFE209db",
-          "consolidationGateway": "0xC9991Bb865d025364BCbBd99f36e85889Fb68e69",
+          "consolidationGateway": "0x0718B7DE68ee5A82ebb17a86cF99371881154E51",
           "accounting": "0x9b5b78D1C9A3238bF24662067e34c57c83E8c354",
           "predepositGuarantee": "0xa5F55f3402beA2B14AE15Dae1b6811457D43581d",
           "wstETH": "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
@@ -905,19 +903,14 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol",
-      "address": "0xd1245b75d243A7e0b655479043f9C30b3e8717F5",
-      "constructorArgs": [
-        "0x10000910",
-        "0x0000000000000000000000000000000000000000000000000096000000000028",
-        "0x0000000000000000000000000000000000000000000000000096000000000028",
-        0
-      ]
+      "address": "0x972A2a03011D629cded15b5b7e70e60b3E17a142",
+      "constructorArgs": ["0x10000910", "4235264"]
     }
   },
   "resealManager": {
     "address": "0x05172CbCDb7307228F781436b327679e4DAE166B"
   },
-  "scratchDeployGasUsed": "166261142",
+  "scratchDeployGasUsed": "180130716",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleTypeId": "curated-onchain-v1",
@@ -1016,14 +1009,8 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/TopUpGateway.sol",
-      "address": "0x8621D8a402fdf2a131E38e16ac50f4C97660Fc2b",
-      "constructorArgs": [
-        "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
-        "0x0000000000000000000000000000000000000000000000000096000000000028",
-        "0x0000000000000000000000000000000000000000000000000096000000000028",
-        0,
-        32
-      ]
+      "address": "0x18Ed6Ba7EBaecEd415b71dbB3795362070b227C5",
+      "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8", "4235264", 32, 12, 1742213400]
     }
   },
   "triggerableWithdrawalsGateway": {
@@ -1322,19 +1309,11 @@
   },
   "validatorExitDelayVerifier": {
     "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
-    "address": "0xa5F5A9360275390fF9728262a29384399f38d2f0",
+    "address": "0x34eFB78e7e4241269D6fe96042Eaa0c5715C7Ba4",
     "constructorArgs": [
       "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
-      {
-        "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
-        "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
-        "gIFirstHistoricalSummaryPrev": "0x000000000000000000000000000000000000000000000000000000b600000018",
-        "gIFirstHistoricalSummaryCurr": "0x000000000000000000000000000000000000000000000000000000b600000018",
-        "gIFirstBlockRootInSummaryPrev": "0x000000000000000000000000000000000000000000000000000000000040000d",
-        "gIFirstBlockRootInSummaryCurr": "0x000000000000000000000000000000000000000000000000000000000040000d"
-      },
-      1,
-      1,
+      65536,
+      "4235264",
       0,
       8192,
       32,
@@ -1421,12 +1400,12 @@
   "withdrawalVault": {
     "implementation": {
       "contract": "contracts/0.8.9/WithdrawalVault.sol",
-      "address": "0x6724DaD16f7b05157dF72783F99cA6B813742330",
+      "address": "0xdfC1E89ceb393C15e2d864F453c7991230367708",
       "constructorArgs": [
         "0x3508A952176b3c15387C97BE809eaffB1982176a",
         "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
         "0x6679090D92b08a2a686eF8614feECD8cDFE209db",
-        "0xC9991Bb865d025364BCbBd99f36e85889Fb68e69",
+        "0x0718B7DE68ee5A82ebb17a86cF99371881154E51",
         "0x00000961Ef480Eb55e80D19ad83579A64c007002",
         "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
       ]

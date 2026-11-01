@@ -125,9 +125,9 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     await consolidationBus.connect(agentSigner).grantRole(REMOVE_ROLE, agentSigner.address);
 
     // Normalize the gateway rate limit so it never bounds the measurement
-    const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
+    const CONSOLIDATION_LIMIT_MANAGER_ROLE = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
     await (
-      await consolidationGateway.connect(agentSigner).grantRole(EXIT_LIMIT_MANAGER_ROLE, agentSigner.address)
+      await consolidationGateway.connect(agentSigner).grantRole(CONSOLIDATION_LIMIT_MANAGER_ROLE, agentSigner.address)
     ).wait();
     await (
       await consolidationGateway.connect(agentSigner).setConsolidationRequestLimit(totalRequests, totalRequests, 1)
