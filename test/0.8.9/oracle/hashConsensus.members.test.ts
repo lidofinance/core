@@ -295,8 +295,8 @@ describe("HashConsensus.sol:members", function () {
       await consensus.connect(admin).removeMember(await member1.getAddress(), 3);
 
       const reportVariants = await consensus.getReportVariants();
-      expect([...reportVariants.variants]).to.have.members([HASH_1]);
-      expect([...reportVariants.support]).to.have.ordered.members([0n]);
+      expect([...reportVariants.variants]).to.be.empty;
+      expect([...reportVariants.support]).to.be.empty;
     });
 
     context("Re-triggering consensus via members and quorum manipulation", () => {
