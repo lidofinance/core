@@ -61,12 +61,22 @@ export async function main() {
   // The template's constructor rejects a mismatch against `block.chainid`; ask the node rather than the config
   const { chainId } = await ethers.provider.getNetwork();
 
-  // The vote sets these limits on the new gateway: the bus first, then the staking module ejectors
+  // The vote sets these limits on the new gateway in the order of its items, each naming its consumer,
+  // so the ejectors are picked by name rather than by their order in the parameters file
   const triggerableWithdrawalsBusAddress = getAddress(Sk.triggerableWithdrawalsBus, state);
   const { busLimits, ejectors } = parameters.triggerableWithdrawalsGateway;
+  const ejectorNames = ["CSM", "CSM 0x02", "CMv2"];
+  if (ejectors.length !== ejectorNames.length) {
+    throw new Error(`Expected ejectors ${ejectorNames.join(", ")}, got ${ejectors.map((e) => e.name).join(", ")}`);
+  }
+  const ejectorLimits = (name: string): GatewayConsumerLimitsStruct => {
+    const ejector = ejectors.find((e) => e.name === name);
+    if (!ejector) throw new Error(`Missing ejector "${name}" in the upgrade parameters`);
+    return { consumer: ejector.address, pwrLimit: ejector.pwr, fwrLimit: ejector.fwr };
+  };
   const gatewayConsumers: GatewayConsumerLimitsStruct[] = [
     { consumer: triggerableWithdrawalsBusAddress, pwrLimit: busLimits.pwr, fwrLimit: busLimits.fwr },
-    ...ejectors.map((ejector) => ({ consumer: ejector.address, pwrLimit: ejector.pwr, fwrLimit: ejector.fwr })),
+    ...ejectorNames.map(ejectorLimits),
   ];
 
   const upgradeParams: SRPhase2UpgradeParametersStruct = {

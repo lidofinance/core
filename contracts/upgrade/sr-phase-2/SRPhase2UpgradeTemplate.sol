@@ -171,9 +171,14 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         _assertSingleRoleHolder("sr-exit-triggered-role", stakingRouter, REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE, oldGateway);
         _assertSingleRoleHolder("sr-exiting-status-role", stakingRouter, REPORT_VALIDATOR_EXITING_STATUS_ROLE, verifier);
 
-        // --- Old gateway: the limit manager is replayed onto the new one ---
+        // --- Old gateway: the limit manager and the CircuitBreaker pauser move to the new one ---
         _assertSingleRoleHolder(
             "old-gateway-limit-manager", IAccessControlEnumerable(oldGateway), TW_EXIT_LIMIT_MANAGER_ROLE, agent
+        );
+        _assertAddress(
+            "old-gateway-pauser",
+            ICircuitBreaker(config.CIRCUIT_BREAKER()).getPauser(oldGateway),
+            config.CIRCUIT_BREAKER_COMMITTEE()
         );
 
         // --- New gateway: deployed with the Agent as its admin and no other role granted yet ---
@@ -278,6 +283,7 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
             ICircuitBreaker(circuitBreaker).getPauser(newGateway),
             config.CIRCUIT_BREAKER_COMMITTEE()
         );
+        _assertAddress("old-gateway-pauser-cleared", ICircuitBreaker(circuitBreaker).getPauser(oldGateway), address(0));
 
         // Every consumer got exactly the configured limits, and its quota is still full
         GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();

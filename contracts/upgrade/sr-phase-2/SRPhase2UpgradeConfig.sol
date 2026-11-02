@@ -13,7 +13,11 @@ contract SRPhase2UpgradeConfig {
     error InvalidChainId(uint256 chainId);
     error NotReplaced(string field, address value);
     error BusLimitsMissing();
+    error InvalidGatewayConsumersCount(uint256 count);
     error DuplicateGatewayConsumer(address consumer);
+
+    /// @notice The bus and three staking module ejectors; the vote script has one explicit item per consumer
+    uint256 public constant GATEWAY_CONSUMERS_COUNT = 4;
 
     uint256 public immutable CHAIN_ID;
 
@@ -87,15 +91,16 @@ contract SRPhase2UpgradeConfig {
         );
     }
 
-    /// @notice Limits the vote sets on the new gateway: the bus first, then the staking module ejectors.
+    /// @notice Limits the vote sets on the new gateway: the bus, then the CSM, CSM 0x02 and CMv2 ejectors.
     function getGatewayConsumers() external view returns (GatewayConsumerLimits[] memory) {
         return _gatewayConsumers;
     }
 
     /// @dev The limit values are checked by the gateway itself when the vote sets them.
     function _setGatewayConsumers(GatewayConsumerLimits[] memory consumers, address bus) private {
+        if (consumers.length != GATEWAY_CONSUMERS_COUNT) revert InvalidGatewayConsumersCount(consumers.length);
         // The bus is the consumer of the oracle path, and LIP-38 requires its limits
-        if (consumers.length == 0 || consumers[0].consumer != bus) revert BusLimitsMissing();
+        if (consumers[0].consumer != bus) revert BusLimitsMissing();
 
         for (uint256 i = 0; i < consumers.length; ++i) {
             address consumer = _nonZero(consumers[i].consumer, "gatewayConsumer");

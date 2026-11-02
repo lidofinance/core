@@ -35,7 +35,7 @@ struct SRPhase2UpgradeParameters {
     address triggerableWithdrawalsBus;
     // removed from the protocol
     address validatorExitDelayVerifier;
-    // limits the vote sets on the new gateway: the bus first, then the staking module ejectors
+    // limits the vote sets on the new gateway: the bus, then the CSM, CSM 0x02 and CMv2 ejectors
     GatewayConsumerLimits[] gatewayConsumers;
 }
 
