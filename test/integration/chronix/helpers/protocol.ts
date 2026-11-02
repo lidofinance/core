@@ -18,6 +18,7 @@ import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
 import type { Node } from "@chainsafe/persistent-merkle-tree";
+import type { ChronixClient } from "@lidofinance/chronix-client";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
@@ -35,7 +36,6 @@ import {
   WithdrawalVault,
 } from "typechain-types";
 
-import { Chronix } from "lib/chronix";
 import { DaoRunner, executeDaoDecision } from "lib/dao";
 import { getAddress, Sk } from "lib/state-file";
 
@@ -60,7 +60,25 @@ type Call = { to: string; data: string };
 type ValidatorRecord = { index: string; status: string; balance: string; validator: BeaconValidator };
 type BeaconResponse<T> = { data: T; version?: string; execution_optimistic?: boolean };
 type HeaderResponse = BeaconResponse<{ canonical: boolean; root: string; header: { message: BeaconHeader } }>;
-type ExecutionBlock = { number: string; hash: string; timestamp: string; parentBeaconBlockRoot: string };
+type ExecutionBlock = {
+  number: string;
+  hash: string;
+  timestamp: string;
+  parentHash: string;
+  parentBeaconBlockRoot: string;
+};
+type GloasBlock = BeaconResponse<{
+  message: {
+    slot: string;
+    body: { signed_execution_payload_bid: { message: { block_hash: string; parent_block_hash: string } } };
+  };
+}>;
+type PayloadEnvelope = BeaconResponse<{
+  message: {
+    beacon_block_root: string;
+    payload: { slot_number: string; block_hash: string; parent_hash: string; block_number: string; timestamp: string };
+  };
+}>;
 type BeaconBlock = {
   message: {
     body: {
@@ -138,7 +156,7 @@ export interface ExitRequestBatch {
 }
 
 export interface ChronixProtocolContext {
-  chronix: Chronix;
+  chronix: ChronixClient;
   deployment: Deployment;
   signer: HardhatEthersSigner;
   contracts: ChronixProtocolContracts;
@@ -163,7 +181,7 @@ export interface ChronixProtocolContext {
 
 /** Connect the scratch deployment and enable verifier calls through a real DAO vote. */
 export async function getChronixProtocolContext(
-  chronix: Chronix,
+  chronix: ChronixClient,
   deployment: Deployment,
   signer: HardhatEthersSigner,
 ): Promise<ChronixProtocolContext> {
@@ -300,6 +318,36 @@ async function enableVerifierCalls(ctx: ChronixProtocolContext) {
   assert.equal(await lido.canDeposit(), true);
 }
 
+/** Bind a captured Gloas Beacon root to its real, canonical EL payload. */
+async function assertExecution(ctx: ChronixProtocolContext, blockRoot: string) {
+  assert.match(blockRoot, /^0x[0-9a-f]{64}$/i);
+  const block = await ctx.chronix.beacon<GloasBlock>(`/eth/v2/beacon/blocks/${blockRoot}`);
+  assert.equal(block.version, "gloas", "Expected a Gloas block");
+  assert.equal(block.execution_optimistic, false, "CL block must not be optimistic");
+  const envelope = await ctx.chronix.beacon<PayloadEnvelope>(`/eth/v1/beacon/execution_payload_envelopes/${blockRoot}`);
+  assert.equal(envelope.version, "gloas", "Expected a Gloas envelope");
+  assert.equal(envelope.execution_optimistic, false, "CL envelope must not be optimistic");
+  assert.equal(envelope.data.message.beacon_block_root, blockRoot, "Envelope must bind the captured Beacon root");
+  const payload = envelope.data.message.payload;
+  const bid = block.data.message.body.signed_execution_payload_bid.message;
+  assert.equal(payload.slot_number, block.data.message.slot, "Gloas envelope slot must match the block");
+  assert.equal(payload.block_hash, bid.block_hash, "Gloas bid/envelope execution hash must match");
+  assert.equal(payload.parent_hash, bid.parent_block_hash, "Gloas bid/envelope execution parent must match");
+  assert.equal(
+    BigInt(payload.timestamp),
+    BigInt(ctx.genesis.genesis_time) + BigInt(payload.slot_number) * 12n,
+    "Invalid CL slot timestamp",
+  );
+  const number = `0x${BigInt(payload.block_number).toString(16)}`;
+  const el = await ctx.chronix.rpc<ExecutionBlock | null>("eth_getBlockByNumber", [number, false]);
+  assert.ok(el, "CL payload must exist in canonical EL history");
+  assert.equal(el.hash, payload.block_hash, "EL/CL execution hash must match");
+  assert.equal(el.parentHash, payload.parent_hash, "EL/CL execution parent must match");
+  assert.equal(BigInt(el.number), BigInt(payload.block_number), "EL/CL block number must match");
+  assert.equal(BigInt(el.timestamp), BigInt(payload.timestamp), "EL/CL execution timestamp must match");
+  return { blockRoot, slot: payload.slot_number, executionHash: el.hash, executionNumber: el.number };
+}
+
 /** Advance one slot to anchor the current canonical CL head in the real EL EIP-4788 contract. */
 export async function anchorHead(ctx: ChronixProtocolContext, label: string): Promise<AnchoredState> {
   const response = await ctx.chronix.beacon<HeaderResponse>("/eth/v1/beacon/headers/head");
@@ -316,7 +364,7 @@ export async function anchorHead(ctx: ChronixProtocolContext, label: string): Pr
   const tree = State.node(state);
   assert.equal(hex(tree.root), header.state_root, "Independent SSZ state root must equal Lighthouse");
   assert.equal(hex(Header.node(header).root), response.data.root, "Independent header root must equal Lighthouse");
-  const execution = await ctx.chronix.assertExecution(response.data.root);
+  const execution = await assertExecution(ctx, response.data.root);
   assert.equal(execution.slot, header.slot, "Captured CL state and execution payload must belong to the same slot");
   await ctx.chronix.advanceSlots(1);
   const child = await ctx.chronix.rpc<ExecutionBlock>("eth_getBlockByNumber", ["latest", false]);
@@ -348,7 +396,7 @@ export async function anchorHead(ctx: ChronixProtocolContext, label: string): Pr
     executionNumber: execution.executionNumber,
   });
   await writeFile(
-    path.join(ctx.chronix.directory, `${label}.json`),
+    path.join(ctx.deployment.directory, `${label}.json`),
     JSON.stringify({ header: response, state: stateResponse, execution }),
   );
   return result;
@@ -484,8 +532,34 @@ export async function submitExitRequests(
     validators: indices.map((index) => anchor.state.validators[index]),
   };
 }
+/** Gloas finalizes the checkpoint's execution parent, not its own payload. */
+async function readFinalized(ctx: ChronixProtocolContext) {
+  const response = await ctx.chronix.beacon<BeaconResponse<{ finalized: { epoch: string; root: string } }>>(
+    "/eth/v1/beacon/states/head/finality_checkpoints",
+  );
+  assert.equal(response.execution_optimistic, false, "CL finality must not be optimistic");
+  const checkpoint = response.data.finalized;
+  if (BigInt(checkpoint.epoch) === 0n) return null;
+  assert.match(checkpoint.root, /^0x[0-9a-f]{64}$/i);
+  const block = await ctx.chronix.beacon<GloasBlock>(`/eth/v2/beacon/blocks/${checkpoint.root}`);
+  assert.equal(block.version, "gloas", "Expected a Gloas checkpoint");
+  assert.equal(block.execution_optimistic, false, "CL checkpoint must not be optimistic");
+  assert.ok(
+    BigInt(block.data.message.slot) <= BigInt(checkpoint.epoch) * 32n,
+    "Checkpoint block exceeds its epoch boundary",
+  );
+  const el = await ctx.chronix.rpc<ExecutionBlock | null>("eth_getBlockByNumber", ["finalized", false]);
+  assert.ok(el, "EL must expose a finalized block");
+  assert.equal(
+    el.hash,
+    block.data.message.body.signed_execution_payload_bid.message.parent_block_hash,
+    "Gloas finalized execution must equal the checkpoint execution parent",
+  );
+  return { epoch: checkpoint.epoch, root: checkpoint.root, executionHash: el.hash, executionNumber: el.number };
+}
+
 export async function readFinalizedCheckpoint(ctx: ChronixProtocolContext) {
-  const checkpoint = await ctx.chronix.finalized();
+  const checkpoint = await readFinalized(ctx);
   assert.ok(checkpoint, "CL must finalize a non-genesis checkpoint");
   return checkpoint;
 }
@@ -510,7 +584,7 @@ export async function readValidator(ctx: ChronixProtocolContext, index: number):
 }
 export async function advanceUntilFinalized(ctx: ChronixProtocolContext, number: number): Promise<void> {
   for (let slots = 0; slots <= 128; slots += 32) {
-    const finalized = await ctx.chronix.finalized();
+    const finalized = await readFinalized(ctx);
     if (finalized && BigInt(finalized.executionNumber) >= BigInt(number)) return;
     if (slots < 128) await ctx.chronix.advanceSlots(32);
   }

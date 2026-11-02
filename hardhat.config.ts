@@ -67,7 +67,7 @@ const config: HardhatUserConfig = {
       url: RPC_URL,
       timeout: 120_000,
     },
-    // Chronix starts this real Geth endpoint in the integration suite before hook.
+    // The controller of a running Chronix service: EL JSON-RPC, the Beacon API and the control API.
     "chronix": {
       url: process.env.CHRONIX_URL || `http://127.0.0.1:${process.env.CHRONIX_PORT || "18547"}`,
       chainId: 1337,

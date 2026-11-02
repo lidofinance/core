@@ -3,8 +3,9 @@ import path from "node:path";
 
 import { expect } from "chai";
 import { ethers, network } from "hardhat";
+import { HttpNetworkConfig } from "hardhat/types";
 
-import { Chronix } from "lib/chronix";
+import { ChronixClient } from "@lidofinance/chronix-client";
 
 import { bailOnFailure } from "test/suite";
 
@@ -48,7 +49,7 @@ const describeChronix = network.name === "chronix" ? describe : describe.skip;
 describeChronix("Core verifiers on Chronix / Gloas", function () {
   this.timeout(20 * 60_000);
 
-  let chronix: Chronix;
+  let chronix: ChronixClient;
   let ctx: ChronixProtocolContext;
   let initial: AnchoredState;
   let active: AnchoredState;
@@ -56,36 +57,31 @@ describeChronix("Core verifiers on Chronix / Gloas", function () {
   let invalidDeposit: DepositFixture;
   let validatorIndex: number;
 
-  before("start one Chronix network and scratch-deploy once for the whole suite", async () => {
+  before("connect to the Chronix service and scratch-deploy once for the whole suite", async () => {
     await initializeSSZ();
-    chronix = await Chronix.start({ port: Number(process.env.CHRONIX_PORT || 18547), timeoutMs: 120_000 });
+    chronix = new ChronixClient((network.config as HttpNetworkConfig).url, { timeoutMs: 120_000 });
     const deployment = await deployScratch(chronix);
     console.log(`    Scratch: ${deployment.steps} steps in ${deployment.elapsedSeconds.toFixed(2)}s`);
     ctx = await getChronixProtocolContext(chronix, deployment, await ethers.getSigner(deployment.state.deployer));
     initial = await anchorHead(ctx, "initial");
   });
 
-  after("save evidence and stop only this suite's Chronix network", async () => {
-    try {
-      if (ctx) {
-        await writeFile(
-          path.join(chronix.directory, "verifiers.json"),
-          JSON.stringify(
-            {
-              bake: await chronix.status(),
-              endpoints: { rpc: chronix.url, beacon: chronix.beaconUrl },
-              deploymentSeconds: ctx.deployment.elapsedSeconds,
-              captures: ctx.evidence.captures,
-              transactions: ctx.evidence.receipts,
-            },
-            null,
-            2,
-          ),
-        );
-      }
-    } finally {
-      await chronix?.close();
-    }
+  after("save evidence", async () => {
+    if (!ctx) return;
+    await writeFile(
+      path.join(ctx.deployment.directory, "verifiers.json"),
+      JSON.stringify(
+        {
+          bake: await chronix.status(),
+          endpoint: chronix.url,
+          deploymentSeconds: ctx.deployment.elapsedSeconds,
+          captures: ctx.evidence.captures,
+          transactions: ctx.evidence.receipts,
+        },
+        null,
+        2,
+      ),
+    );
   });
 
   // The groups share one real CL/EL lifecycle; run the complete suite with --bail.

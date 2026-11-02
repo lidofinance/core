@@ -3,25 +3,17 @@
 This checkout is based on Lido core PR 1940, commit
 `2f4a21d0ba89826087ef328ecf9fbdf0775f8e44`.
 
-From this core checkout, install dependencies (`HUSKY=0 yarn install --immutable`), then run:
+From this core checkout, install dependencies (`HUSKY=0 yarn install --immutable`). Start a Chronix
+service as the [suite documentation](../test/integration/chronix/README.md) shows, then run:
 
 ```sh
-CHRONIX_ROOT=/path/to/chronix yarn test:integration:chronix --bail
+CHRONIX_URL=http://127.0.0.1:18547 yarn test:integration:chronix --bail
 ```
 
-This optional local mode requires Deno 2.9.7 on `PATH` and an existing compatible Chronix bake.
-The HTTP service mode below needs neither Deno nor a Chronix checkout on the core test runner.
-
-To use a running Chronix service, set `CHRONIX_URL=http://127.0.0.1:18547` instead of `CHRONIX_ROOT`:
-
-```sh
-CHRONIX_URL=http://127.0.0.1:18547 CHRONIX_BEACON_URL=http://127.0.0.1:5052 \
-  yarn test:integration:chronix --bail
-```
-
-The service must expose a fresh Gloas chain (block 0, slot 0, automine off). The client connects over
-HTTP and leaves the externally owned service running when the suite ends. Validator import and
-voluntary exits use Chronix's `/control` API; keymanager credentials stay inside Chronix.
+The service must expose a fresh Gloas chain (block 0, slot 0, automine off). The suite connects to it
+through the Chronix SDK, `@lidofinance/chronix-client`, and leaves the externally owned service
+running when it ends. Validator import and voluntary exits use Chronix's control API; keymanager
+credentials stay inside Chronix. The test runner needs neither Deno nor a Chronix checkout.
 
 The **Integration Tests Chronix** workflow runs on every push with
 `ghcr.io/lidofinance/chronix-gloas:latest`, following the latest successful stable Chronix publication.
@@ -29,8 +21,7 @@ If that tag does not exist, the job fails. The selected image is recorded in the
 authentication or network errors also fail the job.
 A published version tag or image digest from the same repository can be supplied through the manual
 workflow's `image` input. It starts the image as a privileged service
-with its own Docker daemon and binds RPC `127.0.0.1:18547:8545`, Beacon `127.0.0.1:5052:5052`
-and validator API `127.0.0.1:5062:5062`. Deno and the Chronix
+with its own Docker daemon and binds the controller to `127.0.0.1:18547:8545`. Deno and the Chronix
 runtime are contained in the image. The workflow uses the command above; scratch deployment remains
 inside the existing suite. The workflow pulls the image with this repository's `GITHUB_TOKEN`
 (`packages: read`).
@@ -39,11 +30,9 @@ The Hardhat suite uses one fresh Chronix network and invokes the ordinary `yarn 
 command through the TypeScript [deployment helper](../test/integration/chronix/helpers/deploy.ts).
 The helper enables transaction-driven mining, waits for Geth indexer readiness, and records wall
 time, migration steps and output under `.local/chronix/core-<id>/`. Each run has its own
-`deployment.json`. The suite then checks the four core verifiers. Local mode starts and stops its
-own Chronix process; service mode leaves lifecycle management to Docker/CI.
-See the [suite documentation](../test/integration/chronix/README.md) for prerequisites and coverage.
-Local startup defaults to `gloas:chronix`; `CHRONIX_BAKE` selects another compatible tag. In service mode,
-`CHRONIX_BAKE` optionally asserts that the running service uses that exact bake tag.
+`deployment.json`. The suite then checks the four core verifiers. Docker or CI owns the service
+lifecycle. See the [suite documentation](../test/integration/chronix/README.md) for prerequisites
+and coverage.
 The standard public Hardhat development key is used only against this local Gloas network.
 
 The supplied scratch TOML keeps the original token allocations and vote durations, but assigns
