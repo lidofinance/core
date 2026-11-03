@@ -341,6 +341,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     /// @dev Everything the verifier is pinned to except the Gloas switch itself. The chain is the
     ///      same one, so the incoming deployment must agree with the outgoing one field for field.
+    ///      The one exception is `FIRST_SUPPORTED_SLOT`: it may move forward, never back (Hoodi
+    ///      raises it from 1 to the Electra fork slot).
     function _assertUnchangedVerifierProfile(UpgradeConfig config) private view {
         IValidatorExitDelayVerifier oldVerifier = IValidatorExitDelayVerifier(
             config.OLD_VALIDATOR_EXIT_DELAY_VERIFIER()
@@ -359,11 +361,13 @@ contract UpgradeTemplate is IUpgradeTemplate {
             newVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS(),
             oldVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS()
         );
-        _assertUint(
-            "verifier-first-supported-slot",
-            newVerifier.FIRST_SUPPORTED_SLOT(),
-            oldVerifier.FIRST_SUPPORTED_SLOT()
-        );
+        if (newVerifier.FIRST_SUPPORTED_SLOT() < oldVerifier.FIRST_SUPPORTED_SLOT()) {
+            revert InvalidUint(
+                "verifier-first-supported-slot",
+                newVerifier.FIRST_SUPPORTED_SLOT(),
+                oldVerifier.FIRST_SUPPORTED_SLOT()
+            );
+        }
         _assertUint("verifier-capella-slot", newVerifier.CAPELLA_SLOT(), oldVerifier.CAPELLA_SLOT());
         _assertUint(
             "verifier-slots-per-hist-root",

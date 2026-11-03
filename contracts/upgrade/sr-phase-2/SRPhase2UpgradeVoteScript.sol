@@ -37,8 +37,8 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
 
     uint256 public constant DG_ITEMS_COUNT = 4;
     uint256 public constant VOTING_ITEMS_COUNT = 0;
-    /// @notice Agent actions of the first Dual Governance call, besides one `setConsumerLimits` per gateway consumer
-    uint256 public constant FIXED_RAW_ACTIONS_COUNT = 12;
+    /// @notice Agent actions of the first Dual Governance call
+    uint256 public constant RAW_ACTIONS_COUNT = 17;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -129,8 +129,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         address newGateway = config.NEW_TRIGGERABLE_WITHDRAWALS_GATEWAY();
         GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
 
-        uint256 rawActionsCount = FIXED_RAW_ACTIONS_COUNT + consumers.length;
-        items = new VoteItem[](rawActionsCount);
+        items = new VoteItem[](RAW_ACTIONS_COUNT);
         uint256 i = 0;
 
         items[i++] = _item(
@@ -147,20 +146,22 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             config.LOCATOR(),
             abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (config.NEW_LOCATOR_IMPLEMENTATION()))
         );
-        // No setup calldata: the exit hooks are removed without a storage migration.
+        // Plain upgradeTo: removing the exit hooks leaves the storage layout untouched, nothing to finalize.
         items[i++] = _item(
             "Upgrade StakingRouter implementation",
             config.STAKING_ROUTER(),
             abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (config.NEW_STAKING_ROUTER_IMPL()))
         );
-        // No setup calldata: only the TRIGGERABLE_WITHDRAWALS_GATEWAY immutable changes.
+        // Empty setupCalldata: only the TRIGGERABLE_WITHDRAWALS_GATEWAY immutable changes, nothing to finalize.
         items[i++] = _item(
             "Upgrade WithdrawalVault implementation",
             config.WITHDRAWAL_VAULT(),
             abi.encodeCall(IWithdrawalsManagerProxy.proxy_upgradeTo, (config.NEW_WITHDRAWAL_VAULT_IMPL(), ""))
         );
 
-        // --- StakingRouter roles orphaned by the removed exit hooks ---
+        // TODO upgrade the ValidatorsExitBusOracle once its implementation exists.
+
+        // --- StakingRouter roles of the removed exit hooks ---
         items[i++] = _item(
             "Revoke REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE from the old TriggerableWithdrawalsGateway",
             config.STAKING_ROUTER(),
@@ -201,27 +202,48 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             abi.encodeCall(IAccessControl.grantRole, (TW_EXIT_LIMIT_MANAGER_ROLE, AGENT))
         );
         // A consumer without limits cannot submit requests, so these items also decide who may call the gateway.
-        // The first consumer is the bus.
-        for (uint256 c = 0; c < consumers.length; ++c) {
-            items[i++] = _item(
-                string.concat(
-                    c == 0
-                        ? "Set the limits of the TriggerableWithdrawalsBus "
-                        : "Set the limits of the staking module ejector ",
-                    Strings.toHexString(consumers[c].consumer),
-                    " on the new TriggerableWithdrawalsGateway"
-                ),
-                newGateway,
-                abi.encodeCall(
-                    ITriggerableWithdrawalsGateway.setConsumerLimits,
-                    (consumers[c].consumer, consumers[c].pwrLimit, consumers[c].fwrLimit)
-                )
-            );
-        }
+        // The config holds exactly these four consumers in this order.
+        items[i++] = _item(
+            "Set the limits of the TriggerableWithdrawalsBus on the new TriggerableWithdrawalsGateway",
+            newGateway,
+            abi.encodeCall(
+                ITriggerableWithdrawalsGateway.setConsumerLimits,
+                (consumers[0].consumer, consumers[0].pwrLimit, consumers[0].fwrLimit)
+            )
+        );
+        items[i++] = _item(
+            "Set the limits of the CSM ejector on the new TriggerableWithdrawalsGateway",
+            newGateway,
+            abi.encodeCall(
+                ITriggerableWithdrawalsGateway.setConsumerLimits,
+                (consumers[1].consumer, consumers[1].pwrLimit, consumers[1].fwrLimit)
+            )
+        );
+        items[i++] = _item(
+            "Set the limits of the CSM 0x02 ejector on the new TriggerableWithdrawalsGateway",
+            newGateway,
+            abi.encodeCall(
+                ITriggerableWithdrawalsGateway.setConsumerLimits,
+                (consumers[2].consumer, consumers[2].pwrLimit, consumers[2].fwrLimit)
+            )
+        );
+        items[i++] = _item(
+            "Set the limits of the CMv2 ejector on the new TriggerableWithdrawalsGateway",
+            newGateway,
+            abi.encodeCall(
+                ITriggerableWithdrawalsGateway.setConsumerLimits,
+                (consumers[3].consumer, consumers[3].pwrLimit, consumers[3].fwrLimit)
+            )
+        );
         items[i++] = _item(
             "Register CircuitBreaker pauser for the new TriggerableWithdrawalsGateway",
             config.CIRCUIT_BREAKER(),
             abi.encodeCall(ICircuitBreaker.registerPauser, (newGateway, config.CIRCUIT_BREAKER_COMMITTEE()))
+        );
+        items[i++] = _item(
+            "Unregister CircuitBreaker pauser for the old TriggerableWithdrawalsGateway",
+            config.CIRCUIT_BREAKER(),
+            abi.encodeCall(ICircuitBreaker.registerPauser, (config.OLD_TRIGGERABLE_WITHDRAWALS_GATEWAY(), address(0)))
         );
 
         // --- TriggerableWithdrawalsBus ---
@@ -231,7 +253,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             abi.encodeCall(IAccessControl.grantRole, (ADD_WITHDRAWAL_INTENTS_ROLE, config.VALIDATORS_EXIT_BUS_ORACLE()))
         );
 
-        if (i != rawActionsCount) revert InvalidItemsCount(i, rawActionsCount);
+        if (i != RAW_ACTIONS_COUNT) revert InvalidItemsCount(i, RAW_ACTIONS_COUNT);
     }
 
     function _item(string memory description, address to, bytes memory data) private pure returns (VoteItem memory) {

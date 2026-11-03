@@ -319,7 +319,10 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
 }
 
 async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, executor: HardhatEthersSigner) {
-  const { dg, timelock } = await upgCtx(state);
+  const [dg, timelock] = await Promise.all([
+    loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state)),
+    loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state)),
+  ]);
 
   const afterSubmitDelay = await timelock.getAfterSubmitDelay();
   const afterScheduleDelay = await timelock.getAfterScheduleDelay();
@@ -554,9 +557,11 @@ type OmnibusVoteScript = {
 };
 
 /**
- * Executes the items of an omnibus vote script directly on a fork: the Aragon items from the Voting app
- * and the Dual Governance items from the proposer's executor.
- * A non-zero `proposalId` targets the DG proposal only and skips the Aragon items; items of a vote or
+ * Enacts an omnibus vote script on a fork: the Aragon items are executed directly from the Voting app,
+ * and the Dual Governance items are submitted by the proposer as one proposal, then scheduled and executed
+ * through the timelock in one transaction, as on-chain (an upgrade template checks that `startUpgrade` and
+ * `finishUpgrade` run in the same transaction).
+ * A non-zero `proposalId` enacts that DG proposal and skips the Aragon items; items of a vote or
  * proposal already enacted on-chain are skipped as well.
  */
 export async function mockEnactOmnibus(
@@ -582,10 +587,22 @@ export async function mockEnactOmnibus(
   const dg = await loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state));
   const proposers = await dg.getProposers();
   if (!proposers.length) throw new Error("No proposer found in DualGovernance.");
+  const proposer = await impersonate(proposers[0].account, ether("100"));
 
-  const voteItemsDG = (await voteScript.getVoteItems()) as VoteItem[];
-  const executor = await impersonate(proposers[0].executor, ether("100"));
-  await execVoteItems(voteItemsDG, executor);
+  if (!proposalId) {
+    const voteItemsDG = (await voteScript.getVoteItems()) as VoteItem[];
+    const proposalCalls = voteItemsDG.map(({ call: { to, data } }) => ({ target: to, value: 0n, payload: data }));
+    for (const item of voteItemsDG) log(`DG proposal item: ${or(item.description)}`);
+
+    proposalId = (await dg
+      .connect(proposer)
+      .getFunction("submitProposal")
+      .staticCall(proposalCalls, PROPOSAL_METADATA)) as bigint;
+    await txWaitAndLog(await dg.connect(proposer).submitProposal(proposalCalls, PROPOSAL_METADATA));
+    log.success("Proposal submitted ID:", proposalId);
+  }
+
+  await mockEnactDGProposal(state, proposalId, proposer);
 }
 
 async function isVoteEnacted(state: DeploymentState, voteId: bigint): Promise<boolean> {

@@ -27,9 +27,8 @@ import {WithdrawalIntent, MAX_PWR_AMOUNT_GWEI} from "contracts/common/interfaces
  * Intents cannot be reordered, skipped or dismissed one by one. The only way to stop queued intents is
  * `clearWithdrawalIntents`, which drops the whole queue (CLEAR_WITHDRAWAL_INTENTS_ROLE).
  *
- * Storage of processed and dropped intents is never cleared. Intents added to an empty queue start again
- * from index 0 and overwrite it, as the EIP-7002 predeploy reuses its request queue: rewriting a non-zero
- * slot creates no new state (EIP-8037), so a refilled queue does not pay state creation gas again.
+ * Intent storage is never cleared: an emptied queue restarts from index 0 and overwrites old slots,
+ * avoiding new state creation gas (EIP-8037), as the EIP-7002 predeploy does.
  */
 contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlEnumerableUpgradeable {
     /// @notice role that allows to append withdrawal intents to the queue
@@ -154,8 +153,6 @@ contract TriggerableWithdrawalsBus is ITriggerableWithdrawalsBus, AccessControlE
      * @notice Drops all unprocessed intents at once. Nothing is sent to the gateway and no gateway limit is consumed.
      * @dev Emergency measure: a DAO vote grants CLEAR_WITHDRAWAL_INTENTS_ROLE, calls this and revokes the role.
      *      Does not revert on an empty queue, so such a vote does not fail if the queue was drained before enactment.
-     *      The storage of dropped intents is not cleared, so the call costs the same for any queue length;
-     *      the next added intents overwrite it.
      */
     function clearWithdrawalIntents() external onlyRole(CLEAR_WITHDRAWAL_INTENTS_ROLE) {
         Storage storage $ = _storage();

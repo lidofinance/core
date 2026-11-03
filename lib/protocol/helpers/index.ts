@@ -57,6 +57,7 @@ export type { ConsolidationPubkeyGroup, ConsolidationTargetWitness, Consolidatio
 export {
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
+  cmv2HasTopUpAllocationPause,
   cmv2NormalizeTopUpAllocationBaseline,
   cmv2RefreshDepositInfo,
   cmv2SuiteEnabled,
