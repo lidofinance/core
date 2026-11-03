@@ -7,43 +7,36 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   HashConsensus__Harness,
   OracleReportSanityChecker,
-  StakingModule__MockForKeyVerification,
+  StakingRouter__MockForValidatorsExitBus,
+  TriggerableWithdrawalsBus__MockForVEB,
   ValidatorsExitBus__Harness,
 } from "typechain-types";
 
-import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
+import { VEBO_CONSENSUS_VERSION } from "lib";
 
 import {
+  calcVEBOReportDataHash,
   computeTimestampAtSlot,
-  DATA_FORMAT_LIST_WITH_KEY_INDEX,
   deployVEBO,
+  encodeWithdrawalRequests,
   initVEBO,
-  seedMockModuleSigningKeys,
+  makeMockPubkey,
+  MAX_REQUESTS_PER_REPORT,
+  VEBOReportFields,
+  WithdrawalRequest,
 } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-  "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-];
 const HASH_1 = "0x1111111111111111111111111111111111111111111111111111111111111111";
+const GWEI_PER_ETH = 10n ** 9n;
 
 describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let oracleReportSanityChecker: OracleReportSanityChecker;
-  let mockModules: {
-    module1: StakingModule__MockForKeyVerification;
-    module2: StakingModule__MockForKeyVerification;
-    module3: StakingModule__MockForKeyVerification;
-    module4: StakingModule__MockForKeyVerification;
-    module5: StakingModule__MockForKeyVerification;
-    module7: StakingModule__MockForKeyVerification;
-  };
+  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
+  let triggerableWithdrawalsBus: TriggerableWithdrawalsBus__MockForVEB;
 
   let oracleVersion: bigint;
 
@@ -51,49 +44,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let authorizedEntity: HardhatEthersSigner;
 
   const LAST_PROCESSING_REF_SLOT = 1;
-
-  interface ExitRequest {
-    moduleId: number;
-    nodeOpId: number;
-    valIndex: number;
-    keyIndex: number;
-    valPubkey: string;
-  }
-
-  interface ReportFields {
-    consensusVersion: bigint;
-    refSlot: bigint;
-    requestsCount: number;
-    dataFormat: number;
-    data: string;
-  }
-
-  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
-    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
-    const reportDataHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
-    );
-    return reportDataHash;
-  };
-
-  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey, keyIndex }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return (
-      numberToHex(moduleId, 3) +
-      numberToHex(nodeOpId, 5) +
-      numberToHex(valIndex, 8) +
-      numberToHex(keyIndex, 8) +
-      pubkeyHex
-    );
-  };
-
-  const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
-    return "0x" + requests.map(encodeExitRequestHex).join("");
-  };
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
@@ -102,23 +54,21 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
+  // Builds a report from the requests and brings the committee to consensus on its hash
   const prepareReportAndSubmitHash = async (
-    requests = [{ moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[2], keyIndex: 1 }],
-    options = { reportFields: {} },
+    requests: WithdrawalRequest[] = [{ moduleId: 5, nodeOpId: 1, keyIndex: 1, amount: 0n }],
+    options: { reportFields?: Partial<VEBOReportFields> } = {},
   ) => {
-    await seedMockModuleSigningKeys(mockModules, requests);
-
     const { refSlot } = await consensus.getCurrentFrame();
-    const reportData = {
+    const reportData: VEBOReportFields = {
       consensusVersion: VEBO_CONSENSUS_VERSION,
-      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
       refSlot,
       requestsCount: requests.length,
-      data: encodeExitRequestsDataList(requests),
+      data: encodeWithdrawalRequests(requests),
       ...options.reportFields,
     };
 
-    const reportHash = calcValidatorsExitBusReportDataHash(reportData);
+    const reportHash = calcVEBOReportDataHash(reportData);
 
     await triggerConsensusOnHash(reportHash);
 
@@ -130,7 +80,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
-    mockModules = deployed.mockModules;
+    stakingRouter = deployed.stakingRouter;
+    triggerableWithdrawalsBus = deployed.triggerableWithdrawalsBus;
 
     await initVEBO({
       admin: admin.address,
@@ -148,13 +99,13 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   };
 
   before(async () => {
-    [admin, member1, member2, member3, stranger, authorizedEntity] = await ethers.getSigners();
+    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
 
     await deploy();
   });
 
   context("discarded report prevents data submit", () => {
-    let reportData: ReportFields;
+    let reportData: VEBOReportFields;
     let reportHash: string;
     let originalState: string;
 
@@ -178,7 +129,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const state = await oracle.getProcessingState();
       expect(state.dataHash).to.equal(ZeroHash);
       expect(state.dataSubmitted).to.equal(false);
-      expect(state.dataFormat).to.equal(0);
       expect(state.requestsCount).to.equal(0);
       expect(state.requestsSubmitted).to.equal(0);
     });
@@ -200,45 +150,12 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
     afterEach(async () => await Snapshot.restore(originalState));
 
-    context("enforces data format", () => {
-      it("dataFormat = 0 reverts", async () => {
-        const dataFormatUnsupported = 0;
-        const { reportData } = await prepareReportAndSubmitHash(
-          [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 }],
-          { reportFields: { dataFormat: dataFormatUnsupported } },
-        );
-
-        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-          .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
-          .withArgs(dataFormatUnsupported);
-      });
-
-      it("dataFormat = 3 reverts", async () => {
-        const dataFormatUnsupported = 3;
-        const { reportData } = await prepareReportAndSubmitHash(
-          [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 }],
-          { reportFields: { dataFormat: dataFormatUnsupported } },
-        );
-
-        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-          .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
-          .withArgs(dataFormatUnsupported);
-      });
-
-      it("dataFormat = 1 pass", async () => {
-        const { reportData } = await prepareReportAndSubmitHash([
-          { moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 },
-        ]);
-        await oracle.connect(member1).submitReportData(reportData, oracleVersion);
-      });
-    });
-
     context("enforces data length", () => {
       it("reverts if there is more data than expected", async () => {
         const { refSlot } = await consensus.getCurrentFrame();
-        const exitRequests = [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 }];
-        const { reportData } = await prepareReportAndSubmitHash(exitRequests, {
-          reportFields: { refSlot, data: encodeExitRequestsDataList(exitRequests) + "aaaaaaaaaaaaaaaaaa" },
+        const requests = [{ moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 0n }];
+        const { reportData } = await prepareReportAndSubmitHash(requests, {
+          reportFields: { refSlot, data: encodeWithdrawalRequests(requests) + "aaaaaaaaaaaaaaaaaa" },
         });
 
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
@@ -249,10 +166,10 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
       it("reverts if there is less data than expected", async () => {
         const { refSlot } = await consensus.getCurrentFrame();
-        const exitRequests = [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 }];
-        const data = encodeExitRequestsDataList(exitRequests);
+        const requests = [{ moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 0n }];
+        const data = encodeWithdrawalRequests(requests);
 
-        const { reportData } = await prepareReportAndSubmitHash(exitRequests, {
+        const { reportData } = await prepareReportAndSubmitHash(requests, {
           reportFields: {
             data: data.slice(0, data.length - 18),
             refSlot,
@@ -267,9 +184,116 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
       it("pass if there is exact amount of data", async () => {
         const { reportData } = await prepareReportAndSubmitHash([
-          { moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 },
+          { moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 0n },
         ]);
         await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+      });
+    });
+
+    context("enforces max requests per report", () => {
+      const makeFwrRequests = (count: number) =>
+        Array.from({ length: count }, (_, i) => ({ moduleId: 1, nodeOpId: 1, keyIndex: i, amount: 0n }));
+
+      it("MAX_REQUESTS_PER_REPORT is set from the constructor", async () => {
+        expect(await oracle.MAX_REQUESTS_PER_REPORT()).to.equal(MAX_REQUESTS_PER_REPORT);
+      });
+
+      it("pass if requests count equals the limit", async () => {
+        // the mock bus would run out of gas storing 400 intents from zero slots
+        await triggerableWithdrawalsBus.setStoreIntents(false);
+
+        const { reportData } = await prepareReportAndSubmitHash(makeFwrRequests(MAX_REQUESTS_PER_REPORT));
+        await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+
+        expect(await triggerableWithdrawalsBus.receivedIntentsCount()).to.equal(MAX_REQUESTS_PER_REPORT);
+      });
+
+      it("reverts if requests count exceeds the limit", async () => {
+        const { reportData } = await prepareReportAndSubmitHash(makeFwrRequests(MAX_REQUESTS_PER_REPORT + 1));
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
+          .to.be.revertedWithCustomError(oracle, "TooManyRequestsInReport")
+          .withArgs(MAX_REQUESTS_PER_REPORT + 1, MAX_REQUESTS_PER_REPORT);
+      });
+    });
+
+    context("validates partial withdrawals", () => {
+      const MAX_PWR_AMOUNT_GWEI = 2016n * GWEI_PER_ETH;
+
+      it("reverts if module does not allow partial withdrawals", async () => {
+        const { reportData } = await prepareReportAndSubmitHash([
+          { moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 32n * GWEI_PER_ETH },
+        ]);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
+          .to.be.revertedWithCustomError(oracle, "PartialWithdrawalsNotAllowed")
+          .withArgs(5);
+      });
+
+      it("pass if PWR amount equals MAX_PWR_AMOUNT", async () => {
+        await stakingRouter.setStakingModulePartialWithdrawalsAllowed(5, true);
+        const { reportData } = await prepareReportAndSubmitHash([
+          { moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: MAX_PWR_AMOUNT_GWEI },
+        ]);
+
+        await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+      });
+
+      it("reverts if PWR amount exceeds MAX_PWR_AMOUNT", async () => {
+        await stakingRouter.setStakingModulePartialWithdrawalsAllowed(5, true);
+        const { reportData } = await prepareReportAndSubmitHash([
+          { moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: MAX_PWR_AMOUNT_GWEI + 1n },
+        ]);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
+          .to.be.revertedWithCustomError(oracle, "WithdrawalAmountTooLarge")
+          .withArgs(0, MAX_PWR_AMOUNT_GWEI + 1n);
+      });
+    });
+
+    context("passes withdrawal intents to the bus", () => {
+      // PWR first and module 5 again after module 1: no sorting, module cache is refreshed on every change
+      const requests = [
+        { moduleId: 5, nodeOpId: 3, keyIndex: 7, amount: 10n * GWEI_PER_ETH }, // PWR
+        { moduleId: 1, nodeOpId: 1, keyIndex: 2, amount: 0n }, // FWR
+        { moduleId: 5, nodeOpId: 2, keyIndex: 4, amount: 0n }, // FWR
+      ];
+
+      beforeEach(async () => {
+        await stakingRouter.setStakingModulePartialWithdrawalsAllowed(5, true);
+      });
+
+      it("passes intents to the bus in report order", async () => {
+        const { reportData } = await prepareReportAndSubmitHash(requests);
+        await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+
+        const intents = await triggerableWithdrawalsBus.getWithdrawalIntents();
+        expect(intents.length).to.equal(requests.length);
+        intents.forEach((intent, i) => {
+          const { nodeOpId, keyIndex, amount } = requests[i];
+          expect(intent.amount).to.equal(amount);
+          expect(intent.pubkey).to.equal(makeMockPubkey(nodeOpId, keyIndex));
+        });
+      });
+
+      it("calls the bus once per report", async () => {
+        const { reportData } = await prepareReportAndSubmitHash(requests);
+        await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+
+        expect(await triggerableWithdrawalsBus.addWithdrawalIntentsCalls()).to.equal(1);
+      });
+
+      it("reverts the whole report if the bus reverts", async () => {
+        await triggerableWithdrawalsBus.setRevertOnAdd(true);
+        const stateBefore = await oracle.getDataProcessingState();
+        const totalBefore = await oracle.getTotalRequestsProcessed();
+
+        const { reportData } = await prepareReportAndSubmitHash(requests);
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWith(
+          "TWB mock: revert",
+        );
+
+        expect(await oracle.getDataProcessingState()).to.deep.equal(stateBefore);
+        expect(await oracle.getTotalRequestsProcessed()).to.equal(totalBefore);
       });
     });
 
@@ -287,8 +311,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         const exitRequestsLimit = 2_048n; // 2048 ETH
         await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
-          { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2], keyIndex: 1 },
-          { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3], keyIndex: 2 },
+          { moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 0n },
+          { moduleId: 5, nodeOpId: 3, keyIndex: 2, amount: 0n },
         ]);
         // 2 validators = 4096 ETH (actual balance that exceeds the limit)
         const actualBalance = 2_048n * 2n;
@@ -302,7 +326,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         const exitRequestsLimit = 2_048n; // 2048 ETH
         await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
-          { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2], keyIndex: 1 },
+          { moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 0n },
         ]);
         await oracle.connect(member1).submitReportData(reportData, oracleVersion);
       });
@@ -311,8 +335,10 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     context("validates data.requestsCount field with given data", () => {
       it("reverts if requestsCount does not match with encoded data size", async () => {
         const { reportData } = await prepareReportAndSubmitHash(
-          [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 }],
-          { reportFields: { requestsCount: 2 } },
+          [{ moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 0n }],
+          {
+            reportFields: { requestsCount: 2 },
+          },
         );
 
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
@@ -323,9 +349,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
 
     it("reverts if moduleId equals zero", async () => {
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 0, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 },
-      ]);
+      const { reportData } = await prepareReportAndSubmitHash([{ moduleId: 0, nodeOpId: 3, keyIndex: 1, amount: 0n }]);
 
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
         oracle,
@@ -333,29 +357,23 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       );
     });
 
-    it("emits ValidatorExitRequest events", async () => {
+    it("emits WithdrawalRequested event for every request in report order", async () => {
+      await stakingRouter.setStakingModulePartialWithdrawalsAllowed(5, true);
+
       const requests = [
-        { moduleId: 4, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[2], keyIndex: 1 },
-        { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3], keyIndex: 2 },
+        { moduleId: 4, nodeOpId: 2, keyIndex: 1, amount: 0n }, // FWR
+        { moduleId: 5, nodeOpId: 3, keyIndex: 2, amount: 32n * GWEI_PER_ETH }, // PWR
       ];
       const { reportData } = await prepareReportAndSubmitHash(requests);
       const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
-      const timestamp = await consensus.getTime();
+      const receipt = await tx.wait();
 
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[0].moduleId, requests[0].nodeOpId, requests[0].valIndex, requests[0].valPubkey, timestamp);
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
-
-      const data = encodeExitRequestsDataList(requests);
-
-      const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, reportData.dataFormat]);
-      const reportDataHash = ethers.keccak256(encodedData);
-
-      await expect(tx).to.emit(oracle, "RequestsHashSubmitted").withArgs(reportDataHash);
+      const events = await oracle.queryFilter(oracle.filters.WithdrawalRequested(), receipt!.blockNumber);
+      expect(events.length).to.equal(requests.length);
+      events.forEach((event, i) => {
+        const { moduleId, nodeOpId, keyIndex, amount } = requests[i];
+        expect(event.args).to.deep.equal([moduleId, nodeOpId, makeMockPubkey(nodeOpId, keyIndex), amount]);
+      });
     });
 
     it("updates processing state", async () => {
@@ -364,12 +382,11 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       expect(storageBefore.requestsCount).to.equal(0);
 
       expect(storageBefore.requestsProcessed).to.equal(0);
-      expect(storageBefore.dataFormat).to.equal(0);
 
       const { refSlot } = await consensus.getCurrentFrame();
       const requests = [
-        { moduleId: 4, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2], keyIndex: 1 },
-        { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3], keyIndex: 2 },
+        { moduleId: 4, nodeOpId: 3, keyIndex: 1, amount: 0n },
+        { moduleId: 5, nodeOpId: 3, keyIndex: 2, amount: 0n },
       ];
       const { reportData } = await prepareReportAndSubmitHash(requests);
       await oracle.connect(member1).submitReportData(reportData, oracleVersion);
@@ -378,7 +395,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       expect(storageAfter.refSlot).to.equal(refSlot);
       expect(storageAfter.requestsCount).to.equal(requests.length);
       expect(storageAfter.requestsProcessed).to.equal(requests.length);
-      expect(storageAfter.dataFormat).to.equal(DATA_FORMAT_LIST_WITH_KEY_INDEX);
     });
 
     it("updates total requests processed count", async () => {
@@ -387,7 +403,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       expect(countStep0).to.equal(currentCount);
 
       // Step 1 — process 1 item
-      const requestsStep1 = [{ moduleId: 3, nodeOpId: 1, valIndex: 2, valPubkey: PUBKEYS[1], keyIndex: 1 }];
+      const requestsStep1 = [{ moduleId: 3, nodeOpId: 1, keyIndex: 1, amount: 0n }];
       const { reportData: reportStep1 } = await prepareReportAndSubmitHash(requestsStep1);
       await oracle.connect(member1).submitReportData(reportStep1, oracleVersion);
       const countStep1 = await oracle.getTotalRequestsProcessed();
@@ -397,8 +413,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       // Step 2 — process 2 items
       await consensus.advanceTimeToNextFrameStart();
       const requestsStep2 = [
-        { moduleId: 4, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[2], keyIndex: 1 },
-        { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3], keyIndex: 2 },
+        { moduleId: 4, nodeOpId: 2, keyIndex: 1, amount: 0n },
+        { moduleId: 5, nodeOpId: 3, keyIndex: 2, amount: 0n },
       ];
       const { reportData: reportStep2 } = await prepareReportAndSubmitHash(requestsStep2);
       await oracle.connect(member1).submitReportData(reportStep2, oracleVersion);
@@ -406,9 +422,9 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       currentCount += requestsStep2.length;
       expect(countStep2).to.equal(currentCount);
 
-      // // Step 3 — process no items
+      // Step 3 — process no items
       await consensus.advanceTimeToNextFrameStart();
-      const requestsStep3: ExitRequest[] = [];
+      const requestsStep3: WithdrawalRequest[] = [];
       const { reportData: reportStep3 } = await prepareReportAndSubmitHash(requestsStep3);
       await oracle.connect(member1).submitReportData(reportStep3, oracleVersion);
 
@@ -481,21 +497,20 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
 
     it("reverts on hash mismatch", async () => {
-      const requests = [{ moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[2], keyIndex: 1 }];
+      const requests = [{ moduleId: 5, nodeOpId: 1, keyIndex: 1, amount: 0n }];
       const { reportHash: actualReportHash } = await prepareReportAndSubmitHash(requests);
-      const newRequests = [{ moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[1], keyIndex: 1 }];
+      const newRequests = [{ moduleId: 5, nodeOpId: 1, keyIndex: 2, amount: 0n }];
 
       const { refSlot } = await consensus.getCurrentFrame();
-      // change pubkey
+      // change keyIndex
       const reportData = {
         consensusVersion: VEBO_CONSENSUS_VERSION,
         refSlot,
         requestsCount: requests.length,
-        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
-        data: encodeExitRequestsDataList(newRequests),
+        data: encodeWithdrawalRequests(newRequests),
       };
 
-      const changedReportHash = calcValidatorsExitBusReportDataHash(reportData);
+      const changedReportHash = calcVEBOReportDataHash(reportData);
 
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
         .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")
@@ -531,10 +546,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
 
     it("should increase after report", async () => {
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0], keyIndex: 1 },
-      ]);
-      await oracle.connect(member1).submitReportData(reportData, oracleVersion, { from: member1 });
+      const { reportData } = await prepareReportAndSubmitHash([{ moduleId: 5, nodeOpId: 3, keyIndex: 1, amount: 0n }]);
+      await oracle.connect(member1).submitReportData(reportData, oracleVersion);
       requestCount += 1;
       expect(await oracle.getTotalRequestsProcessed()).to.equal(requestCount);
     });
@@ -542,8 +555,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     it("should double increase for two exits", async () => {
       await consensus.advanceTimeToNextFrameStart();
       const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0], keyIndex: 1 },
-        { moduleId: 5, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[0], keyIndex: 2 },
+        { moduleId: 5, nodeOpId: 1, keyIndex: 1, amount: 0n },
+        { moduleId: 5, nodeOpId: 3, keyIndex: 2, amount: 0n },
       ]);
       await oracle.connect(member1).submitReportData(reportData, oracleVersion);
       requestCount += 2;
@@ -566,7 +579,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
     after(async () => await Snapshot.restore(originalState));
 
-    let report: ReportFields;
+    let report: VEBOReportFields;
     let hash: string;
 
     it("has correct defaults on init", async () => {
@@ -578,14 +591,13 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         false,
         0,
         0,
-        0,
       ]);
     });
 
     it("consensus report submitted", async () => {
       ({ reportData: report, reportHash: hash } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[2], keyIndex: 1 },
-        { moduleId: 5, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[3], keyIndex: 2 },
+        { moduleId: 5, nodeOpId: 1, keyIndex: 1, amount: 0n },
+        { moduleId: 5, nodeOpId: 3, keyIndex: 2, amount: 0n },
       ]));
       const state = await oracle.getProcessingState();
 
@@ -594,7 +606,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         computeTimestampAtSlot((await consensus.getCurrentFrame()).reportProcessingDeadlineSlot),
         hash,
         false,
-        0,
         0,
         0,
       ]);
@@ -608,7 +619,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         computeTimestampAtSlot((await consensus.getCurrentFrame()).reportProcessingDeadlineSlot),
         hash,
         true,
-        DATA_FORMAT_LIST_WITH_KEY_INDEX,
         2,
         2,
       ]);
@@ -624,373 +634,32 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         false,
         0,
         0,
-        0,
       ]);
     });
   });
 
-  context("VEB limits", () => {
-    let originalState: string;
-    before(async () => {
-      originalState = await Snapshot.take();
-      await consensus.advanceTimeToNextFrameStart();
-    });
-    after(async () => await Snapshot.restore(originalState));
-
-    it("some time passes", async () => {
-      await consensus.advanceTimeBy(24 * 60 * 60);
-    });
-
-    it("Set exit limit", async () => {
-      const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
-      await oracle.grantRole(role, admin);
-      // Set limit to allow 4160 ETH (2 legacy + 2 MaxEB validators)
-      // Max: 7000 ETH, Per frame: 5000 ETH (enough to cover 4160 ETH)
-      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7_000n, 5_000n, 48);
-      await expect(exitLimitTx).to.emit(oracle, "ExitBalanceLimitSet").withArgs(7_000n, 5_000n, 48);
-    });
-
-    it("deliver report by actor different from oracle", async () => {
-      const requests = [
-        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0], keyIndex: 1 },
-        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1], keyIndex: 2 },
-        { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2], keyIndex: 3 },
-        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3], keyIndex: 4 },
-      ];
-      await seedMockModuleSigningKeys(mockModules, requests);
-      const data = await encodeExitRequestsDataList(requests);
-      const exitRequestHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, DATA_FORMAT_LIST_WITH_KEY_INDEX]),
-      );
-
-      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
-      await oracle.grantRole(role, authorizedEntity);
-
-      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
-      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
-
-      const exitRequest = {
-        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
-        data,
-      };
-
-      const emitTx = await oracle.submitExitRequestsData(exitRequest);
-
-      const timestamp = await oracle.getTime();
-
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[0].moduleId, requests[0].nodeOpId, requests[0].valIndex, requests[0].valPubkey, timestamp);
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[2].moduleId, requests[2].nodeOpId, requests[2].valIndex, requests[2].valPubkey, timestamp);
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
-    });
-
-    it("oracle does not consume common veb limits", async () => {
-      const requests = [
-        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0], keyIndex: 1 },
-        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1], keyIndex: 2 },
-        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[2], keyIndex: 3 },
-        { moduleId: 2, nodeOpId: 3, valIndex: 4, valPubkey: PUBKEYS[4], keyIndex: 4 },
-      ];
-      const { reportData } = await prepareReportAndSubmitHash(requests);
-
-      const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
-      const timestamp = await consensus.getTime();
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[0].moduleId, requests[0].nodeOpId, requests[0].valIndex, requests[0].valPubkey, timestamp);
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[2].moduleId, requests[2].nodeOpId, requests[2].valIndex, requests[2].valPubkey, timestamp);
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
-    });
-  });
-
-  context("Allow oracle to submit a report for a previously submitted hash if the original submitter did not.", () => {
-    let originalState: string;
-    before(async () => {
-      originalState = await Snapshot.take();
-      await consensus.advanceTimeToNextFrameStart();
-    });
-    after(async () => await Snapshot.restore(originalState));
-
-    const validators = [
-      { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0], keyIndex: 1 },
-      { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1], keyIndex: 2 },
-      { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2], keyIndex: 3 },
-      { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3], keyIndex: 4 },
-    ];
-
-    let exitRequestHash: string;
-
-    it("create hash", async () => {
-      const data = await encodeExitRequestsDataList(validators);
-      exitRequestHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, DATA_FORMAT_LIST_WITH_KEY_INDEX]),
-      );
-    });
-
-    it("submit hash by actor different from oracle", async () => {
-      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
-      await oracle.grantRole(role, authorizedEntity);
-
-      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
-      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
-
-      const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
-      expect(deliveredExitDataTimestamp).to.equal(0);
-    });
-
-    it("oracle allowed to submit report", async () => {
-      const { reportData } = await prepareReportAndSubmitHash(validators);
-
-      const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
-      const timestamp = await consensus.getTime();
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          validators[0].moduleId,
-          validators[0].nodeOpId,
-          validators[0].valIndex,
-          validators[0].valPubkey,
-          timestamp,
-        );
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          validators[1].moduleId,
-          validators[1].nodeOpId,
-          validators[1].valIndex,
-          validators[1].valPubkey,
-          timestamp,
-        );
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          validators[2].moduleId,
-          validators[2].nodeOpId,
-          validators[2].valIndex,
-          validators[2].valPubkey,
-          timestamp,
-        );
-
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          validators[3].moduleId,
-          validators[3].nodeOpId,
-          validators[3].valIndex,
-          validators[3].valPubkey,
-          timestamp,
-        );
-
-      const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
-      expect(deliveredExitDataTimestamp).to.equal(timestamp);
-    });
-  });
-
-  context(
-    "Dont allow oracle to change deliveredExitDataTimestamp for a previously submitted report by another submitter.",
-    () => {
-      let originalState: string;
-      const prevTime = 2000;
-
-      before(async () => {
-        originalState = await Snapshot.take();
-        await consensus.advanceTimeToNextFrameStart();
-
-        await consensus.setTime(prevTime);
-
-        const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
-        await oracle.grantRole(role, admin);
-        // Set limit to allow 4160 ETH (2 legacy + 2 MaxEB validators)
-        // Max: 100000 ETH, Per frame: 5000 ETH
-        await oracle.connect(admin).setExitRequestLimit(100_000n, 5_000n, 48);
-      });
-      after(async () => await Snapshot.restore(originalState));
-
-      const validators = [
-        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0], keyIndex: 1 },
-        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1], keyIndex: 2 },
-        { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2], keyIndex: 3 },
-        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3], keyIndex: 4 },
-      ];
-
-      let exitRequestHash: string;
-      let exitRequests: string;
-
-      it("create hash", async () => {
-        await seedMockModuleSigningKeys(mockModules, validators);
-        exitRequests = await encodeExitRequestsDataList(validators);
-        exitRequestHash = ethers.keccak256(
-          ethers.AbiCoder.defaultAbiCoder().encode(
-            ["bytes", "uint256"],
-            [exitRequests, DATA_FORMAT_LIST_WITH_KEY_INDEX],
-          ),
-        );
-      });
-
-      it("submit hash by actor different from oracle", async () => {
-        const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
-        await oracle.grantRole(role, authorizedEntity);
-
-        const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
-        await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
-
-        const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
-        expect(deliveredExitDataTimestamp).to.equal(0);
-      });
-
-      it("submit report by actor different from oracle", async () => {
-        const exitRequest = {
-          dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
-          data: exitRequests,
-        };
-
-        const tx = await oracle.submitExitRequestsData(exitRequest);
-        const timestamp = await oracle.getTime();
-
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(
-            validators[0].moduleId,
-            validators[0].nodeOpId,
-            validators[0].valIndex,
-            validators[0].valPubkey,
-            timestamp,
-          );
-
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(
-            validators[1].moduleId,
-            validators[1].nodeOpId,
-            validators[1].valIndex,
-            validators[1].valPubkey,
-            timestamp,
-          );
-
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(
-            validators[2].moduleId,
-            validators[2].nodeOpId,
-            validators[2].valIndex,
-            validators[2].valPubkey,
-            timestamp,
-          );
-
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(
-            validators[3].moduleId,
-            validators[3].nodeOpId,
-            validators[3].valIndex,
-            validators[3].valPubkey,
-            timestamp,
-          );
-
-        const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
-        expect(deliveredExitDataTimestamp).to.equal(2000);
-      });
-
-      it("dont allow oracle to change deliveredExitDataTimestamp", async () => {
-        await consensus.advanceTimeBy(10);
-        const { reportData } = await prepareReportAndSubmitHash(validators);
-
-        const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
-        const timestamp = await consensus.getTime();
-
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(
-            validators[1].moduleId,
-            validators[1].nodeOpId,
-            validators[1].valIndex,
-            validators[1].valPubkey,
-            timestamp,
-          );
-
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(
-            validators[2].moduleId,
-            validators[2].nodeOpId,
-            validators[2].valIndex,
-            validators[2].valPubkey,
-            timestamp,
-          );
-
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(
-            validators[3].moduleId,
-            validators[3].nodeOpId,
-            validators[3].valIndex,
-            validators[3].valPubkey,
-            timestamp,
-          );
-
-        const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
-        expect(deliveredExitDataTimestamp).to.equal(prevTime);
-
-        expect(timestamp).to.eq(prevTime + 10);
-      });
-    },
-  );
-
   context("allow oracle to submit empty data", () => {
     let originalState: string;
-    const time = 2000;
+
     beforeEach(async () => {
       originalState = await Snapshot.take();
-
-      await consensus.setTime(time);
+      await consensus.advanceTimeToNextFrameStart();
     });
 
     afterEach(async () => await Snapshot.restore(originalState));
 
-    it("submit report pass", async () => {
-      const encodedEmptyRequestList = encodeExitRequestsDataList([]);
-      const exitHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          ["bytes", "uint256"],
-          [encodedEmptyRequestList, DATA_FORMAT_LIST_WITH_KEY_INDEX],
-        ),
-      );
-
-      await expect(oracle.connect(member1).getDeliveryTimestamp(exitHash)).to.be.revertedWithCustomError(
-        oracle,
-        "ExitHashNotSubmitted",
-      );
-
+    it("submit report pass without withdrawal intents", async () => {
+      const { refSlot } = await consensus.getCurrentFrame();
       const { reportData } = await prepareReportAndSubmitHash([]);
       const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
 
-      await expect(tx).to.not.emit(oracle, "ValidatorExitRequest");
-      await expect(tx).to.emit(oracle, "ExitDataProcessing").withArgs(exitHash);
+      await expect(tx).to.not.emit(oracle, "WithdrawalRequested");
+      expect(await triggerableWithdrawalsBus.addWithdrawalIntentsCalls()).to.equal(0);
 
-      const timestamp = await oracle.connect(member1).getDeliveryTimestamp(exitHash);
-      expect(timestamp).to.be.equal(time);
+      const state = await oracle.getDataProcessingState();
+      expect(state.refSlot).to.equal(refSlot);
+      expect(state.requestsCount).to.equal(0);
+      expect(state.requestsProcessed).to.equal(0);
     });
   });
 });

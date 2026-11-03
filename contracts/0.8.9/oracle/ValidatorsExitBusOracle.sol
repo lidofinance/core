@@ -8,6 +8,7 @@ import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
 import {BaseOracle} from "./BaseOracle.sol";
 import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
+import {WithdrawalIntent} from "../../common/interfaces/WithdrawalIntent.sol";
 
 interface IOracleReportSanityChecker {
     function checkExitBusOracleReport(uint256 _maxBalanceExitRequestedPerReportInEth) external view;
@@ -27,7 +28,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint64 refSlot;
         uint64 requestsCount;
         uint64 requestsProcessed;
-        uint16 dataFormat;
+        //uint16 _deprecatedDataFormat
     }
 
     /// @notice An ACL role granting the permission to submit the data for a committee report.
@@ -48,21 +49,18 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     constructor(
         uint256 secondsPerSlot,
         uint256 genesisTime,
-        address lidoLocator
+        address lidoLocator,
+        uint256 maxRequestsPerReport
     )
         BaseOracle(secondsPerSlot, genesisTime)
-        ValidatorsExitBus(lidoLocator)
+        ValidatorsExitBus(lidoLocator, maxRequestsPerReport)
     {}
 
     function initialize(
         address admin,
         address consensusContract,
         uint256 consensusVersion,
-        uint256 lastProcessingRefSlot,
-        uint256 maxValidatorsPerReport,
-        uint256 maxExitBalanceEth,
-        uint256 balancePerFrameEth,
-        uint256 frameDurationInSec
+        uint256 lastProcessingRefSlot
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
@@ -71,29 +69,19 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
         _updateContractVersion(2);
         _updateContractVersion(3);
-
-        _setMaxValidatorsPerReport(maxValidatorsPerReport);
-        _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
+        _updateContractVersion(4);
     }
 
     /**
-     * @notice A function to finalize upgrade to v3. Can be called only once
+     * @notice A function to finalize upgrade to v4. Can be called only once
+     * @dev Switches the report to the withdrawal requests format, so the consensus version is updated as well.
      *
-     * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+     * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-38.md
+     * @param consensusVersion New consensus version
      */
-    function finalizeUpgrade_v3(
-        uint256 maxValidatorsPerReport,
-        uint256 maxExitBalanceEth,
-        uint256 balancePerFrameEth,
-        uint256 frameDurationInSec,
-        uint256 consensusVersion
-    ) external {
-        _updateContractVersion(3);
+    function finalizeUpgrade_v4(uint256 consensusVersion) external {
+        _updateContractVersion(4);
         _setConsensusVersion(consensusVersion);
-
-        _setMaxValidatorsPerReport(maxValidatorsPerReport);
-        _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
-        _clearDeprecatedExitRequestLimit();
     }
 
     ///
@@ -117,14 +105,10 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         /// Requests data
         ///
 
-        /// @dev Total number of validator exit requests in this report. Must not be greater
-        /// than limit checked in OracleReportSanityChecker.checkExitBusOracleReport.
+        /// @dev Total number of withdrawal requests in this report. Must not be greater
+        /// than MAX_REQUESTS_PER_REPORT.
         uint256 requestsCount;
-        /// @dev Format of the validator exit requests data. Currently, only the extended
-        /// DATA_FORMAT_LIST_WITH_KEY_INDEX=2 is supported.
-        uint256 dataFormat;
-        /// @dev Validator exit requests data. Can differ based on the data format,
-        /// see the constant defining a specific data format below for more info.
+        /// @dev Packed withdrawal requests, see the data format in ValidatorsExitBus.
         bytes data;
     }
 
@@ -143,18 +127,23 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     /// - The keccak256 hash of the ABI-encoded data is different from the last hash
     ///   provided by the hash consensus contract.
     /// - The provided data doesn't meet safety checks.
+    /// - The report contains more than MAX_REQUESTS_PER_REPORT records.
+    /// - A partial withdrawal targets a module without `partialWithdrawalsAllowed`.
+    /// - A partial withdrawal amount exceeds MAX_PWR_AMOUNT_GWEI.
+    /// - The report's total exit balance exceeds the OracleReportSanityChecker limit.
     ///
     function submitReportData(ReportData calldata data, uint256 contractVersion) external whenResumed {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
-        bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
+        // need to discuss delete of ExitDataProcessing event
+        // bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
-        _storeOracleExitRequestHash(dataHash, contractVersion);
         _handleConsensusReportData(data);
-        emit ExitDataProcessing(dataHash);
+        // possibly delete
+        // emit ExitDataProcessing(dataHash);
     }
 
     struct ProcessingState {
@@ -169,8 +158,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         /// @notice Whether any report data for the for the current reporting frame has been
         /// already submitted.
         bool dataSubmitted;
-        /// @notice Format of the report data for the current reporting frame.
-        uint256 dataFormat;
         /// @notice Total number of validator exit requests for the current reporting frame.
         uint256 requestsCount;
         /// @notice How many validator exit requests are already submitted for the current
@@ -199,7 +186,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             return result;
         }
 
-        result.dataFormat = procState.dataFormat;
         result.requestsCount = procState.requestsCount;
         result.requestsSubmitted = procState.requestsProcessed;
     }
@@ -227,45 +213,39 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     function _handleConsensusReportData(ReportData calldata data) internal {
-        if (data.dataFormat != DATA_FORMAT_LIST_WITH_KEY_INDEX) {
-            revert UnsupportedRequestsDataFormat(data.dataFormat);
-        }
-
-        uint256 packedLength = _getPackedRequestLength(data.dataFormat);
-        if (data.data.length % packedLength != 0) {
+        if (data.data.length % PACKED_REQUEST_LENGTH != 0) {
             revert InvalidRequestsDataLength();
         }
 
-        if (data.data.length / packedLength != data.requestsCount) {
+        if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
-        // Calculate total balance of validators being exited in ETH (uint256)
-        uint256 totalExitBalanceEth = _calculateTotalExitBalanceEth(data.data, data.dataFormat);
+        if (data.requestsCount > MAX_REQUESTS_PER_REPORT) {
+            revert TooManyRequestsInReport(data.requestsCount, MAX_REQUESTS_PER_REPORT);
+        }
+
+        (WithdrawalIntent[] memory intents, uint256 totalExitBalanceEth) = _processWithdrawalRequests(data.data);
+
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(
             totalExitBalanceEth
         );
 
-        _processExitRequestsList(data.data, data.dataFormat);
-
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),
             requestsCount: data.requestsCount.toUint64(),
-            requestsProcessed: data.requestsCount.toUint64(),
-            dataFormat: uint16(data.dataFormat)
+            requestsProcessed: data.requestsCount.toUint64()
         });
 
         if (data.requestsCount == 0) {
             return;
         }
 
+        _addWithdrawalIntents(intents);
+
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
             TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + data.requestsCount
         );
-    }
-
-    function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 contractVersion) internal {
-        _storeOracleNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), uint32(_getTime()));
     }
 
     ///

@@ -6,46 +6,36 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   HashConsensus__Harness,
-  StakingModule__MockForKeyVerification,
+  TriggerableWithdrawalsBus__MockForVEB,
   ValidatorsExitBus__Harness,
 } from "typechain-types";
 
-import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
+import { VEBO_CONSENSUS_VERSION } from "lib";
 
 import {
+  calcVEBOReportDataHash,
   computeTimestampAtSlot,
-  DATA_FORMAT_LIST_WITH_KEY_INDEX,
   deployVEBO,
+  encodeWithdrawalRequests,
   initVEBO,
+  makeMockPubkey,
   SECONDS_PER_FRAME,
-  seedMockModuleSigningKeys,
   SLOTS_PER_FRAME,
+  VEBOReportFields,
+  WithdrawalRequest,
 } from "test/deploy";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-  "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-];
+const GWEI_PER_ETH = 10n ** 9n;
 
 describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
+  let triggerableWithdrawalsBus: TriggerableWithdrawalsBus__MockForVEB;
   let admin: HardhatEthersSigner;
-  let mockModules: {
-    module1: StakingModule__MockForKeyVerification;
-    module2: StakingModule__MockForKeyVerification;
-    module3: StakingModule__MockForKeyVerification;
-    module4: StakingModule__MockForKeyVerification;
-    module5: StakingModule__MockForKeyVerification;
-    module7: StakingModule__MockForKeyVerification;
-  };
 
   let oracleVersion: bigint;
-  let exitRequests: ExitRequest[];
-  let reportFields: ReportFields;
+  let requests: WithdrawalRequest[];
+  let reportFields: VEBOReportFields;
   let reportHash: string;
 
   let member1: HardhatEthersSigner;
@@ -55,53 +45,16 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
 
   const LAST_PROCESSING_REF_SLOT = 1;
 
-  interface ExitRequest {
-    moduleId: number;
-    nodeOpId: number;
-    valIndex: number;
-    keyIndex: number;
-    valPubkey: string;
-  }
-
-  interface ReportFields {
-    consensusVersion: bigint;
-    refSlot: bigint;
-    requestsCount: number;
-    dataFormat: number;
-    data: string;
-  }
-
-  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
-    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
-    const reportDataHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
-    );
-    return reportDataHash;
-  };
-
-  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey, keyIndex }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return (
-      numberToHex(moduleId, 3) +
-      numberToHex(nodeOpId, 5) +
-      numberToHex(valIndex, 8) +
-      numberToHex(keyIndex, 8) +
-      pubkeyHex
-    );
-  };
-
-  const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
-    return "0x" + requests.map(encodeExitRequestHex).join("");
-  };
-
   before(async () => {
     [admin, member1, member2, member3, stranger] = await ethers.getSigners();
 
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    mockModules = deployed.mockModules;
+    triggerableWithdrawalsBus = deployed.triggerableWithdrawalsBus;
+
+    // module 2 has 0x02 withdrawal credentials and accepts partial withdrawals
+    await deployed.stakingRouter.setStakingModulePartialWithdrawalsAllowed(2, true);
 
     await initVEBO({
       admin: admin.address,
@@ -139,7 +92,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.dataHash).to.equal(ZeroHash);
     expect(procState.processingDeadlineTime).to.equal(0);
     expect(procState.dataSubmitted).to.equal(false);
-    expect(procState.dataFormat).to.equal(0);
     expect(procState.requestsCount).to.equal(0);
     expect(procState.requestsSubmitted).to.equal(0);
   });
@@ -152,22 +104,20 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   it("committee reaches consensus on a report hash", async () => {
     const { refSlot } = await consensus.getCurrentFrame();
 
-    exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, keyIndex: 2, valPubkey: PUBKEYS[2] },
+    requests = [
+      { moduleId: 1, nodeOpId: 0, keyIndex: 0, amount: 0n }, // FWR, 0x01 module
+      { moduleId: 2, nodeOpId: 0, keyIndex: 2, amount: 16n * GWEI_PER_ETH }, // PWR, 0x02 module
+      { moduleId: 1, nodeOpId: 0, keyIndex: 1, amount: 0n }, // FWR, 0x01 module
     ];
 
     reportFields = {
       consensusVersion: VEBO_CONSENSUS_VERSION,
       refSlot: refSlot,
-      requestsCount: exitRequests.length,
-      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
-      data: encodeExitRequestsDataList(exitRequests),
+      requestsCount: requests.length,
+      data: encodeWithdrawalRequests(requests),
     };
-    await seedMockModuleSigningKeys(mockModules, exitRequests);
 
-    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
+    reportHash = calcVEBOReportDataHash(reportFields);
 
     await triggerConsensusOnHash(reportHash);
   });
@@ -187,7 +137,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.dataHash).to.equal(reportHash);
     expect(procState.processingDeadlineTime).to.equal(computeTimestampAtSlot(frame.reportProcessingDeadlineSlot));
     expect(procState.dataSubmitted).to.equal(false);
-    expect(procState.dataFormat).to.equal(0);
     expect(procState.requestsCount).to.equal(0);
     expect(procState.requestsSubmitted).to.equal(0);
   });
@@ -221,26 +170,32 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
       ...reportFields,
       requestsCount: reportFields.requestsCount + 1,
     };
-    const invalidReportHash = calcValidatorsExitBusReportDataHash(invalidReport);
+    const invalidReportHash = calcVEBOReportDataHash(invalidReport);
 
     await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
       .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")
       .withArgs(reportHash, invalidReportHash);
   });
 
-  it("a committee member submits the report data, exit requests are emitted", async () => {
+  it("a committee member submits the report data, withdrawal intents are queued", async () => {
     const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
     await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, reportHash);
     expect((await oracle.getConsensusReport()).processingStarted).to.equal(true);
 
-    const timestamp = await oracle.getTime();
-
-    for (const request of exitRequests) {
+    for (const { moduleId, nodeOpId, keyIndex, amount } of requests) {
       await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+        .to.emit(oracle, "WithdrawalRequested")
+        .withArgs(moduleId, nodeOpId, makeMockPubkey(nodeOpId, keyIndex), amount);
     }
+
+    const intents = await triggerableWithdrawalsBus.getWithdrawalIntents();
+    expect(intents.length).to.equal(requests.length);
+    intents.forEach((intent, i) => {
+      const { nodeOpId, keyIndex, amount } = requests[i];
+      expect(intent.amount).to.equal(amount);
+      expect(intent.pubkey).to.equal(makeMockPubkey(nodeOpId, keyIndex));
+    });
   });
 
   it("reports are marked as processed", async () => {
@@ -251,9 +206,8 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.dataHash).to.equal(reportHash);
     expect(procState.processingDeadlineTime).to.equal(computeTimestampAtSlot(frame.reportProcessingDeadlineSlot));
     expect(procState.dataSubmitted).to.equal(true);
-    expect(procState.dataFormat).to.equal(DATA_FORMAT_LIST_WITH_KEY_INDEX);
-    expect(procState.requestsCount).to.equal(exitRequests.length);
-    expect(procState.requestsSubmitted).to.equal(exitRequests.length);
+    expect(procState.requestsCount).to.equal(requests.length);
+    expect(procState.requestsSubmitted).to.equal(requests.length);
   });
 
   it("no data can be submitted for the same reference slot again", async () => {

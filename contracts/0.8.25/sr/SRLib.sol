@@ -114,7 +114,8 @@ library SRLib {
                 stakeShareLimit: smOld.stakeShareLimit,
                 priorityExitShareThreshold: smOld.priorityExitShareThreshold,
                 status: StakingModuleStatus(smOld.status),
-                withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01
+                withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01,
+                partialWithdrawalsAllowed: false
             });
 
             // 1 SSTORE
@@ -366,6 +367,14 @@ library SRLib {
         }
         stateConfig.status = _status;
         emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
+    }
+
+    function _setModulePartialWithdrawalsAllowed(uint256 _moduleId, bool _allowed) public {
+        ModuleStateConfig storage stateConfig = _moduleId.getModuleState().config;
+        /// @dev PWRs are supported only for modules with 0x02 withdrawal credentials
+        if (_allowed) SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
+        stateConfig.partialWithdrawalsAllowed = _allowed;
+        emit ISRBase.StakingModulePartialWithdrawalsAllowedSet(_moduleId, _allowed, msg.sender);
     }
 
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.

@@ -23,6 +23,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
         uint64 maxDepositsPerBlock;
         uint64 minDepositBlockDistance;
         uint8 withdrawalCredentialsType;
+        bool partialWithdrawalsAllowed;
     }
 
     mapping(uint256 => StakingModuleData) internal _modules;
@@ -49,6 +50,13 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
         _moduleConfigured[moduleId] = true;
     }
 
+    /// @notice Mock function to allow or disallow partial withdrawals for a module
+    /// @param moduleId The module ID
+    /// @param allowed Whether partial withdrawals are allowed
+    function setStakingModulePartialWithdrawalsAllowed(uint256 moduleId, bool allowed) external {
+        _modules[moduleId].partialWithdrawalsAllowed = allowed;
+    }
+
     function getStakingModuleStateConfig(
         uint256 _stakingModuleId
     ) external view returns (ModuleStateConfig memory stateConfig) {
@@ -62,7 +70,8 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
                 stakeShareLimit: data.stakeShareLimit,
                 priorityExitShareThreshold: data.priorityExitShareThreshold,
                 status: data.status,
-                withdrawalCredentialsType: data.withdrawalCredentialsType
+                withdrawalCredentialsType: data.withdrawalCredentialsType,
+                partialWithdrawalsAllowed: data.partialWithdrawalsAllowed
             });
     }
 

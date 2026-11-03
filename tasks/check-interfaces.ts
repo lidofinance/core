@@ -59,13 +59,13 @@ const PAIRS_TO_SKIP: {
     reason: "Optimization to avoid memory struct allocation on each deposit.",
   },
   {
-    interfaceFqn: "contracts/0.8.9/oracle/ValidatorsExitBus.sol:ITriggerableWithdrawalsGateway",
-    contractFqn: "contracts/0.8.25/TriggerableWithdrawalsGateway.sol:TriggerableWithdrawalsGateway",
-    reason: "LIP-38: VEBO moves from triggerExits to TriggerableWithdrawalsBus, remove together with triggerExits",
-  },
-  {
     interfaceFqn: "contracts/upgrade/gloas/legacy/ValidatorExitDelayVerifier.sol:IStakingRouter",
     contractFqn: "contracts/0.8.25/sr/StakingRouter.sol:StakingRouter",
+    reason: "LIP-38: frozen pre-LIP-38 verifier for the Gloas upgrade, remove together with contracts/upgrade/gloas",
+  },
+  {
+    interfaceFqn: "contracts/upgrade/gloas/legacy/ValidatorExitDelayVerifier.sol:IValidatorsExitBus",
+    contractFqn: "contracts/0.8.9/oracle/ValidatorsExitBus.sol:ValidatorsExitBus",
     reason: "LIP-38: frozen pre-LIP-38 verifier for the Gloas upgrade, remove together with contracts/upgrade/gloas",
   },
 ];
