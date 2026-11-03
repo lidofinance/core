@@ -5,6 +5,7 @@
 # Ethereum consensus layer specifications - session specific values set via env vars
 slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum consensus
 secondsPerSlot = 12                   # Duration of each slot in seconds
+capellaSlot = 0                       # Capella fork slot for external staking modules (devnet: active from genesis)
 # genesisTime and depositContract are set via environment variables or deployment scripts
 
 # CircuitBreaker configuration for testnet deployment
@@ -95,7 +96,7 @@ maxValidatorsPerReport = 600         # Maximum validators per request
 maxExitBalanceEth = 358400
 balancePerFrameEth = 32
 frameDurationInSec = 48               # Frame duration in seconds
-consensusVersion = 5                  # Consensus version
+consensusVersion = 6                  # Consensus version
 
 # Deposit security module configuration
 [depositSecurityModule]
@@ -154,35 +155,26 @@ name = "Lido: stETH Withdrawal NFT"   # NFT collection name
 symbol = "unstETH"                    # NFT collection symbol
 # baseUri is set to null for testnet deployment
 
-# Validator exit delay verifier configuration for managing validator exits
-[validatorExitDelayVerifier]
-# Generalized indices for validator state verification in Ethereum consensus
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstHistoricalSummaryPrev = "0x000000000000000000000000000000000000000000000000000000b600000018"
-gIFirstHistoricalSummaryCurr = "0x000000000000000000000000000000000000000000000000000000b600000018"
-gIFirstBlockRootInSummaryPrev = "0x000000000000000000000000000000000000000000000000000000000040000d"
-gIFirstBlockRootInSummaryCurr = "0x000000000000000000000000000000000000000000000000000000000040000d"
-# Additional deployment parameters for ValidatorExitDelayVerifier
-firstSupportedSlot = 11649024              # First supported slot for validator state verification
-pivotSlot = 11649024                       # Pivot slot for state verification
-capellaSlot = 6209536                      # Capella upgrade slot
-slotsPerHistoricalRoot = 8192              # Number of slots per historical root
-shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (2^8 * 32 * 12)
+# Triggerable withdrawals gateway limits per consumer (LIP-38 "Initial limits"):
+# `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators.
+# All zero disables a limit; an enabled PWR limit holds at least 2016 ETH.
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full VEBO report of either kind restores within 8 hours
+pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
 
-# Triggerable withdrawals gateway for managing validator exit requests
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250          # Maximum number of exit requests that can be processed
-exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 240               # Duration of each processing frame in seconds
+[triggerableWithdrawalsGateway.ejectorLimitsWC0x01]   # Ejector of a 0x01 staking module: full withdrawals only
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 400, limitPerFrame = 1, frameDurationInSec = 192 }
+
+[triggerableWithdrawalsGateway.ejectorLimitsWC0x02]   # Ejector of a 0x02 staking module: full withdrawals only
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 36               # Duration of each processing frame in seconds
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
-pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+gloasSlot = 36000                           # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
 
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
@@ -197,9 +189,7 @@ targetModuleId = 4                    # Target staking module ID: CMv2 is plugge
 
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]
-gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
-gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
-changeSlot = 0                        # Slot number when the change takes effect
+gloasSlot = 36000                          # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
 
 # Operator grid configuration for managing staking operators
 [operatorGrid]
@@ -219,10 +209,7 @@ minBlockDistance = 75                 # Minimum block distance between top-ups
 maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
 targetBalanceGwei = 2046750000000
 minTopUpGwei = 1000000000
-# Generalized indices for validator/balance/pending state verification
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+gloasSlot = 36000                           # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
 
 # StakingRouter configuration
 [stakingRouter]

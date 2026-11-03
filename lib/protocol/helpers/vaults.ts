@@ -26,19 +26,21 @@ import {
   days,
   de0x,
   findEventsWithInterfaces,
+  firstValidatorGIndexPreGloas,
   generatePredeposit,
   getCurrentBlockTimestamp,
   impersonate,
   log,
   prepareLocalMerkleTree,
   TOTAL_BASIS_POINTS,
+  unpackLegacyGIndex,
   Validator,
 } from "lib";
 
 import { ether } from "../../units";
 import { LoadedContract, ProtocolContext } from "../types";
 
-import { setWithdrawalVaultBalance, waitNextAvailableReportTime } from "./accounting";
+import { reportWithoutClActivation, setWithdrawalVaultBalance, waitNextAvailableReportTime } from "./accounting";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -204,7 +206,7 @@ export async function autofillRoles(
  * Sets up the protocol with a maximum external ratio
  */
 export async function setupLidoForVaults(ctx: ProtocolContext) {
-  const { lido, acl } = ctx.contracts;
+  const { lido, acl, hashConsensus, lazyOracle } = ctx.contracts;
 
   if ((await lido.getMaxExternalRatioBP()) < 20_00n) {
     const agentSigner = await ctx.getSigner("agent");
@@ -215,6 +217,26 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
     await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
     log.success("Setting max external ratio to 20%");
   }
+
+  // A live fork can start after HashConsensus enters a new frame but before
+  // AccountingOracle reports it. LazyOracle is one frame behind in that window.
+  // Vault tests then advance another frame and can revert with VaultReportStale,
+  // so synchronize the fixture with the current consensus frame first.
+  const currentRefSlot = (await hashConsensus.getCurrentFrame()).refSlot;
+  const [, latestVaultReportRefSlot] = await lazyOracle.latestReportData();
+
+  if (latestVaultReportRefSlot < currentRefSlot) {
+    await reportWithoutClActivation(ctx, {
+      waitNextReportTime: false,
+      reportBurner: false,
+      reportElVault: false,
+      reportWithdrawalsVault: true,
+      skipWithdrawals: true,
+    });
+  }
+
+  const [, fixtureVaultReportRefSlot] = await lazyOracle.latestReportData();
+  expect(fixtureVaultReportRefSlot).to.equal(currentRefSlot, "Vault fixture report is not from the current frame");
 
   await setWithdrawalVaultBalance(ctx, 0n);
 }
@@ -602,17 +624,49 @@ export const generatePredepositData = async (
   });
 };
 
+export const getFirstValidatorGIndexForProof = async (
+  predepositGuarantee: PredepositGuarantee,
+  slot: bigint | number,
+) => {
+  let gloasSlot: bigint;
+  try {
+    gloasSlot = await predepositGuarantee.GLOAS_SLOT();
+  } catch {
+    const legacyVerifier = new ethers.Contract(
+      await predepositGuarantee.getAddress(),
+      ["function PIVOT_SLOT() view returns (uint64)"],
+      ethers.provider,
+    );
+    gloasSlot = await legacyVerifier.PIVOT_SLOT();
+  }
+
+  if (BigInt(slot) < gloasSlot) {
+    return firstValidatorGIndexPreGloas(await predepositGuarantee.GI_VALIDATORS_PRE_GLOAS());
+  }
+
+  if (gloasSlot !== 0n) {
+    throw new Error(`Pre-Gloas proof slot ${slot} must be below Gloas slot ${gloasSlot}`);
+  }
+
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS PDG IS DEPLOYED WITH A REAL GLOAS SLOT.
+  // Fork tests use the deployed legacy verifier, where the zero slot selects
+  // a static post-fork validator gindex packed in the legacy `index << 8 | pow` format.
+  const legacyVerifier = new ethers.Contract(
+    await predepositGuarantee.getAddress(),
+    ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+    ethers.provider,
+  );
+  return unpackLegacyGIndex(await legacyVerifier.GI_FIRST_VALIDATOR_CURR());
+};
+
 export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {
   const { predepositGuarantee } = ctx.contracts;
 
   // Step 3: Prove and deposit the validator
-  const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
-
-  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PREV());
+  const slot = 8192;
+  const mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(predepositGuarantee, slot));
   const { validatorIndex } = await mockCLtree.addValidator(validator.container);
-  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(
-    Number(pivot_slot) + 100,
-  );
+  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(slot);
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
   const pubkey = hexlify(validator.container.pubkey);

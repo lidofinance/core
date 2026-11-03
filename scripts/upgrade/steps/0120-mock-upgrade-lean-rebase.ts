@@ -25,11 +25,10 @@ const PRE_LEAN_REBASE_CHECKER_ABI = [
 ] as const;
 
 /**
- * Test-only upgrade for forks where the SRv3/CMv2 upgrade is already live.
+ * Test-only upgrade that runs after the Gloas and SR phase 2 mock upgrades.
  *
- * The regular SRv3 deployment and enactment steps intentionally skip in that case.
  * This step installs the contracts changed by the lean-rebase draft without changing
- * the production rollout scripts or replaying the already-executed SRv3 upgrade.
+ * the production rollout scripts.
  */
 export async function main(): Promise<void> {
   const state = readNetworkState();
@@ -42,7 +41,8 @@ export async function main(): Promise<void> {
   const agent = await impersonate(agentAddress, ethers.parseEther("1"));
 
   // Read every address from the live locator. In particular, this preserves the
-  // TokenRateNotifier installed by the preceding NEST mock-upgrade step.
+  // TriggerableWithdrawalsGateway and TriggerableWithdrawalsBus installed by the
+  // preceding SR phase 2 mock-upgrade step.
   const liveLocatorConfig = {
     accountingOracle: await locator.accountingOracle(),
     depositSecurityModule: await locator.depositSecurityModule(),
@@ -57,8 +57,8 @@ export async function main(): Promise<void> {
     withdrawalQueue: await locator.withdrawalQueue(),
     withdrawalVault: await locator.withdrawalVault(),
     oracleDaemonConfig: await locator.oracleDaemonConfig(),
-    validatorExitDelayVerifier: await locator.validatorExitDelayVerifier(),
     triggerableWithdrawalsGateway: await locator.triggerableWithdrawalsGateway(),
+    triggerableWithdrawalsBus: await locator.triggerableWithdrawalsBus(),
     consolidationGateway: await locator.consolidationGateway(),
     accounting: await locator.accounting(),
     predepositGuarantee: await locator.predepositGuarantee(),

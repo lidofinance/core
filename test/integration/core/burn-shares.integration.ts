@@ -21,7 +21,7 @@ describe("Scenario: Burn Shares", () => {
   let stranger: HardhatEthersSigner;
 
   const amount = ether("1");
-  let strangerSharesBefore: bigint;
+  let initialShares: bigint;
   let sharesToBurn: bigint;
   let internalEth: bigint;
   let internalShares: bigint;
@@ -43,14 +43,16 @@ describe("Scenario: Burn Shares", () => {
 
     await setWithdrawalVaultBalance(ctx, 0n);
 
+    // The stranger is a well-known hardhat account that may already hold stETH on a live fork,
+    // so check the balance delta rather than the absolute value.
     const stEthBefore = await lido.balanceOf(stranger.address);
-    strangerSharesBefore = await lido.sharesOf(stranger.address);
+    initialShares = await lido.sharesOf(stranger.address);
     await lido.connect(stranger).submit(ZeroAddress, { value: amount });
 
     const stEthAfter = await lido.balanceOf(stranger.address);
     expect(stEthAfter - stEthBefore).to.be.approximately(amount, 10n, "Incorrect stETH balance after submit");
 
-    sharesToBurn = (await lido.sharesOf(stranger.address)) - strangerSharesBefore;
+    sharesToBurn = (await lido.sharesOf(stranger.address)) - initialShares;
     internalEth = (await lido.totalSupply()) - (await lido.getExternalEther());
     internalShares = (await lido.getTotalShares()) - (await lido.getExternalShares());
 
@@ -93,7 +95,7 @@ describe("Scenario: Burn Shares", () => {
       "Total shares": internalSharesAfter,
     });
 
-    expect(sharesToBurnAfter).to.equal(strangerSharesBefore, "Incorrect shares balance after burn");
+    expect(sharesToBurnAfter).to.equal(initialShares, "Incorrect shares balance after burn");
     expect(internalEthAfter).to.equal(internalEth, "Incorrect total ETH supply after burn");
     expect(internalSharesAfter).to.equal(internalShares - sharesToBurn, "Incorrect total shares after burn");
   });

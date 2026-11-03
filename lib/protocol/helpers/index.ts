@@ -32,7 +32,8 @@ export {
   setWithdrawalVaultBalance,
 } from "./accounting";
 
-export { ensureDsmGuardians } from "./dsm";
+export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm";
+export { deployDelegationContract, getDelegationFactory } from "./edf";
 export {
   norEnsureDepositedOperatorKeys,
   norSdvtEnsureOperators,
@@ -54,6 +55,7 @@ export type { ConsolidationPubkeyGroup, ConsolidationTargetWitness, Consolidatio
 export {
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
+  cmv2HasTopUpAllocationPause,
   cmv2NormalizeTopUpAllocationBaseline,
   cmv2RefreshDepositInfo,
   cmv2SuiteEnabled,
@@ -74,6 +76,14 @@ export {
 } from "./topup";
 export type { TopUpValidatorState, TopUpWitnessBundle } from "./topup";
 export { calcNodeOperatorRewards } from "./staking-module";
+export {
+  DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT,
+  drainWithdrawalRequestsQueue,
+  ensureRoleFromAgent,
+  fixedTriggerableWithdrawalsLimit,
+  setTriggerableWithdrawalsConsumerLimits,
+} from "./triggerable-withdrawals";
+export type { TriggerableWithdrawalsLimitConfig } from "./triggerable-withdrawals";
 
 export * from "./vaults";
 export * from "./operatorGrid";

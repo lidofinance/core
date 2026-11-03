@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat, fls} from "contracts/common/lib/GIndex.sol";
+import {GIndex, toGIndex, fls} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 
@@ -51,7 +51,7 @@ contract SSZBLSHelpers {
     }
 
     function depth(GIndex gIndex) public pure returns (uint256) {
-        return fls(gIndex.index());
+        return fls(gIndex.unwrap());
     }
 
     // canonical implementation from original SSZ
@@ -195,7 +195,7 @@ contract SSZBLSHelpers {
         // it's constant for all validators
         uint256 VALIDATOR_TREE_DEPTH = 2;
         uint256 PARENT_POSITION = 0;
-        parentIndex = pack((1 << VALIDATOR_TREE_DEPTH) + PARENT_POSITION, uint8(VALIDATOR_TREE_DEPTH));
+        parentIndex = toGIndex((1 << VALIDATOR_TREE_DEPTH) + PARENT_POSITION);
         return (proof, root, parentNode, parentIndex);
     }
 
@@ -310,7 +310,7 @@ contract SSZBLSHelpers {
         proof[2] = BlockHeaderL3[1];
 
         uint256 PARENT_POSITION = 3;
-        index = pack((1 << HEADER_TREE_DEPTH) + PARENT_POSITION, uint8(HEADER_TREE_DEPTH));
+        index = toGIndex((1 << HEADER_TREE_DEPTH) + PARENT_POSITION);
     }
 
     // See https://github.com/succinctlabs/telepathy-contracts/blob/5aa4bb7/src/libraries/SimpleSerialize.sol#L17-L28

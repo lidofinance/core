@@ -103,9 +103,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
       100,
       1,
       48,
-      localMerkle.gIFirstValidator,
-      localMerkle.gIFirstValidator,
-      0,
+      (1n << 64n) - 1n,
     ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();

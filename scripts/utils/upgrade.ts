@@ -1,5 +1,6 @@
 import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
 import fs from "fs";
+import { ethers } from "hardhat";
 import { getMode } from "hardhat.helpers";
 
 import * as toml from "@iarna/toml";
@@ -167,7 +168,8 @@ export function writeUpgradeParameterAddresses(sectionName: string, paramKey: st
 }
 
 export const mockAragonVoting = async (state: DeploymentState) => {
-  const holderAddress = process.env.HOLDER || process.env.DEPLOYER || "";
+  const defaultHolder = state[Sk.chainId] === 1 ? getAddress(Sk.appAgent, state) : process.env.DEPLOYER;
+  const holderAddress = process.env.HOLDER || defaultHolder || "";
   const holder = await getSignerOrImpersonate(holderAddress, ether("100"));
   log("Starting mock Aragon voting...");
 
@@ -204,7 +206,7 @@ export const mockAragonVoting = async (state: DeploymentState) => {
     const agent = await impersonate(getAddress(Sk.appAgent, state), ether("100"));
     receipt = await mockEnactDGProposal(state, proposalId, agent);
   }
-  const { template } = await upgCtx(state);
+  const { template } = await aragonCtx(state);
   const event = findEventsWithInterfaces(receipt, "UpgradeFinished", [template.interface])[0];
   if (event) {
     log.success("Template UpgradeFinished event found in tx:", receipt.hash);
@@ -216,7 +218,7 @@ async function newAragonVoting(
   holder: HardhatEthersSigner,
   voteDescription: string,
 ): Promise<bigint> {
-  const { tm, voting, voteScript } = await upgCtx(state);
+  const { tm, voting, voteScript } = await aragonCtx(state);
   let voteItems: VoteItem[] = [];
   let evmScriptNewVote;
   if (VOTE_MODE === "dg") {
@@ -257,7 +259,7 @@ async function newAragonVoting(
 }
 
 async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, holder: HardhatEthersSigner) {
-  const { voting } = await upgCtx(state);
+  const { voting } = await aragonCtx(state);
 
   const vote = await voting.getVote(voteId);
 
@@ -265,7 +267,22 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
     throw new Error(`VoteId ${voteId} does not exist or already executed`);
   }
 
-  if ((await voting.canVote(voteId, holder)) && (await voting.getVoterState(voteId, holder)) !== 1n) {
+  const voterState = await voting.getVoterState(voteId, holder);
+  if (getMode() === "forking" && voterState !== 1n) {
+    const [currentTime, voteTime, objectionPhaseTime] = await Promise.all([
+      getCurrentBlockTimestamp(),
+      voting.voteTime(),
+      voting.objectionPhaseTime(),
+    ]);
+    const mainPhaseEnd = vote.startDate + voteTime - objectionPhaseTime;
+    const nextBlockTime = currentTime + 1n;
+    if (nextBlockTime >= mainPhaseEnd) {
+      throw new Error(`VoteId ${voteId} is no longer in its main voting phase`);
+    }
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(nextBlockTime)]);
+  }
+
+  if ((await voting.canVote(voteId, holder)) && voterState !== 1n) {
     log("Try to cast...");
     const voteTx = await voting.connect(holder).vote(voteId, true, true);
     await txWaitAndLog(voteTx);
@@ -302,7 +319,10 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
 }
 
 async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, executor: HardhatEthersSigner) {
-  const { dg, timelock } = await upgCtx(state);
+  const [dg, timelock] = await Promise.all([
+    loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state)),
+    loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state)),
+  ]);
 
   const afterSubmitDelay = await timelock.getAfterSubmitDelay();
   const afterScheduleDelay = await timelock.getAfterScheduleDelay();
@@ -426,7 +446,7 @@ export async function mockDGAragonVoting(state: DeploymentState) {
   }
 
   const receipt = await mockEnactDGProposal(state, proposalId, agent);
-  const { template } = await upgCtx(state);
+  const { template } = await aragonCtx(state);
   const event = findEventsWithInterfaces(receipt, "UpgradeFinished", [template.interface])[0];
   if (!event) {
     throw new Error("UpgradeFinished event not found");
@@ -444,18 +464,40 @@ type Ctx = {
   timelock: LoadedContract<ITimelock>;
 };
 
+type AragonCtx = Pick<Ctx, "tm" | "voting" | "template" | "voteScript">;
+
+let aragonCtxPromise: Promise<AragonCtx> | undefined;
 let ctxPromise: Promise<Ctx> | undefined;
+
+export const aragonCtx = (state: DeploymentState): Promise<AragonCtx> => {
+  if (!aragonCtxPromise) {
+    aragonCtxPromise = (async () => {
+      try {
+        const [tm, voting, template, voteScript] = await Promise.all([
+          loadContract<TokenManager>("TokenManager", getAddress(Sk.appTokenManager, state)),
+          loadContract<Voting>("Voting", getAddress(Sk.appVoting, state)),
+          loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state)),
+          loadContract<UpgradeVoteScript>("UpgradeVoteScript", getAddress(Sk.upgradeVoteScript, state)),
+        ]);
+
+        return { tm, voting, template, voteScript };
+      } catch (error) {
+        aragonCtxPromise = undefined;
+        throw error;
+      }
+    })();
+  }
+
+  return aragonCtxPromise;
+};
 
 export const upgCtx = (state: DeploymentState): Promise<Ctx> => {
   if (!ctxPromise) {
     ctxPromise = (async () => {
       try {
-        const [tm, dg, voting, template, voteScript, timelock] = await Promise.all([
-          loadContract<TokenManager>("TokenManager", getAddress(Sk.appTokenManager, state)),
+        const [{ tm, voting, template, voteScript }, dg, timelock] = await Promise.all([
+          aragonCtx(state),
           loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state)),
-          loadContract<Voting>("Voting", getAddress(Sk.appVoting, state)),
-          loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state)),
-          loadContract<UpgradeVoteScript>("UpgradeVoteScript", getAddress(Sk.upgradeVoteScript, state)),
           loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state)),
         ]);
 
@@ -504,4 +546,87 @@ export async function checkArtifactDeployedAndLog(artifactName: Sk): Promise<boo
     log(yl(`Artifact <${or(artifactName)}> exists and deployed at [${bl(address)}], skipping...`));
   }
   return isDeployed;
+}
+
+// ITimelock.ProposalStatus.Executed (see contracts/upgrade/interfaces/ITimelock.sol)
+const PROPOSAL_STATUS_EXECUTED = 3n;
+
+type OmnibusVoteScript = {
+  getVotingVoteItems(): Promise<unknown>;
+  getVoteItems(): Promise<unknown>;
+};
+
+/**
+ * Enacts an omnibus vote script on a fork: the Aragon items are executed directly from the Voting app,
+ * and the Dual Governance items are submitted by the proposer as one proposal, then scheduled and executed
+ * through the timelock in one transaction, as on-chain (an upgrade template checks that `startUpgrade` and
+ * `finishUpgrade` run in the same transaction).
+ * A non-zero `proposalId` enacts that DG proposal and skips the Aragon items; items of a vote or
+ * proposal already enacted on-chain are skipped as well.
+ */
+export async function mockEnactOmnibus(
+  state: DeploymentState,
+  voteScript: OmnibusVoteScript,
+  { voteId, proposalId }: { voteId: bigint; proposalId: bigint },
+) {
+  if (proposalId) {
+    log.warning("Proposal id is set, skipping non-DG vote items:", proposalId);
+  } else if (voteId && (await isVoteEnacted(state, voteId))) {
+    log.warning("Vote already enacted, skipping non-DG vote items:", voteId);
+  } else {
+    const voteItems = (await voteScript.getVotingVoteItems()) as VoteItem[];
+    const voting = await impersonate(getAddress(Sk.appVoting, state), ether("100"));
+    await execVoteItems(voteItems, voting);
+  }
+
+  if (proposalId && (await isProposalEnacted(state, proposalId))) {
+    log.warning("Proposal already enacted, skipping DG items:", proposalId);
+    return;
+  }
+
+  const dg = await loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state));
+  const proposers = await dg.getProposers();
+  if (!proposers.length) throw new Error("No proposer found in DualGovernance.");
+  const proposer = await impersonate(proposers[0].account, ether("100"));
+
+  if (!proposalId) {
+    const voteItemsDG = (await voteScript.getVoteItems()) as VoteItem[];
+    const proposalCalls = voteItemsDG.map(({ call: { to, data } }) => ({ target: to, value: 0n, payload: data }));
+    for (const item of voteItemsDG) log(`DG proposal item: ${or(item.description)}`);
+
+    proposalId = (await dg
+      .connect(proposer)
+      .getFunction("submitProposal")
+      .staticCall(proposalCalls, PROPOSAL_METADATA)) as bigint;
+    await txWaitAndLog(await dg.connect(proposer).submitProposal(proposalCalls, PROPOSAL_METADATA));
+    log.success("Proposal submitted ID:", proposalId);
+  }
+
+  await mockEnactDGProposal(state, proposalId, proposer);
+}
+
+async function isVoteEnacted(state: DeploymentState, voteId: bigint): Promise<boolean> {
+  const voting = await loadContract<Voting>("Voting", getAddress(Sk.appVoting, state));
+  const { executed } = await voting.getVote(voteId);
+  return executed;
+}
+
+async function isProposalEnacted(state: DeploymentState, proposalId: bigint): Promise<boolean> {
+  const timelock = await loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state));
+  const { status } = await timelock.getProposalDetails(proposalId);
+  return status === PROPOSAL_STATUS_EXECUTED;
+}
+
+async function execVoteItems(voteItems: VoteItem[], executor: HardhatEthersSigner) {
+  for (const item of voteItems) {
+    log(`Execute vote item: ${or(item.description)}`);
+    // The node's gas estimate can fall short for the nested DG item
+    const tx = await executor.sendTransaction({
+      to: item.call.to,
+      data: ethers.hexlify(item.call.data),
+      value: 0n,
+      gasLimit: FUSAKA_TX_GAS_LIMIT,
+    });
+    await tx.wait();
+  }
 }

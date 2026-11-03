@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
-import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "lib";
+import { ether, impersonate, WithdrawalCredentialsType } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { streccak } from "lib/keccak";
@@ -168,6 +168,7 @@ async function enableExternalModule(
   setup: ExternalModuleSetup,
   state: ReturnType<typeof readNetworkState>,
   deployer: string,
+  withdrawalCredentialsType: WithdrawalCredentialsType,
 ) {
   const agent = state[Sk.appAgent].proxy.address;
   const agentSigner = await impersonate(agent, ether("1"));
@@ -179,10 +180,18 @@ async function enableExternalModule(
   );
 
   await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_MY_STETH_ROLE(), setup.accounting], { from: deployer });
+
+  // The ejector is a gateway consumer: its limits depend on the module WC type, since a 0x02 validator
+  // can hold up to 2048 ETH. The deployer holds TW_EXIT_LIMIT_MANAGER_ROLE since `0083`.
+  const gatewayParams = state[Sk.triggerableWithdrawalsGateway].deployParameters;
+  const ejectorLimits =
+    withdrawalCredentialsType === WithdrawalCredentialsType.WC0x02
+      ? gatewayParams.ejectorLimitsWC0x02
+      : gatewayParams.ejectorLimitsWC0x01;
   await makeTx(
     triggerableWithdrawalsGateway,
-    "grantRole",
-    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), setup.ejector],
+    "setConsumerLimits",
+    [setup.ejector, ejectorLimits.pwr, ejectorLimits.fwr],
     { from: deployer },
   );
 
@@ -199,8 +208,11 @@ async function enableExternalModule(
     agentSigner,
   );
   const [initialEpoch] = await hashConsensus.getFrameConfig();
-  if (BigInt(initialEpoch) === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
-    await makeTx(hashConsensus, "updateInitialEpoch", [await getCurrentEpoch(hashConsensus)], { from: agent });
+  const currentEpoch = await getCurrentEpoch(hashConsensus);
+  // Same condition as HashConsensus.updateInitialEpoch: the initial epoch must still be in the future.
+  // The far-future sentinel set by the constructor depends on genesisTime, so it can't be matched by a constant.
+  if (BigInt(initialEpoch) > currentEpoch) {
+    await makeTx(hashConsensus, "updateInitialEpoch", [currentEpoch], { from: agent });
   }
 
   const circuitBreakerAddress = state[Sk.circuitBreaker]?.address;
@@ -298,7 +310,7 @@ export async function main() {
       ],
       { from: deployer },
     );
-    await enableExternalModule(setup, state, deployer);
+    await enableExternalModule(setup, state, deployer, CSM_WITHDRAWAL_TYPE);
   }
 
   if (state[Sk.sm_CM]?.proxy?.address) {
@@ -321,7 +333,7 @@ export async function main() {
       ],
       { from: deployer },
     );
-    await enableExternalModule(setup, state, deployer);
+    await enableExternalModule(setup, state, deployer, CMV2_WITHDRAWAL_TYPE);
 
     // ConsolidationMigrator is deployed earlier (0083) with an immutable target module id
     // predicted from deploy params. Verify the id actually assigned to CMv2 matches it.

@@ -42,10 +42,31 @@ withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#specification
 consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250
-exitsPerFrame = 1
-frameDurationInSec = 240
+# Limits the SR phase 2 vote sets on the new triggerable withdrawals gateway (LIP-38 "Initial limits"):
+# `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators; all zero disables a limit.
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full VEBO report of either kind restores within 8 hours
+pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
+
+# Staking module ejectors: the ejectors that hold ADD_FULL_WITHDRAWAL_REQUEST_ROLE on the live gateway
+# (read on-chain on 2026-10-27). Replace them if the CSM release deploys new ejectors that call `triggerWithdrawals`.
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM"   # staking module 4, 0x01
+address = "0xCAe028378d69D54dc8bF809e6C44CF751F997b80"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 400, limitPerFrame = 1, frameDurationInSec = 192 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM 0x02"   # staking module 6, 0x02
+address = "0xf8a71C08DBe7D2efaD76D3951a3065B8cE20e4f0"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CMv2"   # staking module 5, 0x02
+address = "0xfDbde2B3554B69C84e0f8d7daB68D390Ff0f4394"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 
 # Accounting oracle configuration
 [accountingOracle]
@@ -59,6 +80,17 @@ balancePerFrameEth = 32
 frameDurationInSec = 48
 consensusVersion = 5
 
+[validatorExitDelayVerifier]
+firstSupportedSlot = 65536 # ELECTRA_FORK_EPOCH 2048 * 32, @see https://github.com/eth-clients/hoodi/blob/main/metadata/config.yaml#L41
+gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
+capellaSlot = 0
+slotsPerHistoricalRoot = 8192
+shardCommitteePeriodInSeconds = 98304
+
+[predepositGuarantee]
+genesisForkVersion = "0x10000910"
+gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
+
 # Deposit security module configuration
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
@@ -68,9 +100,7 @@ pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 30               # Duration of each processing frame in seconds
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
-pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+gloasSlot = "18446744073709551615"    # Disabled until the Gloas fork slot is known
 
 [consolidationBus]
 initialBatchSize = 200                # Max number of requests in a batch
@@ -89,11 +119,7 @@ minBlockDistance = 75 # Minimum block distance between topUp calls
 maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove validator state
 targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
 minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
-# Generalized indices for validator/balance/pending state verification
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-# Pivot slot for fork-aware gIndex selection
-pivotSlot = 0
+gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
 depositor = "0x9b186cE78Ddd6fF098b4a533Dd17a139e1FFeD76" # depositor bot
 
 # StakingRouter configuration
@@ -157,4 +183,10 @@ hashConsensusInitialEpoch = 93833
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC
+# TODO: placeholder, set the real deadline once the Gloas vote is scheduled.
+expiryTimestamp = 1798761599 # December 31, 2026 at 23:59:59 UTC
+
+[srPhase2UpgradeVoteScript]
+# Expiry timestamp after which the SR phase 2 (LIP-38) upgrade transaction will revert
+# TODO: placeholder, set the real deadline once the SR phase 2 vote is scheduled.
+expiryTimestamp = 1830297599 # December 31, 2027 at 23:59:59 UTC

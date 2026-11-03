@@ -58,7 +58,7 @@ describe("OracleReportSanityChecker: module and CL balances", () => {
         withdrawalVault: withdrawalVault.address,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
-        validatorExitDelayVerifier: deployer.address,
+        triggerableWithdrawalsBus: deployer.address,
         triggerableWithdrawalsGateway: deployer.address,
         consolidationGateway: deployer.address,
         accounting: deployer.address,

@@ -69,7 +69,7 @@ const config: HardhatUserConfig = {
     },
     // local nodes
     "local": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      url: RPC_URL,
       timeout: 20 * 60 * 1000, // 20 minutes
     },
     "local-devnet": {
@@ -218,6 +218,19 @@ const config: HardhatUserConfig = {
       },
     ],
     overrides: {
+      // NB: Decreasing optimizer "runs" parameter to keep Dashboard below the EIP-170 contract size limit.
+      // TODO: Reconsider this override after Dashboard's source code is settled.
+      "contracts/0.8.25/vaults/dashboard/Dashboard.sol": {
+        version: "0.8.25",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 100,
+          },
+          viaIR: true,
+          evmVersion: "cancun",
+        },
+      },
       // NB: Decreasing optimizer "runs" parameter to reduce VaultHub contract size.
       // TODO: Reconsider this override after VaultHub's source code is settled.
       "contracts/0.8.25/vaults/VaultHub.sol": {

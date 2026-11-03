@@ -70,7 +70,7 @@ describe("OracleReportSanityChecker", () => {
         withdrawalVault: withdrawalVault.address,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
-        validatorExitDelayVerifier: deployer.address,
+        triggerableWithdrawalsBus: deployer.address,
         triggerableWithdrawalsGateway: deployer.address,
         consolidationGateway: deployer.address,
         accounting: accounting.address,

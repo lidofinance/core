@@ -11,7 +11,7 @@ import { getDeployerSigner } from "./account";
 export type MethodArgs<C, M extends keyof C> = C[M] extends (...args: any[]) => any ? Parameters<C[M]> : never;
 
 // constructor args
-// example:  const constructorArgs:  ConstructorArgs<UpgradeTemporaryAdmin__factory>;
+// example:  const constructorArgs:  ConstructorArgs<UpgradeTemplate__factory>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ContractWithConstructor = { deploy: (...args: any[]) => any };
 type DeployArgs<C extends ContractWithConstructor> = MethodArgs<C, "deploy">;

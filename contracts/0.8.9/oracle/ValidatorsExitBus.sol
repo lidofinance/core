@@ -57,7 +57,6 @@ interface IStakingRouter {
 }
 
 interface ILidoLocator {
-    function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
     function oracleReportSanityChecker() external view returns (address);
     function stakingRouter() external view returns (address);

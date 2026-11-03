@@ -67,6 +67,7 @@ export enum Sk {
   vestingParams = "vestingParams",
   withdrawalVault = "withdrawalVault",
   circuitBreaker = "circuitBreaker",
+  delegationFactory = "delegationFactory",
   gateSeal = "gateSeal",
   gateSealV3 = "gateSealV3",
   gateSealFactory = "gateSealFactory",
@@ -100,6 +101,7 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  triggerableWithdrawalsBus = "triggerableWithdrawalsBus",
   consolidationGateway = "consolidationGateway",
   consolidationBus = "consolidationBus",
   consolidationMigrator = "consolidationMigrator",
@@ -135,6 +137,9 @@ export enum Sk {
   upgradeTemplate = "upgradeTemplate",
   upgradeVoteScript = "upgradeVoteScript",
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
+  srPhase2UpgradeConfig = "srPhase2UpgradeConfig",
+  srPhase2UpgradeTemplate = "srPhase2UpgradeTemplate",
+  srPhase2UpgradeVoteScript = "srPhase2UpgradeVoteScript",
   // Staking modules
   sm_CSM = "sm:CSM",
   sm_CM = "sm:CM",
@@ -173,6 +178,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.triggerableWithdrawalsBus:
     case Sk.sm_CSM:
     case Sk.sm_CM:
       return state[contractKey].proxy.address;
@@ -187,6 +193,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.evmScriptRegistryFactory:
     case Sk.executionLayerRewardsVault:
     case Sk.circuitBreaker:
+    case Sk.delegationFactory:
     case Sk.gateSeal:
     case Sk.gateSealV3:
     case Sk.gateSealTW:
@@ -219,6 +226,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.upgradeTemporaryAdmin:
     case Sk.upgradeTemplate:
     case Sk.upgradeVoteScript:
+    case Sk.srPhase2UpgradeTemplate:
+    case Sk.srPhase2UpgradeVoteScript:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:
