@@ -12,6 +12,15 @@ import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.s
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IBurner} from "contracts/common/interfaces/IBurner.sol";
 import {ISecondOpinionOracle} from "../interfaces/ISecondOpinionOracle.sol";
+import {
+    MAX_BASIS_POINTS,
+    LimitsList,
+    AccountingCoreLimitsPacked,
+    OperationalLimitsPacked,
+    LimitsListPacker,
+    LimitsListUnpacker,
+    LimitsListValidator
+} from "./OracleReportLimits.sol";
 
 interface IWithdrawalQueue {
     struct WithdrawalRequestStatus {
@@ -53,97 +62,6 @@ interface IStakingRouter {
         );
 }
 
-/// @notice The set of restrictions used in the sanity checks of the oracle report
-/// @dev struct is loaded from the storage and stored in memory during the tx running
-struct LimitsList {
-    /// @notice The max possible exited ETH amount that might be reported
-    ///     per single day.
-    /// @dev Must fit into uint32 (<= 4_294_967_295)
-    uint256 exitedEthAmountPerDayLimit;
-    /// @notice The max possible appeared ETH amount that might be reported
-    ///     per single day.
-    /// @dev Must fit into uint32 (<= 4_294_967_295)
-    uint256 appearedEthAmountPerDayLimit;
-    /// @notice The soft annualized limit for a positive CL accounting rebase.
-    /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 annualCLRebaseIncreaseSoftBPLimit;
-
-    /// @notice The max deviation of the provided `simulatedShareRate`
-    ///     and the actual one within the currently processing oracle report
-    /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 simulatedShareRateDeviationBPLimit;
-
-    /// @notice The max requested to exit balance in ETH
-    /// @dev Sum of all max effective balances of all requested validators should be equal or lower in one report
-    uint256 maxBalanceExitRequestedPerReportInEth;
-    /// @notice WC 0x01 max effective balance equivalent weight in ETH
-    /// @dev Must fit into uint16 and be non-zero
-    uint256 maxEffectiveBalanceWeightWCType01;
-    /// @notice WC 0x02 max effective balance equivalent weight in ETH
-    /// @dev Must fit into uint16 and be non-zero
-    uint256 maxEffectiveBalanceWeightWCType02;
-
-    /// @notice The max number of data list items reported to accounting oracle in extra data per single transaction
-    /// @dev Must fit into uint16 (<= 65_535)
-    uint256 maxItemsPerExtraDataTransaction;
-    /// @notice The max number of node operators reported per extra data list item
-    /// @dev Must fit into uint16 (<= 65_535)
-    uint256 maxNodeOperatorsPerExtraDataItem;
-    /// @notice The min time required to be passed from the creation of the request to be
-    ///     finalized till the time of the oracle report
-    uint256 requestTimestampMargin;
-    /// @notice The hard annualized limit for a positive CL accounting rebase.
-    /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 annualCLRebaseIncreaseHardBPLimit;
-    /// @notice The soft per-report limit for a negative CL accounting rebase.
-    /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 clRebaseDecreaseSoftBPLimit;
-    /// @notice The absolute per-report ceiling of the hard limit for a negative CL accounting rebase.
-    /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 clRebaseDecreaseHardBPLimit;
-    /// @notice The max possible consolidation ETH amount that might be reported
-    ///     per single day.
-    /// @dev Must fit into uint32 (<= 4_294_967_295)
-    uint256 consolidationEthAmountPerDayLimit;
-    /// @notice Effective ETH amount attributed to a single exited validator
-    ///     in the exited ETH amount per day check.
-    /// @dev Stored in whole ETH units. Must fit into uint16.
-    uint256 exitedValidatorEthAmountLimit;
-    /// @notice Extra protocol-level pending balance cap to tolerate bounded side deposits
-    ///     or same-validator top-ups that were not funded by Lido.
-    /// @dev Stored in whole ETH units. Must fit into uint16.
-    uint256 externalPendingBalanceCapEth;
-    /// @notice The hard limit for a negative CL accounting rebase per day of time elapsed since the previous report.
-    /// @dev Represented in the Basis Points (100% == 10_000). The elapsed time counts as at least one day,
-    ///     and the result is capped by `clRebaseDecreaseHardBPLimit`.
-    uint256 dailyCLRebaseDecreaseHardBPLimit;
-}
-
-/// @dev The packed accounting/rebase limits persisted in a single storage slot
-struct AccountingCoreLimitsPacked {
-    uint32 exitedEthAmountPerDayLimit;
-    uint32 appearedEthAmountPerDayLimit;
-    uint32 consolidationEthAmountPerDayLimit;
-    uint16 annualCLRebaseIncreaseSoftBPLimit;
-    uint16 simulatedShareRateDeviationBPLimit;
-    uint16 annualCLRebaseIncreaseHardBPLimit;
-    uint16 clRebaseDecreaseSoftBPLimit;
-    uint16 clRebaseDecreaseHardBPLimit;
-    uint16 exitedValidatorEthAmountLimit;
-    uint16 externalPendingBalanceCapEth;
-    uint16 dailyCLRebaseDecreaseHardBPLimit;
-}
-
-/// @dev The packed operational limits persisted in a single storage slot
-struct OperationalLimitsPacked {
-    uint16 maxBalanceExitRequestedPerReportInEth;
-    uint16 maxEffectiveBalanceWeightWCType01;
-    uint16 maxEffectiveBalanceWeightWCType02;
-    uint16 maxItemsPerExtraDataTransaction;
-    uint16 maxNodeOperatorsPerExtraDataItem;
-    uint32 requestTimestampMargin;
-}
-
 struct CLBalanceChangeCheckParams {
     uint256 timeElapsed;
     uint256 preCLValidatorsBalance;
@@ -158,7 +76,6 @@ struct ActivationBalanceCheckResult {
     uint256 maxPossibleActivatedBalance;
 }
 
-uint256 constant MAX_BASIS_POINTS = 10_000;
 uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
 
 /// @title Sanity checks for the Lido's oracle report
@@ -271,7 +188,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setExitedEthAmountPerDayLimit(
         uint256 _exitedEthAmountPerDayLimit
     ) public onlyRole(EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE) {
-        _checkLimitValue(_exitedEthAmountPerDayLimit, 0, type(uint32).max);
+        LimitsListValidator.checkLimitValue(_exitedEthAmountPerDayLimit, 0, type(uint32).max);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.exitedEthAmountPerDayLimit = SafeCast.toUint32(_exitedEthAmountPerDayLimit);
         _updateAccountingCoreLimits(limits);
@@ -282,7 +199,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setAppearedEthAmountPerDayLimit(
         uint256 _appearedEthAmountPerDayLimit
     ) public onlyRole(APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE) {
-        _checkLimitValue(_appearedEthAmountPerDayLimit, 0, type(uint32).max);
+        LimitsListValidator.checkLimitValue(_appearedEthAmountPerDayLimit, 0, type(uint32).max);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.appearedEthAmountPerDayLimit = SafeCast.toUint32(_appearedEthAmountPerDayLimit);
         _updateAccountingCoreLimits(limits);
@@ -293,7 +210,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setConsolidationEthAmountPerDayLimit(
         uint256 _consolidationEthAmountPerDayLimit
     ) external onlyRole(CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE) {
-        _checkLimitValue(_consolidationEthAmountPerDayLimit, 0, type(uint32).max);
+        LimitsListValidator.checkLimitValue(_consolidationEthAmountPerDayLimit, 0, type(uint32).max);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.consolidationEthAmountPerDayLimit = SafeCast.toUint32(_consolidationEthAmountPerDayLimit);
         _updateAccountingCoreLimits(limits);
@@ -303,7 +220,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setExitedValidatorEthAmountLimit(
         uint256 _exitedValidatorEthAmountLimit
     ) external onlyRole(EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE) {
-        _checkLimitValue(_exitedValidatorEthAmountLimit, 1, type(uint16).max);
+        LimitsListValidator.checkLimitValue(_exitedValidatorEthAmountLimit, 1, type(uint16).max);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.exitedValidatorEthAmountLimit = SafeCast.toUint16(_exitedValidatorEthAmountLimit);
         _updateAccountingCoreLimits(limits);
@@ -314,7 +231,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setExternalPendingBalanceCapEth(
         uint256 _externalPendingBalanceCapEth
     ) external onlyRole(EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE) {
-        _checkLimitValue(_externalPendingBalanceCapEth, 0, type(uint16).max);
+        LimitsListValidator.checkLimitValue(_externalPendingBalanceCapEth, 0, type(uint16).max);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.externalPendingBalanceCapEth = SafeCast.toUint16(_externalPendingBalanceCapEth);
         _updateAccountingCoreLimits(limits);
@@ -325,8 +242,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _softLimitBP,
         uint256 _hardLimitBP
     ) external onlyRole(ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE) {
-        _checkLimitValue(_hardLimitBP, 0, MAX_BASIS_POINTS);
-        _checkLimitValue(_softLimitBP, 0, _hardLimitBP);
+        LimitsListValidator.checkLimitValue(_hardLimitBP, 0, MAX_BASIS_POINTS);
+        LimitsListValidator.checkLimitValue(_softLimitBP, 0, _hardLimitBP);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.annualCLRebaseIncreaseSoftBPLimit = LimitsListPacker.toBasisPoints(_softLimitBP);
         limits.annualCLRebaseIncreaseHardBPLimit = LimitsListPacker.toBasisPoints(_hardLimitBP);
@@ -339,7 +256,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         external
         onlyRole(SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE)
     {
-        _checkLimitValue(_simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
+        LimitsListValidator.checkLimitValue(_simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.simulatedShareRateDeviationBPLimit = LimitsListPacker.toBasisPoints(_simulatedShareRateDeviationBPLimit);
         _updateAccountingCoreLimits(limits);
@@ -351,7 +268,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         external
         onlyRole(MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE)
     {
-        _checkLimitValue(_maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
+        LimitsListValidator.checkLimitValue(_maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
         OperationalLimitsPacked memory limits = _operationalLimits;
         limits.maxBalanceExitRequestedPerReportInEth = SafeCast.toUint16(_maxBalanceExitRequestedPerReportInEth);
         _updateOperationalLimits(limits);
@@ -362,7 +279,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         external
         onlyRole(MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE)
     {
-        _checkLimitValue(_maxEffectiveBalanceWeightWCType01, 1, type(uint16).max);
+        LimitsListValidator.checkLimitValue(_maxEffectiveBalanceWeightWCType01, 1, type(uint16).max);
         OperationalLimitsPacked memory limits = _operationalLimits;
         limits.maxEffectiveBalanceWeightWCType01 = SafeCast.toUint16(_maxEffectiveBalanceWeightWCType01);
         _updateOperationalLimits(limits);
@@ -373,7 +290,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         external
         onlyRole(MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE)
     {
-        _checkLimitValue(_maxEffectiveBalanceWeightWCType02, 1, type(uint16).max);
+        LimitsListValidator.checkLimitValue(_maxEffectiveBalanceWeightWCType02, 1, type(uint16).max);
         OperationalLimitsPacked memory limits = _operationalLimits;
         limits.maxEffectiveBalanceWeightWCType02 = SafeCast.toUint16(_maxEffectiveBalanceWeightWCType02);
         _updateOperationalLimits(limits);
@@ -384,7 +301,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setRequestTimestampMargin(
         uint256 _requestTimestampMargin
     ) external onlyRole(REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE) {
-        _checkLimitValue(_requestTimestampMargin, 0, type(uint32).max);
+        LimitsListValidator.checkLimitValue(_requestTimestampMargin, 0, type(uint32).max);
         OperationalLimitsPacked memory limits = _operationalLimits;
         limits.requestTimestampMargin = SafeCast.toUint32(_requestTimestampMargin);
         _updateOperationalLimits(limits);
@@ -395,7 +312,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setMaxItemsPerExtraDataTransaction(
         uint256 _maxItemsPerExtraDataTransaction
     ) external onlyRole(MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE) {
-        _checkLimitValue(_maxItemsPerExtraDataTransaction, 0, type(uint16).max);
+        LimitsListValidator.checkLimitValue(_maxItemsPerExtraDataTransaction, 0, type(uint16).max);
         OperationalLimitsPacked memory limits = _operationalLimits;
         limits.maxItemsPerExtraDataTransaction = SafeCast.toUint16(_maxItemsPerExtraDataTransaction);
         _updateOperationalLimits(limits);
@@ -406,7 +323,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setMaxNodeOperatorsPerExtraDataItem(
         uint256 _maxNodeOperatorsPerExtraDataItem
     ) external onlyRole(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE) {
-        _checkLimitValue(_maxNodeOperatorsPerExtraDataItem, 0, type(uint16).max);
+        LimitsListValidator.checkLimitValue(_maxNodeOperatorsPerExtraDataItem, 0, type(uint16).max);
         OperationalLimitsPacked memory limits = _operationalLimits;
         limits.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_maxNodeOperatorsPerExtraDataItem);
         _updateOperationalLimits(limits);
@@ -431,9 +348,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _dailyHardLimitBP,
         uint256 _hardLimitBP
     ) external onlyRole(CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE) {
-        _checkLimitValue(_hardLimitBP, 0, MAX_BASIS_POINTS);
-        _checkLimitValue(_dailyHardLimitBP, 0, _hardLimitBP);
-        _checkLimitValue(_softLimitBP, 0, _dailyHardLimitBP);
+        LimitsListValidator.checkLimitValue(_hardLimitBP, 0, MAX_BASIS_POINTS);
+        LimitsListValidator.checkLimitValue(_dailyHardLimitBP, 0, _hardLimitBP);
+        LimitsListValidator.checkLimitValue(_softLimitBP, 0, _dailyHardLimitBP);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.clRebaseDecreaseSoftBPLimit = LimitsListPacker.toBasisPoints(_softLimitBP);
         limits.dailyCLRebaseDecreaseHardBPLimit = LimitsListPacker.toBasisPoints(_dailyHardLimitBP);
@@ -971,47 +888,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _updateLimits(LimitsList memory _newLimitsList) internal {
-        _validateLimitsList(_newLimitsList);
+        LimitsListValidator.validate(_newLimitsList);
         _updateAccountingCoreLimits(_newLimitsList.packAccountingCore());
         _updateOperationalLimits(_newLimitsList.packOperational());
-    }
-
-    function _checkLimitValue(uint256 _value, uint256 _minAllowedValue, uint256 _maxAllowedValue) internal pure {
-        if (_value > _maxAllowedValue || _value < _minAllowedValue) {
-            revert IncorrectLimitValue(_value, _minAllowedValue, _maxAllowedValue);
-        }
-    }
-
-    function _validateLimitsList(LimitsList memory _limitsList) internal pure {
-        _checkLimitValue(_limitsList.exitedEthAmountPerDayLimit, 0, type(uint32).max);
-        _checkLimitValue(_limitsList.appearedEthAmountPerDayLimit, 0, type(uint32).max);
-        _checkLimitValue(_limitsList.consolidationEthAmountPerDayLimit, 0, type(uint32).max);
-        _checkLimitValue(_limitsList.exitedValidatorEthAmountLimit, 1, type(uint16).max);
-        _checkLimitValue(_limitsList.externalPendingBalanceCapEth, 0, type(uint16).max);
-        _checkLimitValue(_limitsList.annualCLRebaseIncreaseHardBPLimit, 0, MAX_BASIS_POINTS);
-        _checkLimitValue(
-            _limitsList.annualCLRebaseIncreaseSoftBPLimit,
-            0,
-            _limitsList.annualCLRebaseIncreaseHardBPLimit
-        );
-        _checkLimitValue(_limitsList.simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
-        _checkLimitValue(_limitsList.maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
-        _checkLimitValue(_limitsList.maxEffectiveBalanceWeightWCType01, 1, type(uint16).max);
-        _checkLimitValue(_limitsList.maxEffectiveBalanceWeightWCType02, 1, type(uint16).max);
-        _checkLimitValue(_limitsList.maxItemsPerExtraDataTransaction, 0, type(uint16).max);
-        _checkLimitValue(_limitsList.maxNodeOperatorsPerExtraDataItem, 0, type(uint16).max);
-        _checkLimitValue(_limitsList.requestTimestampMargin, 0, type(uint32).max);
-        _checkLimitValue(_limitsList.clRebaseDecreaseHardBPLimit, 0, MAX_BASIS_POINTS);
-        _checkLimitValue(
-            _limitsList.dailyCLRebaseDecreaseHardBPLimit,
-            0,
-            _limitsList.clRebaseDecreaseHardBPLimit
-        );
-        _checkLimitValue(
-            _limitsList.clRebaseDecreaseSoftBPLimit,
-            0,
-            _limitsList.dailyCLRebaseDecreaseHardBPLimit
-        );
     }
 
     function _updateAccountingCoreLimits(AccountingCoreLimitsPacked memory _newLimits) internal {
@@ -1100,7 +979,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
     event CLRebaseDecreaseBPLimitsSet(uint256 softLimitBP, uint256 dailyHardLimitBP, uint256 hardLimitBP);
 
-    error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
     error IncorrectELRewardsVaultBalance(uint256 actualELRewardsVaultBalance);
     error IncorrectSharesRequestedToBurn(uint256 actualSharesToBurn);
@@ -1123,67 +1001,4 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error SecondOpinionReportNotReady(uint256 refSlot);
     error SecondOpinionReportHashMismatch(uint256 refSlot, bytes32 consensusHash, bytes32 attestedHash);
     error CalledNotFromAccounting();
-}
-
-library LimitsListPacker {
-    error BasisPointsOverflow(uint256 value, uint256 maxValue);
-
-    function packAccountingCore(
-        LimitsList memory _limitsList
-    ) internal pure returns (AccountingCoreLimitsPacked memory res) {
-        res.exitedEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.exitedEthAmountPerDayLimit);
-        res.appearedEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.appearedEthAmountPerDayLimit);
-        res.consolidationEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.consolidationEthAmountPerDayLimit);
-        res.annualCLRebaseIncreaseSoftBPLimit = toBasisPoints(_limitsList.annualCLRebaseIncreaseSoftBPLimit);
-        res.simulatedShareRateDeviationBPLimit = toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
-        res.annualCLRebaseIncreaseHardBPLimit = toBasisPoints(_limitsList.annualCLRebaseIncreaseHardBPLimit);
-        res.clRebaseDecreaseSoftBPLimit = toBasisPoints(_limitsList.clRebaseDecreaseSoftBPLimit);
-        res.clRebaseDecreaseHardBPLimit = toBasisPoints(_limitsList.clRebaseDecreaseHardBPLimit);
-        res.exitedValidatorEthAmountLimit = SafeCast.toUint16(_limitsList.exitedValidatorEthAmountLimit);
-        res.externalPendingBalanceCapEth = SafeCast.toUint16(_limitsList.externalPendingBalanceCapEth);
-        res.dailyCLRebaseDecreaseHardBPLimit = toBasisPoints(_limitsList.dailyCLRebaseDecreaseHardBPLimit);
-    }
-
-    function packOperational(
-        LimitsList memory _limitsList
-    ) internal pure returns (OperationalLimitsPacked memory res) {
-        res.maxBalanceExitRequestedPerReportInEth = SafeCast.toUint16(_limitsList.maxBalanceExitRequestedPerReportInEth);
-        res.maxEffectiveBalanceWeightWCType01 = SafeCast.toUint16(_limitsList.maxEffectiveBalanceWeightWCType01);
-        res.maxEffectiveBalanceWeightWCType02 = SafeCast.toUint16(_limitsList.maxEffectiveBalanceWeightWCType02);
-        res.maxItemsPerExtraDataTransaction = SafeCast.toUint16(_limitsList.maxItemsPerExtraDataTransaction);
-        res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
-        res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);
-    }
-
-    function toBasisPoints(uint256 _value) internal pure returns (uint16) {
-        if (_value > MAX_BASIS_POINTS) {
-            revert BasisPointsOverflow(_value, MAX_BASIS_POINTS);
-        }
-        return uint16(_value);
-    }
-}
-
-library LimitsListUnpacker {
-    function unpack(
-        AccountingCoreLimitsPacked memory _accountingLimits,
-        OperationalLimitsPacked memory _operationalLimitsPacked
-    ) internal pure returns (LimitsList memory res) {
-        res.exitedEthAmountPerDayLimit = _accountingLimits.exitedEthAmountPerDayLimit;
-        res.appearedEthAmountPerDayLimit = _accountingLimits.appearedEthAmountPerDayLimit;
-        res.annualCLRebaseIncreaseSoftBPLimit = _accountingLimits.annualCLRebaseIncreaseSoftBPLimit;
-        res.simulatedShareRateDeviationBPLimit = _accountingLimits.simulatedShareRateDeviationBPLimit;
-        res.maxBalanceExitRequestedPerReportInEth = _operationalLimitsPacked.maxBalanceExitRequestedPerReportInEth;
-        res.maxEffectiveBalanceWeightWCType01 = _operationalLimitsPacked.maxEffectiveBalanceWeightWCType01;
-        res.maxEffectiveBalanceWeightWCType02 = _operationalLimitsPacked.maxEffectiveBalanceWeightWCType02;
-        res.maxItemsPerExtraDataTransaction = _operationalLimitsPacked.maxItemsPerExtraDataTransaction;
-        res.maxNodeOperatorsPerExtraDataItem = _operationalLimitsPacked.maxNodeOperatorsPerExtraDataItem;
-        res.requestTimestampMargin = _operationalLimitsPacked.requestTimestampMargin;
-        res.annualCLRebaseIncreaseHardBPLimit = _accountingLimits.annualCLRebaseIncreaseHardBPLimit;
-        res.clRebaseDecreaseSoftBPLimit = _accountingLimits.clRebaseDecreaseSoftBPLimit;
-        res.clRebaseDecreaseHardBPLimit = _accountingLimits.clRebaseDecreaseHardBPLimit;
-        res.consolidationEthAmountPerDayLimit = _accountingLimits.consolidationEthAmountPerDayLimit;
-        res.exitedValidatorEthAmountLimit = _accountingLimits.exitedValidatorEthAmountLimit;
-        res.externalPendingBalanceCapEth = _accountingLimits.externalPendingBalanceCapEth;
-        res.dailyCLRebaseDecreaseHardBPLimit = _accountingLimits.dailyCLRebaseDecreaseHardBPLimit;
-    }
 }

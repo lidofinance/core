@@ -4,14 +4,14 @@
 
 pragma solidity 0.8.9;
 
+import {OracleReportSanityChecker} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 import {
-    OracleReportSanityChecker,
     LimitsList,
     AccountingCoreLimitsPacked,
     OperationalLimitsPacked,
     LimitsListPacker,
     LimitsListUnpacker
-} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
+} from "contracts/0.8.9/sanity_checks/OracleReportLimits.sol";
 import {ISecondOpinionOracle} from "contracts/0.8.9/interfaces/ISecondOpinionOracle.sol";
 
 contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
