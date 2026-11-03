@@ -1,0 +1,43 @@
+# Dual Governance section for scratch deployment.
+# Append it to a scratch parameters file to deploy Dual Governance (step 0125) and put the Agent
+# under it (step 0160). The delays are short, for test networks.
+
+[dualGovernance]
+tiebreakerActivationTimeout = 900       # Tiebreaker activation timeout in seconds (15 minutes)
+
+[dualGovernance.sanityCheckParams]
+minWithdrawalsBatchSize = 4
+minTiebreakerActivationTimeout = 300
+maxTiebreakerActivationTimeout = 1800
+maxSealableWithdrawalBlockersCount = 255
+maxMinAssetsLockDuration = 3600
+
+[dualGovernance.configProvider]
+firstSealRageQuitSupport = "30000000000000000"    # 3%
+secondSealRageQuitSupport = "150000000000000000"  # 15%
+minAssetsLockDuration = 300
+vetoSignallingMinDuration = 300
+vetoSignallingMinActiveDuration = 180
+vetoSignallingMaxDuration = 1800
+vetoSignallingDeactivationMaxDuration = 300
+vetoCooldownDuration = 180
+rageQuitExtensionPeriodDuration = 180
+rageQuitEthWithdrawalsMinDelay = 600
+rageQuitEthWithdrawalsMaxDelay = 3600
+rageQuitEthWithdrawalsDelayGrowth = 1200
+
+[dualGovernance.timelock]
+afterSubmitDelay = 120
+afterScheduleDelay = 120
+emergencyModeDuration = 86400           # 1 day
+emergencyProtectionDuration = 31536000  # 1 year from the deployment block
+
+[dualGovernance.timelock.sanityCheckParams]
+minExecutionDelay = 120
+maxAfterSubmitDelay = 1800
+maxAfterScheduleDelay = 1800
+maxEmergencyModeDuration = 2592000
+maxEmergencyProtectionDuration = 63072000
+
+[dualGovernance.tiebreaker]
+executionDelay = 900

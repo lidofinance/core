@@ -35,6 +35,12 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     [Sk.delegationFactory]: {
       address: null, // Set by deployment scripts
     },
+    // Optional: Dual Governance is deployed only when the parameters have a `dualGovernance` section
+    ...(params.dualGovernance && {
+      [Sk.dgDualGovernance]: {
+        deployParameters: params.dualGovernance,
+      },
+    }),
     lidoApmEnsName: params.lidoApm.ensName,
     lidoApmEnsRegDurationSec: params.lidoApm.ensRegDurationSec,
     daoAragonId: params.dao.aragonId,

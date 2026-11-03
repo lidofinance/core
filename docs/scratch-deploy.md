@@ -76,6 +76,9 @@ A detailed overview of the deployment script's process:
   (via `LidoTemplate`)
 - Initialize non-Aragon Lido contracts
 - Set parameters of `OracleDaemonConfig`
+- (optional) Deploy Dual Governance from the external `dual-governance` repo
+  - Only with a `[dualGovernance]` section in the scratch deploy params, see
+    [Deployment With Dual Governance](#deployment-with-dual-governance)
 - Setup non-Aragon permissions
 - (optional) Deploy CSM and CMv2 from the external `community-staking-module` repo
   - Skipped on the in-memory Hardhat network and with `SKIP_STAKING_MODULES=true`, see
@@ -88,6 +91,9 @@ A detailed overview of the deployment script's process:
   - OssifiableProxy admin roles: `LidoLocator`, `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`,
     `WithdrawalQueueERC721`
   - `DepositSecurityModule` owner
+- (optional) Launch Dual Governance: the Agent's `RUN_SCRIPT_ROLE` and `EXECUTE_ROLE` move from `Voting` to the Dual
+  Governance admin executor, and the `ResealManager` may pause and resume `WithdrawalQueueERC721` and
+  `ValidatorsExitBusOracle`
 
 ## Deployment Environments
 
@@ -176,6 +182,27 @@ deployment flow.
 > separately, keep the order NodeOperatorsRegistry, SimpleDVT, CSM, CMv2, or set
 > `CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID` and `CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID` before the deployment.
 > Without step 0135 nothing checks the actual CMv2 id.
+
+### Deployment With Dual Governance
+
+Scratch deploys [Dual Governance](https://github.com/lidofinance/dual-governance) when its deploy params have a
+`[dualGovernance]` section. Step `0125-deploy-dual-governance` deploys it from a pinned commit. `Voting` is the admin
+proposer, the proposals canceller and the emergency governance proposer, as on mainnet. The deployer holds the
+committee roles. Step `0160-launch-dual-governance` then puts the `Agent` under Dual Governance, as the mainnet launch
+vote did. After it, every action of the `Agent` needs a Dual Governance proposal. Without the section both steps do
+nothing and the `Agent` stays under `Voting`.
+
+`scripts/scratch/deploy-params-dual-governance.toml` holds such a section with short delays for test networks. Append
+it to a deploy params file:
+
+```shell
+cat scripts/scratch/deploy-params-testnet.toml scripts/scratch/deploy-params-dual-governance.toml > .local/deploy-params-dual-governance.toml
+SCRATCH_DEPLOY_CONFIG=.local/deploy-params-dual-governance.toml
+```
+
+`yarn test:integration:scratch:dual-governance` deploys scratch this way and runs
+`test/integration/dual-governance/dual-governance.integration.ts`. The same test also runs on mainnet and Hoodi forks,
+where Dual Governance is live, and skips on a scratch deployment without it.
 
 ## Post-Deployment Tasks
 
