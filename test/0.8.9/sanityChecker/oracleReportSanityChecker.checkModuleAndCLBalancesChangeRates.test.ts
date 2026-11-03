@@ -25,6 +25,7 @@ const limits = {
   requestTimestampMargin: 128n,
   annualCLRebaseIncreaseHardBPLimit: 3_000n,
   clRebaseDecreaseSoftBPLimit: 100n,
+  dailyCLRebaseDecreaseHardBPLimit: 500n,
   clRebaseDecreaseHardBPLimit: 500n,
   consolidationEthAmountPerDayLimit: 10n,
   exitedValidatorEthAmountLimit: 32n,

@@ -80,6 +80,7 @@ describe("Integration: Negative rebase", () => {
     await setWithdrawalVaultBalance(ctx, 0n);
     await updateOracleReportLimits(ctx, {
       clRebaseDecreaseSoftBPLimit: 100n,
+      dailyCLRebaseDecreaseHardBPLimit: 500n,
       clRebaseDecreaseHardBPLimit: 500n,
     });
 
@@ -98,6 +99,7 @@ describe("Integration: Negative rebase", () => {
     await setWithdrawalVaultBalance(ctx, 0n);
     await updateOracleReportLimits(ctx, {
       clRebaseDecreaseSoftBPLimit: 100n,
+      dailyCLRebaseDecreaseHardBPLimit: 500n,
       clRebaseDecreaseHardBPLimit: 500n,
     });
 
@@ -127,6 +129,7 @@ describe("Integration: Negative rebase", () => {
     await setWithdrawalVaultBalance(ctx, 0n);
     await updateOracleReportLimits(ctx, {
       clRebaseDecreaseSoftBPLimit: 100n,
+      dailyCLRebaseDecreaseHardBPLimit: 500n,
       clRebaseDecreaseHardBPLimit: 500n,
     });
 

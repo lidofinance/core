@@ -24,6 +24,7 @@ const limits = {
   requestTimestampMargin: 128n,
   annualCLRebaseIncreaseHardBPLimit: 1_750n,
   clRebaseDecreaseSoftBPLimit: 100n,
+  dailyCLRebaseDecreaseHardBPLimit: 500n,
   clRebaseDecreaseHardBPLimit: 500n,
   consolidationEthAmountPerDayLimit: 10n,
   exitedValidatorEthAmountLimit: 32n,
@@ -482,30 +483,42 @@ describe("OracleReportSanityChecker", () => {
       expect(await checker.secondOpinionOracle()).to.equal(ZeroAddress);
     });
 
-    it("updates the CL decrease soft/hard pair atomically", async () => {
+    it("updates the CL decrease soft, daily hard, and hard limits atomically", async () => {
       const { admin, manager, stranger, checker } = await loadFixture(deployFixture);
       const role = await checker.CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE();
       await checker.connect(admin).grantRole(role, manager.address);
 
       await expect(
-        checker.connect(stranger).setCLRebaseDecreaseBPLimits(50n, 300n),
+        checker.connect(stranger).setCLRebaseDecreaseBPLimits(50n, 100n, 300n),
       ).to.be.revertedWithOZAccessControlError(stranger.address, role);
-      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(0n, TOTAL_BASIS_POINTS + 1n))
+      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(0n, 0n, TOTAL_BASIS_POINTS + 1n))
         .to.be.revertedWithCustomError(checker, "IncorrectLimitValue")
         .withArgs(TOTAL_BASIS_POINTS + 1n, 0n, TOTAL_BASIS_POINTS);
-      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(301n, 300n))
+      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(0n, 301n, 300n))
         .to.be.revertedWithCustomError(checker, "IncorrectLimitValue")
         .withArgs(301n, 0n, 300n);
-      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(0n, 0n))
+      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(101n, 100n, 300n))
+        .to.be.revertedWithCustomError(checker, "IncorrectLimitValue")
+        .withArgs(101n, 0n, 100n);
+      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(0n, 0n, 0n))
         .to.emit(checker, "CLRebaseDecreaseBPLimitsSet")
-        .withArgs(0n, 0n);
-      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(TOTAL_BASIS_POINTS, TOTAL_BASIS_POINTS))
+        .withArgs(0n, 0n, 0n);
+      await expect(checker.connect(manager).setCLRebaseDecreaseBPLimits(50n, 100n, 300n))
         .to.emit(checker, "CLRebaseDecreaseBPLimitsSet")
-        .withArgs(TOTAL_BASIS_POINTS, TOTAL_BASIS_POINTS);
+        .withArgs(50n, 100n, 300n);
 
       const updated = await checker.getOracleReportLimits();
-      expect(updated.clRebaseDecreaseSoftBPLimit).to.equal(TOTAL_BASIS_POINTS);
-      expect(updated.clRebaseDecreaseHardBPLimit).to.equal(TOTAL_BASIS_POINTS);
+      expect(updated.clRebaseDecreaseSoftBPLimit).to.equal(50n);
+      expect(updated.dailyCLRebaseDecreaseHardBPLimit).to.equal(100n);
+      expect(updated.clRebaseDecreaseHardBPLimit).to.equal(300n);
+
+      await expect(
+        checker
+          .connect(manager)
+          .setCLRebaseDecreaseBPLimits(TOTAL_BASIS_POINTS, TOTAL_BASIS_POINTS, TOTAL_BASIS_POINTS),
+      )
+        .to.emit(checker, "CLRebaseDecreaseBPLimitsSet")
+        .withArgs(TOTAL_BASIS_POINTS, TOTAL_BASIS_POINTS, TOTAL_BASIS_POINTS);
     });
 
     it("updates all limits and the second-opinion provider through the bulk setter", async () => {
@@ -524,6 +537,7 @@ describe("OracleReportSanityChecker", () => {
         requestTimestampMargin: 129n,
         annualCLRebaseIncreaseHardBPLimit: 1_200n,
         clRebaseDecreaseSoftBPLimit: 50n,
+        dailyCLRebaseDecreaseHardBPLimit: 200n,
         clRebaseDecreaseHardBPLimit: 300n,
         consolidationEthAmountPerDayLimit: 11n,
         exitedValidatorEthAmountLimit: 33n,
@@ -545,7 +559,14 @@ describe("OracleReportSanityChecker", () => {
       await expect(
         checker
           .connect(manager)
-          .setOracleReportLimits({ ...updatedLimits, clRebaseDecreaseSoftBPLimit: 301n }, manager.address),
+          .setOracleReportLimits({ ...updatedLimits, clRebaseDecreaseSoftBPLimit: 201n }, manager.address),
+      )
+        .to.be.revertedWithCustomError(checker, "IncorrectLimitValue")
+        .withArgs(201n, 0n, 200n);
+      await expect(
+        checker
+          .connect(manager)
+          .setOracleReportLimits({ ...updatedLimits, dailyCLRebaseDecreaseHardBPLimit: 301n }, manager.address),
       )
         .to.be.revertedWithCustomError(checker, "IncorrectLimitValue")
         .withArgs(301n, 0n, 300n);
@@ -555,7 +576,7 @@ describe("OracleReportSanityChecker", () => {
       await expect(updateTx).to.emit(checker, "SecondOpinionOracleChanged").withArgs(manager.address);
       await expect(updateTx).to.emit(checker, "ExitedEthAmountPerDayLimitSet").withArgs(56n);
       await expect(updateTx).to.emit(checker, "AnnualCLRebaseIncreaseBPLimitsSet").withArgs(500n, 1_200n);
-      await expect(updateTx).to.emit(checker, "CLRebaseDecreaseBPLimitsSet").withArgs(50n, 300n);
+      await expect(updateTx).to.emit(checker, "CLRebaseDecreaseBPLimitsSet").withArgs(50n, 200n, 300n);
       expectLimits(await checker.getOracleReportLimits(), updatedLimits);
       expect(await checker.secondOpinionOracle()).to.equal(manager.address);
 
@@ -664,7 +685,11 @@ describe("OracleReportSanityChecker", () => {
       await expect(
         checker
           .connect(manager)
-          .setCLRebaseDecreaseBPLimits(limits.clRebaseDecreaseSoftBPLimit, limits.clRebaseDecreaseHardBPLimit),
+          .setCLRebaseDecreaseBPLimits(
+            limits.clRebaseDecreaseSoftBPLimit,
+            limits.dailyCLRebaseDecreaseHardBPLimit,
+            limits.clRebaseDecreaseHardBPLimit,
+          ),
       ).to.not.emit(checker, "CLRebaseDecreaseBPLimitsSet");
 
       expectLimits(await checker.getOracleReportLimits(), limits);
@@ -707,6 +732,7 @@ describe("OracleReportSanityChecker", () => {
         requestTimestampMargin: OVER_UINT32 - 1n,
         annualCLRebaseIncreaseHardBPLimit: TOTAL_BASIS_POINTS,
         clRebaseDecreaseSoftBPLimit: TOTAL_BASIS_POINTS,
+        dailyCLRebaseDecreaseHardBPLimit: TOTAL_BASIS_POINTS,
         clRebaseDecreaseHardBPLimit: TOTAL_BASIS_POINTS,
         consolidationEthAmountPerDayLimit: OVER_UINT32 - 1n,
         exitedValidatorEthAmountLimit: OVER_UINT16 - 1n,
@@ -721,6 +747,7 @@ describe("OracleReportSanityChecker", () => {
       expect(accountingPacked.annualCLRebaseIncreaseHardBPLimit).to.equal(limits.annualCLRebaseIncreaseHardBPLimit);
       expect(accountingPacked.clRebaseDecreaseSoftBPLimit).to.equal(limits.clRebaseDecreaseSoftBPLimit);
       expect(accountingPacked.clRebaseDecreaseHardBPLimit).to.equal(limits.clRebaseDecreaseHardBPLimit);
+      expect(accountingPacked.dailyCLRebaseDecreaseHardBPLimit).to.equal(limits.dailyCLRebaseDecreaseHardBPLimit);
       expect(accountingPacked.externalPendingBalanceCapEth).to.equal(limits.externalPendingBalanceCapEth);
 
       const operationalPacked = await checker.exposeOperationalPackedLimits();

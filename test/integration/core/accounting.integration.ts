@@ -492,6 +492,7 @@ describe("Integration: Accounting", () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
     await updateOracleReportLimits(ctx, {
       clRebaseDecreaseSoftBPLimit: 100n,
+      dailyCLRebaseDecreaseHardBPLimit: 500n,
       clRebaseDecreaseHardBPLimit: 500n,
     });
     const { clRebaseDecreaseSoftBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();

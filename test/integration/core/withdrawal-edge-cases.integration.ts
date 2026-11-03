@@ -114,6 +114,7 @@ describe("Integration: Withdrawal edge cases", () => {
     // the exceptional-report path, which has dedicated second-opinion tests.
     const { clRebaseDecreaseHardBPLimit } = await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits();
     await updateOracleReportLimits(ctx, {
+      dailyCLRebaseDecreaseHardBPLimit: clRebaseDecreaseHardBPLimit,
       clRebaseDecreaseSoftBPLimit: clRebaseDecreaseHardBPLimit,
     });
 

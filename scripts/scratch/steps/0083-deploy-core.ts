@@ -564,6 +564,7 @@ export async function main() {
     requestTimestampMargin: sanityCheckerParams.requestTimestampMargin,
     annualCLRebaseIncreaseHardBPLimit: sanityCheckerParams.annualCLRebaseIncreaseHardBPLimit,
     clRebaseDecreaseSoftBPLimit: sanityCheckerParams.clRebaseDecreaseSoftBPLimit,
+    dailyCLRebaseDecreaseHardBPLimit: sanityCheckerParams.dailyCLRebaseDecreaseHardBPLimit,
     clRebaseDecreaseHardBPLimit: sanityCheckerParams.clRebaseDecreaseHardBPLimit,
     consolidationEthAmountPerDayLimit: sanityCheckerParams.consolidationEthAmountPerDayLimit,
     exitedValidatorEthAmountLimit: sanityCheckerParams.exitedValidatorEthAmountLimit,

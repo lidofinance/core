@@ -98,7 +98,7 @@ struct LimitsList {
     /// @notice The soft per-report limit for a negative CL accounting rebase.
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 clRebaseDecreaseSoftBPLimit;
-    /// @notice The hard per-report limit for a negative CL accounting rebase.
+    /// @notice The absolute per-report ceiling of the hard limit for a negative CL accounting rebase.
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 clRebaseDecreaseHardBPLimit;
     /// @notice The max possible consolidation ETH amount that might be reported
@@ -113,6 +113,10 @@ struct LimitsList {
     ///     or same-validator top-ups that were not funded by Lido.
     /// @dev Stored in whole ETH units. Must fit into uint16.
     uint256 externalPendingBalanceCapEth;
+    /// @notice The hard limit for a negative CL accounting rebase per day of time elapsed since the previous report.
+    /// @dev Represented in the Basis Points (100% == 10_000). The elapsed time counts as at least one day,
+    ///     and the result is capped by `clRebaseDecreaseHardBPLimit`.
+    uint256 dailyCLRebaseDecreaseHardBPLimit;
 }
 
 /// @dev The packed accounting/rebase limits persisted in a single storage slot
@@ -127,6 +131,7 @@ struct AccountingCoreLimitsPacked {
     uint16 clRebaseDecreaseHardBPLimit;
     uint16 exitedValidatorEthAmountLimit;
     uint16 externalPendingBalanceCapEth;
+    uint16 dailyCLRebaseDecreaseHardBPLimit;
 }
 
 /// @dev The packed operational limits persisted in a single storage slot
@@ -419,15 +424,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Sets the soft and hard per-report limits for a negative CL accounting rebase.
+    /// @notice Sets the limits for a negative CL accounting rebase: the soft per-report limit,
+    ///     the hard limit per day of elapsed time, and the absolute per-report ceiling of the hard limit.
     function setCLRebaseDecreaseBPLimits(
         uint256 _softLimitBP,
+        uint256 _dailyHardLimitBP,
         uint256 _hardLimitBP
     ) external onlyRole(CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE) {
         _checkLimitValue(_hardLimitBP, 0, MAX_BASIS_POINTS);
-        _checkLimitValue(_softLimitBP, 0, _hardLimitBP);
+        _checkLimitValue(_dailyHardLimitBP, 0, _hardLimitBP);
+        _checkLimitValue(_softLimitBP, 0, _dailyHardLimitBP);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.clRebaseDecreaseSoftBPLimit = LimitsListPacker.toBasisPoints(_softLimitBP);
+        limits.dailyCLRebaseDecreaseHardBPLimit = LimitsListPacker.toBasisPoints(_dailyHardLimitBP);
         limits.clRebaseDecreaseHardBPLimit = LimitsListPacker.toBasisPoints(_hardLimitBP);
         _updateAccountingCoreLimits(limits);
     }
@@ -491,7 +500,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             requiresSecondOpinion = _classifyCLRebaseDecrease(
                 limitsList,
                 preCLBalance - postCLAccountingBalance,
-                preCLBalance
+                preCLBalance,
+                _checkParams.timeElapsed
             );
         } else {
             requiresSecondOpinion = _classifyAnnualCLRebaseIncrease(
@@ -838,10 +848,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function _classifyCLRebaseDecrease(
         AccountingCoreLimitsPacked memory _limitsList,
         uint256 _clRebaseDecrease,
-        uint256 _preCLBalance
+        uint256 _preCLBalance,
+        uint256 _timeElapsed
     ) internal pure returns (bool requiresSecondOpinion) {
-        uint256 hardLimit =
-            _preCLBalance * uint256(_limitsList.clRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
+        uint256 hardLimit = _calculateCLRebaseDecreaseHardLimit(_limitsList, _preCLBalance, _timeElapsed);
         if (_clRebaseDecrease > hardLimit) {
             revert CLRebaseDecreaseAboveHardLimit(_clRebaseDecrease, hardLimit);
         }
@@ -849,6 +859,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 softLimit =
             _preCLBalance * uint256(_limitsList.clRebaseDecreaseSoftBPLimit) / MAX_BASIS_POINTS;
         return _clRebaseDecrease > softLimit;
+    }
+
+    /// @dev The hard limit grows with the time elapsed since the previous report, counted as at least one day,
+    ///      so a missed report does not turn a correct decrease into a revert. The per-report ceiling bounds it.
+    function _calculateCLRebaseDecreaseHardLimit(
+        AccountingCoreLimitsPacked memory _limitsList,
+        uint256 _preCLBalance,
+        uint256 _timeElapsed
+    ) internal pure returns (uint256) {
+        uint256 limitForElapsedTime = (_preCLBalance *
+            uint256(_limitsList.dailyCLRebaseDecreaseHardBPLimit) *
+            Math256.max(_timeElapsed, SECONDS_PER_DAY)) / (MAX_BASIS_POINTS * SECONDS_PER_DAY);
+        uint256 limitPerReport = (_preCLBalance * uint256(_limitsList.clRebaseDecreaseHardBPLimit)) / MAX_BASIS_POINTS;
+        return Math256.min(limitForElapsedTime, limitPerReport);
     }
 
     function _classifyAnnualCLRebaseIncrease(
@@ -979,9 +1003,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkLimitValue(_limitsList.requestTimestampMargin, 0, type(uint32).max);
         _checkLimitValue(_limitsList.clRebaseDecreaseHardBPLimit, 0, MAX_BASIS_POINTS);
         _checkLimitValue(
-            _limitsList.clRebaseDecreaseSoftBPLimit,
+            _limitsList.dailyCLRebaseDecreaseHardBPLimit,
             0,
             _limitsList.clRebaseDecreaseHardBPLimit
+        );
+        _checkLimitValue(
+            _limitsList.clRebaseDecreaseSoftBPLimit,
+            0,
+            _limitsList.dailyCLRebaseDecreaseHardBPLimit
         );
     }
 
@@ -1017,10 +1046,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
         if (
             _oldLimits.clRebaseDecreaseSoftBPLimit != _newLimits.clRebaseDecreaseSoftBPLimit ||
+            _oldLimits.dailyCLRebaseDecreaseHardBPLimit != _newLimits.dailyCLRebaseDecreaseHardBPLimit ||
             _oldLimits.clRebaseDecreaseHardBPLimit != _newLimits.clRebaseDecreaseHardBPLimit
         ) {
             emit CLRebaseDecreaseBPLimitsSet(
                 _newLimits.clRebaseDecreaseSoftBPLimit,
+                _newLimits.dailyCLRebaseDecreaseHardBPLimit,
                 _newLimits.clRebaseDecreaseHardBPLimit
             );
         }
@@ -1067,7 +1098,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
-    event CLRebaseDecreaseBPLimitsSet(uint256 softLimitBP, uint256 hardLimitBP);
+    event CLRebaseDecreaseBPLimitsSet(uint256 softLimitBP, uint256 dailyHardLimitBP, uint256 hardLimitBP);
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
@@ -1110,6 +1141,7 @@ library LimitsListPacker {
         res.clRebaseDecreaseHardBPLimit = toBasisPoints(_limitsList.clRebaseDecreaseHardBPLimit);
         res.exitedValidatorEthAmountLimit = SafeCast.toUint16(_limitsList.exitedValidatorEthAmountLimit);
         res.externalPendingBalanceCapEth = SafeCast.toUint16(_limitsList.externalPendingBalanceCapEth);
+        res.dailyCLRebaseDecreaseHardBPLimit = toBasisPoints(_limitsList.dailyCLRebaseDecreaseHardBPLimit);
     }
 
     function packOperational(
@@ -1152,5 +1184,6 @@ library LimitsListUnpacker {
         res.consolidationEthAmountPerDayLimit = _accountingLimits.consolidationEthAmountPerDayLimit;
         res.exitedValidatorEthAmountLimit = _accountingLimits.exitedValidatorEthAmountLimit;
         res.externalPendingBalanceCapEth = _accountingLimits.externalPendingBalanceCapEth;
+        res.dailyCLRebaseDecreaseHardBPLimit = _accountingLimits.dailyCLRebaseDecreaseHardBPLimit;
     }
 }

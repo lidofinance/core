@@ -32,6 +32,8 @@ export const updateOracleReportLimits = async (
     annualCLRebaseIncreaseHardBPLimit:
       patch.annualCLRebaseIncreaseHardBPLimit ?? currentLimits.annualCLRebaseIncreaseHardBPLimit,
     clRebaseDecreaseSoftBPLimit: patch.clRebaseDecreaseSoftBPLimit ?? currentLimits.clRebaseDecreaseSoftBPLimit,
+    dailyCLRebaseDecreaseHardBPLimit:
+      patch.dailyCLRebaseDecreaseHardBPLimit ?? currentLimits.dailyCLRebaseDecreaseHardBPLimit,
     clRebaseDecreaseHardBPLimit: patch.clRebaseDecreaseHardBPLimit ?? currentLimits.clRebaseDecreaseHardBPLimit,
     consolidationEthAmountPerDayLimit:
       patch.consolidationEthAmountPerDayLimit ?? currentLimits.consolidationEthAmountPerDayLimit,

@@ -19,6 +19,7 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
     requestTimestampMargin: 128n,
     annualCLRebaseIncreaseHardBPLimit: 2_000n,
     clRebaseDecreaseSoftBPLimit: 100n,
+    dailyCLRebaseDecreaseHardBPLimit: 500n,
     clRebaseDecreaseHardBPLimit: 500n,
     consolidationEthAmountPerDayLimit: 10n,
     exitedValidatorEthAmountLimit: 32n,

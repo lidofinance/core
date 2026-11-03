@@ -21,6 +21,7 @@ export type OracleReportLimits = {
   requestTimestampMargin: bigint;
   annualCLRebaseIncreaseHardBPLimit: bigint;
   clRebaseDecreaseSoftBPLimit: bigint;
+  dailyCLRebaseDecreaseHardBPLimit: bigint;
   clRebaseDecreaseHardBPLimit: bigint;
   consolidationEthAmountPerDayLimit: bigint;
   exitedValidatorEthAmountLimit: bigint;

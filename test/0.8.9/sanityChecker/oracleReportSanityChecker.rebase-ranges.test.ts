@@ -28,6 +28,7 @@ const limits = {
   requestTimestampMargin: 128n,
   annualCLRebaseIncreaseHardBPLimit: 1_750n,
   clRebaseDecreaseSoftBPLimit: 0n,
+  dailyCLRebaseDecreaseHardBPLimit: 25n,
   clRebaseDecreaseHardBPLimit: 500n,
   consolidationEthAmountPerDayLimit: 0n,
   exitedValidatorEthAmountLimit: 32n,
@@ -264,7 +265,7 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
     const hardDecrease = ether("50");
     const decreaseLimitsRole = await fixture.checker.CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE();
     await fixture.checker.connect(fixture.admin).grantRole(decreaseLimitsRole, fixture.admin.address);
-    await fixture.checker.connect(fixture.admin).setCLRebaseDecreaseBPLimits(100n, 500n);
+    await fixture.checker.connect(fixture.admin).setCLRebaseDecreaseBPLimits(100n, 500n, 500n);
     await fixture.setConsensusReport();
 
     await expect(checkAggregate(fixture, preCLBalance, preCLBalance - softDecrease)).not.to.be.reverted;
@@ -280,6 +281,59 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
       .withArgs(hardDecrease + 1n, hardDecrease);
   });
 
+  it("grows the hard decrease limit with elapsed time up to the per-report ceiling", async () => {
+    const fixture = await deployFixture();
+    const preCLBalance = ether("1000");
+    const dailyHardDecrease = (preCLBalance * limits.dailyCLRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
+    const hardDecreaseCeiling = (preCLBalance * limits.clRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
+    await fixture.setConsensusReport();
+    await fixture.enableSecondOpinion();
+
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - dailyHardDecrease)).not.to.be.reverted;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - dailyHardDecrease - 1n))
+      .to.be.revertedWithCustomError(fixture.checker, "CLRebaseDecreaseAboveHardLimit")
+      .withArgs(dailyHardDecrease + 1n, dailyHardDecrease);
+
+    const threeDays = 3n * ONE_DAY;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - 3n * dailyHardDecrease, 0n, 0n, threeDays)).not.to
+      .be.reverted;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - 3n * dailyHardDecrease - 1n, 0n, 0n, threeDays))
+      .to.be.revertedWithCustomError(fixture.checker, "CLRebaseDecreaseAboveHardLimit")
+      .withArgs(3n * dailyHardDecrease + 1n, 3n * dailyHardDecrease);
+
+    const halfDayOverThreeDays = threeDays + ONE_DAY / 2n;
+    const prorated =
+      (preCLBalance * limits.dailyCLRebaseDecreaseHardBPLimit * halfDayOverThreeDays) / (MAX_BASIS_POINTS * ONE_DAY);
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - prorated, 0n, 0n, halfDayOverThreeDays)).not.to.be
+      .reverted;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - prorated - 1n, 0n, 0n, halfDayOverThreeDays))
+      .to.be.revertedWithCustomError(fixture.checker, "CLRebaseDecreaseAboveHardLimit")
+      .withArgs(prorated + 1n, prorated);
+
+    const longGap = 30n * ONE_DAY;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - hardDecreaseCeiling, 0n, 0n, longGap)).not.to.be
+      .reverted;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - hardDecreaseCeiling - 1n, 0n, 0n, longGap))
+      .to.be.revertedWithCustomError(fixture.checker, "CLRebaseDecreaseAboveHardLimit")
+      .withArgs(hardDecreaseCeiling + 1n, hardDecreaseCeiling);
+  });
+
+  it("counts less than one day of elapsed time as one day for the hard decrease limit", async () => {
+    const fixture = await deployFixture();
+    const preCLBalance = ether("1000");
+    const dailyHardDecrease = (preCLBalance * limits.dailyCLRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
+    await fixture.setConsensusReport();
+    await fixture.enableSecondOpinion();
+
+    for (const timeElapsed of [0n, ONE_HOUR, ONE_DAY - 1n]) {
+      await expect(checkAggregate(fixture, preCLBalance, preCLBalance - dailyHardDecrease, 0n, 0n, timeElapsed)).not.to
+        .be.reverted;
+      await expect(checkAggregate(fixture, preCLBalance, preCLBalance - dailyHardDecrease - 1n, 0n, 0n, timeElapsed))
+        .to.be.revertedWithCustomError(fixture.checker, "CLRebaseDecreaseAboveHardLimit")
+        .withArgs(dailyHardDecrease + 1n, dailyHardDecrease);
+    }
+  });
+
   it("uses deposits in the principal and denominator of a decrease boundary", async () => {
     const fixture = await deployFixture();
     const preCLBalance = ether("500");
@@ -288,7 +342,7 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
     const softDecrease = ether("10");
     const decreaseLimitsRole = await fixture.checker.CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE();
     await fixture.checker.connect(fixture.admin).grantRole(decreaseLimitsRole, fixture.admin.address);
-    await fixture.checker.connect(fixture.admin).setCLRebaseDecreaseBPLimits(100n, 500n);
+    await fixture.checker.connect(fixture.admin).setCLRebaseDecreaseBPLimits(100n, 500n, 500n);
     await fixture.setConsensusReport();
 
     await expect(checkAggregate(fixture, preCLBalance, principalCLBalance - softDecrease, 0n, deposits)).not.to.be
@@ -324,7 +378,7 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
     const increaseLimitsRole = await fixture.checker.ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE();
     await fixture.checker.connect(fixture.admin).grantRole(decreaseLimitsRole, fixture.admin.address);
     await fixture.checker.connect(fixture.admin).grantRole(increaseLimitsRole, fixture.admin.address);
-    await fixture.checker.connect(fixture.admin).setCLRebaseDecreaseBPLimits(0n, 0n);
+    await fixture.checker.connect(fixture.admin).setCLRebaseDecreaseBPLimits(0n, 0n, 0n);
     await fixture.checker.connect(fixture.admin).setAnnualCLRebaseIncreaseBPLimits(0n, 0n);
 
     await expect(checkAggregate(fixture, preCLBalance, preCLBalance)).not.to.be.reverted;
@@ -343,7 +397,9 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
     const increaseLimitsRole = await fixture.checker.ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE();
     await fixture.checker.connect(fixture.admin).grantRole(decreaseLimitsRole, fixture.admin.address);
     await fixture.checker.connect(fixture.admin).grantRole(increaseLimitsRole, fixture.admin.address);
-    await fixture.checker.connect(fixture.admin).setCLRebaseDecreaseBPLimits(MAX_BASIS_POINTS, MAX_BASIS_POINTS);
+    await fixture.checker
+      .connect(fixture.admin)
+      .setCLRebaseDecreaseBPLimits(MAX_BASIS_POINTS, MAX_BASIS_POINTS, MAX_BASIS_POINTS);
     await fixture.checker.connect(fixture.admin).setAnnualCLRebaseIncreaseBPLimits(MAX_BASIS_POINTS, MAX_BASIS_POINTS);
 
     const oneDayIncreaseLimit = preCLBalance / DAYS_PER_YEAR;
@@ -382,7 +438,7 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
   it("handles protocol-scale balances at both hard boundaries", async () => {
     const fixture = await deployFixture();
     const preCLBalance = ether("36000000");
-    const hardDecrease = (preCLBalance * limits.clRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
+    const hardDecrease = (preCLBalance * limits.dailyCLRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
     const hardIncrease =
       (preCLBalance * limits.annualCLRebaseIncreaseHardBPLimit * ONE_YEAR) / (MAX_BASIS_POINTS * ONE_YEAR);
     await fixture.setConsensusReport();

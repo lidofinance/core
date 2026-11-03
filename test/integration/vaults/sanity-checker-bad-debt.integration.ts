@@ -146,6 +146,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
     const { lido } = ctx.contracts;
     await updateOracleReportLimits(ctx, {
       clRebaseDecreaseSoftBPLimit: 500n,
+      dailyCLRebaseDecreaseHardBPLimit: 500n,
       clRebaseDecreaseHardBPLimit: 500n,
     });
 

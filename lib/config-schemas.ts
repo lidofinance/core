@@ -314,6 +314,7 @@ export const OracleReportSanityCheckerUpgradeScheme = z.object({
   annualCLRebaseIncreaseSoftBPLimit: BasisPointsSchema,
   annualCLRebaseIncreaseHardBPLimit: BasisPointsSchema,
   clRebaseDecreaseSoftBPLimit: BasisPointsSchema,
+  dailyCLRebaseDecreaseHardBPLimit: BasisPointsSchema,
   clRebaseDecreaseHardBPLimit: BasisPointsSchema,
 });
 
