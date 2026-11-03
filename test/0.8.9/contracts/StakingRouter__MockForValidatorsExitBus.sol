@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingRouter} from "contracts/0.8.9/oracle/ValidatorsExitBus.sol";
+import {IStakingRouter} from "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol";
 
 contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     error StakingModuleUnregistered();

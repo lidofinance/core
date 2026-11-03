@@ -65,7 +65,7 @@ const PAIRS_TO_SKIP: {
   },
   {
     interfaceFqn: "contracts/upgrade/gloas/legacy/ValidatorExitDelayVerifier.sol:IValidatorsExitBus",
-    contractFqn: "contracts/0.8.9/oracle/ValidatorsExitBus.sol:ValidatorsExitBus",
+    contractFqn: "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol:ValidatorsExitBusOracle",
     reason: "LIP-38: frozen pre-LIP-38 verifier for the Gloas upgrade, remove together with contracts/upgrade/gloas",
   },
 ];
