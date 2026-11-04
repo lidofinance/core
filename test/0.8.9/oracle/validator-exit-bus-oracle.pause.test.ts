@@ -1,58 +1,17 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { de0x, numberToHex } from "lib";
+import { advanceChainTime, getCurrentBlockTimestamp, VEBO_CONSENSUS_VERSION } from "lib";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
-
-// -----------------------------------------------------------------------------
-// Constants & helpers
-// -----------------------------------------------------------------------------
+import { calcVEBOReportDataHash, deployVEBO, encodeWithdrawalRequests, initVEBO, VEBOReportFields } from "test/deploy";
 
 const LAST_PROCESSING_REF_SLOT = 1;
 
-const EXIT = [
-  {
-    moduleId: 1,
-    nodeOpId: 0,
-    valIndex: 0,
-    valPubkey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  },
-];
-
-// -----------------------------------------------------------------------------
-// Encoding
-// -----------------------------------------------------------------------------
-interface ExitRequest {
-  moduleId: number;
-  nodeOpId: number;
-  valIndex: number;
-  valPubkey: string;
-}
-
-const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
-  const pubkeyHex = de0x(valPubkey);
-  expect(pubkeyHex.length).to.equal(48 * 2);
-  return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
-};
-
-const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
-  return "0x" + requests.map(encodeExitRequestHex).join("");
-};
-
-const hashExitRequest = (request: { dataFormat: number; data: string }) => {
-  return ethers.keccak256(
-    ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [request.data, request.dataFormat]),
-  );
-};
-
-const EXIT_DATA = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataList(EXIT) };
-const EXIT_DATA_HASH = hashExitRequest(EXIT_DATA);
+const REQUESTS = [{ moduleId: 1, nodeOpId: 0, keyIndex: 0, amount: 0n }];
 
 describe("ValidatorsExitBus: pause checks", () => {
   let oracle: ValidatorsExitBus__Harness;
@@ -61,9 +20,28 @@ describe("ValidatorsExitBus: pause checks", () => {
   let pauser: HardhatEthersSigner;
   let resumer: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let member1: HardhatEthersSigner;
+  let member2: HardhatEthersSigner;
+
+  // Builds a report and brings the committee to consensus on its hash
+  const prepareReport = async (): Promise<VEBOReportFields> => {
+    const { refSlot } = await consensus.getCurrentFrame();
+    const report = {
+      consensusVersion: VEBO_CONSENSUS_VERSION,
+      refSlot,
+      requestsCount: REQUESTS.length,
+      data: encodeWithdrawalRequests(REQUESTS),
+    };
+    const reportHash = calcVEBOReportDataHash(report);
+
+    await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member2).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+
+    return report;
+  };
 
   beforeEach(async () => {
-    [admin, pauser, resumer, stranger] = await ethers.getSigners();
+    [admin, pauser, resumer, stranger, member1, member2] = await ethers.getSigners();
 
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
@@ -77,7 +55,9 @@ describe("ValidatorsExitBus: pause checks", () => {
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
 
-    await oracle.grantRole(await oracle.SUBMIT_REPORT_HASH_ROLE(), admin);
+    await consensus.addMember(member1, 1);
+    await consensus.addMember(member2, 2);
+
     await oracle.grantRole(await oracle.PAUSE_ROLE(), pauser);
     await oracle.grantRole(await oracle.RESUME_ROLE(), resumer);
   });
@@ -101,16 +81,13 @@ describe("ValidatorsExitBus: pause checks", () => {
   });
 
   it("pauseFor blocks protected calls until resumed", async () => {
+    const report = await prepareReport();
+    const oracleVersion = await oracle.getContractVersion();
+
     // pause 1 h
     await oracle.connect(pauser).pauseFor(3600);
 
-    await expect(oracle.submitExitRequestsHash(EXIT_DATA_HASH)).to.be.revertedWithCustomError(
-      oracle,
-      "ResumedExpected",
-    );
-    await expect(oracle.submitExitRequestsData(EXIT_DATA)).to.be.revertedWithCustomError(oracle, "ResumedExpected");
-
-    await expect(oracle.triggerExits(EXIT_DATA, [0], ZeroAddress, { value: 4 })).to.be.revertedWithCustomError(
+    await expect(oracle.connect(member1).submitReportData(report, oracleVersion)).to.be.revertedWithCustomError(
       oracle,
       "ResumedExpected",
     );
@@ -125,9 +102,7 @@ describe("ValidatorsExitBus: pause checks", () => {
     await oracle.connect(resumer).resume();
 
     // calls work again
-    await oracle.submitExitRequestsHash(EXIT_DATA_HASH);
-    await oracle.submitExitRequestsData(EXIT_DATA);
-    await oracle.triggerExits(EXIT_DATA, [0], ZeroAddress, { value: 4 });
+    await expect(oracle.connect(member1).submitReportData(report, oracleVersion)).to.emit(oracle, "ProcessingStarted");
   });
 
   it("second pause while already paused → ResumedExpected", async () => {
@@ -140,19 +115,21 @@ describe("ValidatorsExitBus: pause checks", () => {
   });
 
   it("pauseUntil blocks only until the timestamp", async () => {
-    const until = 5692495050;
+    const report = await prepareReport();
+    const oracleVersion = await oracle.getContractVersion();
 
+    const until = (await getCurrentBlockTimestamp()) + 3600n;
     await oracle.connect(pauser).pauseUntil(until);
 
-    await expect(oracle.submitExitRequestsHash(EXIT_DATA_HASH)).to.be.revertedWithCustomError(
+    await expect(oracle.connect(member1).submitReportData(report, oracleVersion)).to.be.revertedWithCustomError(
       oracle,
       "ResumedExpected",
     );
-    await expect(oracle.submitExitRequestsData(EXIT_DATA)).to.be.revertedWithCustomError(oracle, "ResumedExpected");
 
-    await expect(oracle.triggerExits(EXIT_DATA, [0], ZeroAddress, { value: 4 })).to.be.revertedWithCustomError(
-      oracle,
-      "ResumedExpected",
-    );
+    // move the chain past the inclusive pause end: the pause lifts without resume()
+    await advanceChainTime(until - (await getCurrentBlockTimestamp()) + 1n);
+    expect(await oracle.isPaused()).to.equal(false);
+
+    await expect(oracle.connect(member1).submitReportData(report, oracleVersion)).to.emit(oracle, "ProcessingStarted");
   });
 });
