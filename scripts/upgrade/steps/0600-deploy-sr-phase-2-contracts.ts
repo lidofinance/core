@@ -7,6 +7,8 @@ import {
   TriggerableWithdrawalsBus,
   TriggerableWithdrawalsBus__factory,
   TriggerableWithdrawalsGateway__factory,
+  ValidatorsExitBusOracle,
+  ValidatorsExitBusOracle__factory,
   WithdrawalVault__factory,
 } from "typechain-types";
 
@@ -34,7 +36,7 @@ import { encodeFunctionCall, InitializeArgs } from "lib/contract";
  * `TriggerableWithdrawalsGateway` is not upgradeable, so it gets a fresh address, and the new
  * `TriggerableWithdrawalsBus` is deployed behind a proxy. `WithdrawalVault` holds the gateway in an
  * immutable and `LidoLocator` lists it, so both get a new implementation; `StakingRouter` gets one
- * without the exit hooks.
+ * without the exit hooks, and `ValidatorsExitBusOracle` one that publishes its reports to the bus.
  *
  * @dev No `skip()`: the state entries touched here are already filled by earlier releases. The outgoing
  *      addresses are read from the live locator rather than from the state file, which this step overwrites.
@@ -140,6 +142,31 @@ export async function main() {
   await deployImplementation(Sk.stakingRouter, "StakingRouter", deployer, stakingRouterConstructorArgs, {
     libraries: { BeaconChainDepositor: beaconChainDepositorAddress, SRLib: srLib.address },
   });
+
+  //
+  // ValidatorsExitBusOracle: the chain spec of the live oracle, the record cap in an immutable
+  //
+  const liveValidatorsExitBusOracle = await loadContract<ValidatorsExitBusOracle>(
+    "ValidatorsExitBusOracle",
+    await locator.validatorsExitBusOracle(),
+  );
+  const validatorsExitBusOracleConstructorArgs: ConstructorArgs<ValidatorsExitBusOracle__factory> = [
+    await liveValidatorsExitBusOracle.SECONDS_PER_SLOT(),
+    await liveValidatorsExitBusOracle.GENESIS_TIME(),
+    locatorAddress,
+    parameters.validatorsExitBusOracle.maxRequestsPerReport,
+  ];
+
+  logStartReview();
+  await logArgs("ValidatorsExitBusOracle", validatorsExitBusOracleConstructorArgs);
+  await logConfirmReview();
+
+  await deployImplementation(
+    Sk.validatorsExitBusOracle,
+    "ValidatorsExitBusOracle",
+    deployer,
+    validatorsExitBusOracleConstructorArgs,
+  );
 
   //
   // LidoLocator: the new gateway and the bus, no ValidatorExitDelayVerifier

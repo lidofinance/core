@@ -39,6 +39,10 @@ abstract contract SRPhase2UpgradeChecksBase {
     /// @dev The StakingRouter implementation is swapped without a reinitializer.
     uint256 internal constant STAKING_ROUTER_CONTRACT_VERSION = 4;
 
+    /// @dev `finalizeUpgrade_v4` moves the ValidatorsExitBusOracle from v3 to v4.
+    uint256 internal constant VEBO_PREVIOUS_CONTRACT_VERSION = 3;
+    uint256 internal constant VEBO_CONTRACT_VERSION = 4;
+
     /// @dev Addresses the vote must leave untouched; checked identically before and after.
     function _assertUnchangedLocatorMembers(SRPhase2UpgradeConfig config, ILidoLocator locator) internal view {
         _assertAddress("locator-staking-router", locator.stakingRouter(), config.STAKING_ROUTER());

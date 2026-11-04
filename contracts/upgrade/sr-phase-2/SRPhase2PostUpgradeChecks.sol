@@ -16,6 +16,7 @@ import {
     IOracleReportSanityChecker,
     IStakingRouter,
     ITriggerableWithdrawalsGateway,
+    IValidatorsExitBusOracle,
     IWithdrawalsManagerProxy,
     IWithdrawalVault
 } from "./SRPhase2UpgradeTypes.sol";
@@ -67,6 +68,17 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
             "withdrawal-vault-tw-gateway",
             IWithdrawalVault(config.WITHDRAWAL_VAULT()).TRIGGERABLE_WITHDRAWALS_GATEWAY(),
             newGateway
+        );
+        _assertAddress(
+            "vebo-implementation",
+            IOssifiableProxy(vebo).proxy__getImplementation(),
+            config.NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL()
+        );
+        _assertUint("vebo-version", IValidatorsExitBusOracle(vebo).getContractVersion(), VEBO_CONTRACT_VERSION);
+        _assertUint(
+            "vebo-consensus-version",
+            IValidatorsExitBusOracle(vebo).getConsensusVersion(),
+            config.VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION()
         );
 
         // --- StakingRouter roles removed with the exit hooks ---

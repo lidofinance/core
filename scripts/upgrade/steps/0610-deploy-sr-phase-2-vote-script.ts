@@ -117,6 +117,9 @@ export async function main() {
     newLocatorImplementation: state[Sk.lidoLocator].implementation.address,
 
     validatorsExitBusOracle,
+    newValidatorsExitBusOracleImpl: state[Sk.validatorsExitBusOracle].implementation.address,
+    validatorsExitBusOracleConsensusVersion: parameters.validatorsExitBusOracle.consensusVersion,
+    validatorsExitBusOracleMaxRequestsPerReport: parameters.validatorsExitBusOracle.maxRequestsPerReport,
     oracleReportSanityChecker: await locator.oracleReportSanityChecker(),
     circuitBreaker: nonZeroAddress(getAddress(Sk.circuitBreaker, state), "circuitBreaker"),
     circuitBreakerCommittee: nonZeroAddress(state[Sk.gateSeal].sealingCommittee, "circuitBreakerCommittee"),

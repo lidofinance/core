@@ -19,8 +19,12 @@ struct SRPhase2UpgradeParameters {
     address locatorAdmin;
     address oldLocatorImplementation;
     address newLocatorImplementation;
-    // untouched contracts the vote reads or grants roles on
+    // the oracle gets an implementation that publishes to the bus, finalized to v4 with a new consensus version
     address validatorsExitBusOracle;
+    address newValidatorsExitBusOracleImpl;
+    uint256 validatorsExitBusOracleConsensusVersion;
+    uint256 validatorsExitBusOracleMaxRequestsPerReport;
+    // untouched contracts the vote reads or grants roles on
     address oracleReportSanityChecker;
     address circuitBreaker;
     address circuitBreakerCommittee;
@@ -121,6 +125,20 @@ interface IDualGovernanceTiebreaker {
 
 interface IStakingRouter {
     function getContractVersion() external view returns (uint256);
+}
+
+interface IValidatorsExitBusOracle {
+    function SECONDS_PER_SLOT() external view returns (uint256);
+
+    function GENESIS_TIME() external view returns (uint256);
+
+    function MAX_REQUESTS_PER_REPORT() external view returns (uint256);
+
+    function getContractVersion() external view returns (uint256);
+
+    function getConsensusVersion() external view returns (uint256);
+
+    function finalizeUpgrade_v4(uint256 consensusVersion) external;
 }
 
 /// @dev `LimitsList` mirrors the deployed 0.8.9 checker field by field; the vote sets only one of them.

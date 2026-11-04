@@ -10,6 +10,7 @@ import {GatewayConsumerLimits, SRPhase2UpgradeParameters} from "./SRPhase2Upgrad
 /// @dev The gateway consumer limits are a list, so they live in storage; nothing changes them after deployment.
 contract SRPhase2UpgradeConfig {
     error ZeroAddress(string field);
+    error ZeroValue(string field);
     error InvalidChainId(uint256 chainId);
     error NotReplaced(string field, address value);
     error BusLimitsMissing();
@@ -35,6 +36,11 @@ contract SRPhase2UpgradeConfig {
     address public immutable NEW_LOCATOR_IMPLEMENTATION;
 
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
+    address public immutable NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
+    /// @notice The consensus version of the new report format, set by `finalizeUpgrade_v4`
+    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION;
+    /// @notice The record cap the new implementation must carry in its immutable
+    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT;
     address public immutable ORACLE_REPORT_SANITY_CHECKER;
     address public immutable CIRCUIT_BREAKER;
     address public immutable CIRCUIT_BREAKER_COMMITTEE;
@@ -75,6 +81,14 @@ contract SRPhase2UpgradeConfig {
         NEW_LOCATOR_IMPLEMENTATION = _nonZero(params.newLocatorImplementation, "newLocatorImplementation");
 
         VALIDATORS_EXIT_BUS_ORACLE = _nonZero(params.validatorsExitBusOracle, "validatorsExitBusOracle");
+        NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL =
+            _nonZero(params.newValidatorsExitBusOracleImpl, "newValidatorsExitBusOracleImpl");
+        VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION =
+            _nonZeroUint(params.validatorsExitBusOracleConsensusVersion, "validatorsExitBusOracleConsensusVersion");
+        VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT = _nonZeroUint(
+            params.validatorsExitBusOracleMaxRequestsPerReport,
+            "validatorsExitBusOracleMaxRequestsPerReport"
+        );
         ORACLE_REPORT_SANITY_CHECKER = _nonZero(params.oracleReportSanityChecker, "oracleReportSanityChecker");
         CIRCUIT_BREAKER = _nonZero(params.circuitBreaker, "circuitBreaker");
         CIRCUIT_BREAKER_COMMITTEE = _nonZero(params.circuitBreakerCommittee, "circuitBreakerCommittee");
@@ -153,6 +167,11 @@ contract SRPhase2UpgradeConfig {
 
     function _nonZero(address value, string memory field) private pure returns (address) {
         if (value == address(0)) revert ZeroAddress(field);
+        return value;
+    }
+
+    function _nonZeroUint(uint256 value, string memory field) private pure returns (uint256) {
+        if (value == 0) revert ZeroValue(field);
         return value;
     }
 }

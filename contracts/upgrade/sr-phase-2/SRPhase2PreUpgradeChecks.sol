@@ -17,6 +17,7 @@ import {
     IStakingRouter,
     ITriggerableWithdrawalsBus,
     ITriggerableWithdrawalsGateway,
+    IValidatorsExitBusOracle,
     IWithdrawalsManagerProxy,
     IWithdrawalVault
 } from "./SRPhase2UpgradeTypes.sol";
@@ -84,6 +85,22 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
             "new-wv-impl-cons-gateway",
             IWithdrawalVault(config.NEW_WITHDRAWAL_VAULT_IMPL()).CONSOLIDATION_GATEWAY(),
             locator.consolidationGateway()
+        );
+
+        // The VEBO candidate keeps the chain spec of the live oracle and carries the configured record cap
+        IValidatorsExitBusOracle vebo = IValidatorsExitBusOracle(config.VALIDATORS_EXIT_BUS_ORACLE());
+        IValidatorsExitBusOracle candidateVebo = IValidatorsExitBusOracle(config.NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL());
+        _assertNotYetUpgraded(
+            "vebo", IOssifiableProxy(address(vebo)).proxy__getImplementation(), address(candidateVebo)
+        );
+        _assertAddress("vebo-admin", IOssifiableProxy(address(vebo)).proxy__getAdmin(), agent);
+        _assertUint("vebo-version", vebo.getContractVersion(), VEBO_PREVIOUS_CONTRACT_VERSION);
+        _assertUint("vebo-candidate-seconds-per-slot", candidateVebo.SECONDS_PER_SLOT(), vebo.SECONDS_PER_SLOT());
+        _assertUint("vebo-candidate-genesis-time", candidateVebo.GENESIS_TIME(), vebo.GENESIS_TIME());
+        _assertUint(
+            "vebo-candidate-max-requests",
+            candidateVebo.MAX_REQUESTS_PER_REPORT(),
+            config.VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT()
         );
 
         // --- StakingRouter roles removed with the exit hooks ---

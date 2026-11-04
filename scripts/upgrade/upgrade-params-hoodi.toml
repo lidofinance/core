@@ -71,7 +71,7 @@ consensusVersion = 6
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
 maxRequestsPerReport = 400   # Maximum records per report (LIP-38)
-consensusVersion = 5
+consensusVersion = 6         # LIP-38 report format, set by finalizeUpgrade_v4 (live: 5)
 
 [validatorExitDelayVerifier]
 firstSupportedSlot = 65536 # ELECTRA_FORK_EPOCH 2048 * 32, @see https://github.com/eth-clients/hoodi/blob/main/metadata/config.yaml#L41
