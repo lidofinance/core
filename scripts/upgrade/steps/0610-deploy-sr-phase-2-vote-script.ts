@@ -35,8 +35,8 @@ function nonZeroAddress(value: string | undefined, field: string): string {
 }
 
 /**
- * Deploys `SRPhase2UpgradeTemplate` (which builds `SRPhase2UpgradeConfig` in its constructor) and the
- * `SRPhase2UpgradeVoteScript` omnibus on top of it.
+ * Deploys `SRPhase2UpgradeTemplate` (which builds `SRPhase2UpgradeConfig` and the pre/post upgrade checks in its
+ * constructor) and the `SRPhase2UpgradeVoteScript` omnibus on top of it.
  *
  * @dev The outgoing gateway, verifier and locator implementation are read from the live locator, not from
  *      the state file: `0600` has already overwritten those entries with the incoming addresses.
@@ -161,6 +161,16 @@ export async function main() {
     contract: await getContractPath("SRPhase2UpgradeConfig"),
     address: configAddress,
     constructorArgs: [upgradeParams],
+  });
+  updateObjectInState(Sk.srPhase2PreUpgradeChecks, {
+    contract: await getContractPath("SRPhase2PreUpgradeChecks"),
+    address: await template.getFunction("PRE_UPGRADE_CHECKS")(),
+    constructorArgs: [],
+  });
+  updateObjectInState(Sk.srPhase2PostUpgradeChecks, {
+    contract: await getContractPath("SRPhase2PostUpgradeChecks"),
+    address: await template.getFunction("POST_UPGRADE_CHECKS")(),
+    constructorArgs: [],
   });
 
   const scriptParams: SRPhase2UpgradeVoteScript.ScriptParamsStruct = { upgradeTemplate: template.address };
