@@ -42,6 +42,8 @@ interface IStakingRouter {
         external
         view
         returns (ModuleStateConfig memory stateConfig);
+
+    function getStakingModulesCount() external view returns (uint256);
 }
 
 interface ILidoLocator {
@@ -76,7 +78,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     error ZeroArgument(string name);
 
     /**
-     * @notice Thrown when exit request has wrong length
+     * @notice Thrown when report data has wrong length
      */
     error InvalidRequestsDataLength();
 
@@ -113,8 +115,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     error InvalidMaxEBWeight();
     error UnexpectedWCType();
 
-    event WarnDataIncompleteProcessing(uint256 indexed refSlot, uint256 requestsProcessed, uint256 requestsCount);
-
     /**
      * @notice Emitted for every withdrawal request intent added to the TriggerableWithdrawalsBus queue
      * @param moduleId Staking module ID
@@ -128,12 +128,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         bytes pubkey,
         uint256 amountGwei
     );
-
-    // /**
-    //  * @notice Emitted when exit requests were delivered
-    //  * @param exitRequestsHash keccak256 hash of the encoded validators list
-    //  */
-    // event ExitDataProcessing(bytes32 exitRequestsHash);
 
     struct DataProcessingState {
         uint64 refSlot;
@@ -152,9 +146,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
     /// @notice An ACL role granting the permission to submit the data for a committee report.
     bytes32 public constant SUBMIT_DATA_ROLE = keccak256("SUBMIT_DATA_ROLE");
-    /// @notice An ACL role granting the permission to pause accepting validator exit requests
+    /// @notice An ACL role granting the permission to pause accepting report data
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
-    /// @notice An ACL role granting the permission to resume accepting validator exit requests
+    /// @notice An ACL role granting the permission to resume accepting report data
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
 
     /// @dev Storage slot: DataProcessingState dataProcessingState
@@ -167,15 +161,20 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
     /// @dev [DEPRECATED] Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
     /// This mapping was previously used for storing last requested validator indexes per (moduleId, nodeOpId) key.
-    /// This code was removed from the contract, but slots can still contain logic.
+    /// This code was removed from the contract, but slots can still contain data.
 
     /// @dev [DEPRECATED] Storage slot: uint256 at keccak256("lido.ValidatorsExitBus.maxExitRequestLimit")
-    /// Exit request limit by validators count (v2), replaced by the exit balance limit in v3.
-    /// @dev [DEPRECATED] Storage slot: LimitData at keccak256("lido.ValidatorsExitBus.exitBalanceLimitEth")
-    /// Exit balance rate limit (in ETH) for the exit requests hash-delivery path.
-    /// @dev [DEPRECATED] Storage slot: uint256 at keccak256("lido.ValidatorsExitBus.maxValidatorsPerReport")
-    /// Maximum number of exit requests per report.
-    /// This code was removed from the contract, but slots can still contain data.
+    /// Exit request limit by validators count (v2), replaced by the exit balance limit in v3. Cleared in v3.
+
+    /// @dev [DEPRECATED] Storage slot: LimitData exitBalanceLimitEth
+    /// Exit balance rate limit (in ETH) for the exit requests hash-delivery path. Cleared in v4.
+    bytes32 internal constant DEPRECATED_EXIT_BALANCE_LIMIT_POSITION =
+        keccak256("lido.ValidatorsExitBus.exitBalanceLimitEth");
+
+    /// @dev [DEPRECATED] Storage slot: uint256 maxValidatorsPerReport
+    /// Maximum number of exit requests per report. Cleared in v4.
+    bytes32 internal constant DEPRECATED_MAX_VALIDATORS_PER_REPORT_POSITION =
+        keccak256("lido.ValidatorsExitBus.maxValidatorsPerReport");
 
     /// @dev [DEPRECATED] Storage slot: mapping(bytes32 => RequestStatus) at keccak256("lido.ValidatorsExitBus.requestStatus")
     /// This mapping was previously used for storing the delivery timestamp and contract version per exit requests hash.
@@ -232,9 +231,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     function finalizeUpgrade_v4(uint256 consensusVersion) external {
         _updateContractVersion(4);
         _setConsensusVersion(consensusVersion);
+        _clearDeprecatedSlots();
     }
 
-    /// @notice Resume accepting validator exit requests
+    /// @notice Resume accepting report data
     ///
     /// @dev Reverts with `PausedExpected()` if contract is already resumed
     /// @dev Reverts with `AccessControl:...` reason if sender has no `RESUME_ROLE`
@@ -243,7 +243,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         _resume();
     }
 
-    /// @notice Pause accepting validator exit requests util in after duration.
+    /// @notice Pause accepting report data for the given duration.
     ///
     /// @param _duration Pause duration, seconds (use `PAUSE_INFINITELY` for unlimited).
     /// @dev Reverts with `ResumedExpected()` if contract is already paused.
@@ -328,15 +328,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     function submitReportData(ReportData calldata data, uint256 contractVersion) external whenResumed {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
-        // need to discuss delete of ExitDataProcessing event
-        // bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);
-        // possibly delete
-        // emit ExitDataProcessing(dataHash);
     }
 
     struct ProcessingState {
@@ -383,8 +379,8 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         result.requestsSubmitted = procState.requestsProcessed;
     }
 
-    /// @notice Returns the total number of validator exit requests ever processed
-    /// across all received reports.
+    /// @notice Returns the total number of withdrawal requests (full and partial) ever processed
+    /// across all received reports. Before v4 it counted validator exit requests only.
     ///
     function getTotalRequestsProcessed() external view returns (uint256) {
         return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
@@ -407,12 +403,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     function _handleConsensusReport(
         ConsensusReport memory /* report */,
         uint256 /* prevSubmittedRefSlot */,
-        uint256 prevProcessingRefSlot
+        uint256 /* prevProcessingRefSlot */
     ) internal override {
-        DataProcessingState memory state = _storageDataProcessingState().value;
-        if (state.refSlot == prevProcessingRefSlot && state.requestsProcessed < state.requestsCount) {
-            emit WarnDataIncompleteProcessing(prevProcessingRefSlot, state.requestsProcessed, state.requestsCount);
-        }
+        // a report is processed in a single transaction, so the previous one is never left incomplete
     }
 
     function _checkMsgSenderIsAllowedToSubmitData() internal view {
@@ -476,8 +469,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         intents = new WithdrawalIntent[](requestsCount);
 
         (uint16 maxEBWeightType1, uint16 maxEBWeightType2) = _getMaxEffectiveBalanceWeights();
-        // Cache module data to avoid repeated external calls for the same module
-        ModuleCache memory module;
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
+        // Cache modules data to avoid repeated external calls for the same module
+        ModuleCache[] memory modules = new ModuleCache[](stakingRouter.getStakingModulesCount());
         uint256 totalPwrGwei;
 
         for (uint256 i = 0; i < requestsCount; ++i) {
@@ -487,9 +481,8 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
                 revert InvalidModuleId();
             }
 
-            if (moduleId != module.moduleId) {
-                module = _getModuleCache(moduleId, maxEBWeightType1, maxEBWeightType2);
-            }
+            ModuleCache memory module =
+                _getCachedModule(modules, stakingRouter, moduleId, maxEBWeightType1, maxEBWeightType2);
 
             bytes memory pubkey = _getKey(module.moduleAddress, nodeOpId, keyIndex);
 
@@ -537,22 +530,47 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
     /**
      * @notice Reads the staking module data needed to process its records
+     * @param stakingRouter StakingRouter to read the module config from
      * @param moduleId Staking module ID
      * @param maxEBWeightType1 Max effective balance weight in ETH for 0x01 withdrawal credentials
      * @param maxEBWeightType2 Max effective balance weight in ETH for 0x02 withdrawal credentials
      */
     function _getModuleCache(
+        IStakingRouter stakingRouter,
         uint256 moduleId,
         uint16 maxEBWeightType1,
         uint16 maxEBWeightType2
     ) internal view returns (ModuleCache memory module) {
-        IStakingRouter.ModuleStateConfig memory config =
-            IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId);
+        IStakingRouter.ModuleStateConfig memory config = stakingRouter.getStakingModuleStateConfig(moduleId);
 
         module.moduleId = moduleId;
         module.moduleAddress = config.moduleAddress;
         module.partialWithdrawalsAllowed = config.partialWithdrawalsAllowed;
         module.fwrWeightEth = _getModuleMaxEBWeight(config.withdrawalCredentialsType, maxEBWeightType1, maxEBWeightType2);
+    }
+
+    /**
+     * @notice Returns the module data from the cache, reading it from the StakingRouter on the first use
+     * @dev Modules are cached from the start of the array, so the first empty cell (zero `moduleId`) ends the search
+     * @param modules Cached modules
+     * @param stakingRouter StakingRouter to read the module config from
+     * @param moduleId Staking module ID
+     * @param maxEBWeightType1 Max effective balance weight in ETH for 0x01 withdrawal credentials
+     * @param maxEBWeightType2 Max effective balance weight in ETH for 0x02 withdrawal credentials
+     */
+    function _getCachedModule(
+        ModuleCache[] memory modules,
+        IStakingRouter stakingRouter,
+        uint256 moduleId,
+        uint16 maxEBWeightType1,
+        uint16 maxEBWeightType2
+    ) internal view returns (ModuleCache memory) {
+        uint256 i;
+        for (; i < modules.length && modules[i].moduleId != 0; ++i) {
+            if (modules[i].moduleId == moduleId) return modules[i];
+        }
+        modules[i] = _getModuleCache(stakingRouter, moduleId, maxEBWeightType1, maxEBWeightType2);
+        return modules[i];
     }
 
     /**
@@ -629,5 +647,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         assembly {
             r.slot := position
         }
+    }
+
+    /// @dev LimitData packs into a single slot, so zeroing the slot clears the whole struct
+    function _clearDeprecatedSlots() internal {
+        DEPRECATED_EXIT_BALANCE_LIMIT_POSITION.setStorageUint256(0);
+        DEPRECATED_MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(0);
     }
 }

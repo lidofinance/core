@@ -61,24 +61,25 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
-  const generateRequests = (totalRequests: number) => {
-    const requestsPerModule = Math.max(1, Math.floor(totalRequests / NUM_MODULES));
-    const requestsPerNodeOp = Math.max(1, Math.floor(requestsPerModule / NODE_OPS_PER_MODULE));
-
+  const generateRequests = (totalRequests: number, interleaved: boolean) => {
+    // Record i goes to module 1, 2, 3, 4, 5, 1, 2, ... and to the next node operator on every round
     const requests: WithdrawalRequest[] = [];
-
     for (let i = 0; i < totalRequests; ++i) {
-      const moduleId = Math.floor(i / requestsPerModule);
-      const nodeOpId = Math.floor((i - moduleId * requestsPerModule) / requestsPerNodeOp);
-      const keyIndex = nextKeyIndex++;
-      requests.push({ moduleId: moduleId + 1, nodeOpId, keyIndex, amount: 0n });
+      requests.push({
+        moduleId: (i % NUM_MODULES) + 1,
+        nodeOpId: Math.floor(i / NUM_MODULES) % NODE_OPS_PER_MODULE,
+        keyIndex: nextKeyIndex++,
+        amount: 0n,
+      });
     }
 
-    return { requests, requestsPerModule, requestsPerNodeOp };
+    // sorted: the same records grouped by module (the sort is stable, so the order inside a module is kept)
+    if (!interleaved) requests.sort((a, b) => a.moduleId - b.moduleId);
+
+    return requests;
   };
 
-  const gasUsages: { totalRequests: number; requestsPerModule: number; requestsPerNodeOp: number; gasUsed: number }[] =
-    [];
+  const gasUsages: { order: string; totalRequests: number; gasUsed: number }[] = [];
 
   before(async () => {
     [admin, member1, member2, member3] = await ethers.getSigners();
@@ -112,18 +113,19 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
   });
 
   after(async () => {
-    gasUsages.forEach(({ totalRequests, requestsPerModule, requestsPerNodeOp, gasUsed }) =>
+    gasUsages.forEach(({ order, totalRequests, gasUsed }) =>
       console.log(
-        `${totalRequests} requests (per module ${requestsPerModule}, ` +
-          `per node op ${requestsPerNodeOp}): total gas ${gasUsed}, ` +
+        `${totalRequests} requests, ${order} modules: total gas ${gasUsed}, ` +
           `gas per request: ${Math.round(gasUsed / totalRequests)}`,
       ),
     );
   });
 
-  for (const totalRequests of [10, 50, 100, MAX_REQUESTS_PER_REPORT]) {
-    context(`Total requests: ${totalRequests}`, () => {
-      let generated: { requests: WithdrawalRequest[]; requestsPerModule: number; requestsPerNodeOp: number };
+  for (const [order, totalRequests] of ["sorted", "interleaved"].flatMap((o) =>
+    [10, 50, 100, MAX_REQUESTS_PER_REPORT].map((n) => [o, n] as const),
+  )) {
+    context(`Total requests: ${totalRequests}, ${order} modules`, () => {
+      let requests: WithdrawalRequest[];
       let reportFields: VEBOReportFields;
       let reportHash: string;
       let originalState: string;
@@ -146,18 +148,18 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
       it("committee reaches consensus on a report hash", async () => {
         const { refSlot } = await consensus.getCurrentFrame();
 
-        generated = generateRequests(totalRequests);
+        requests = generateRequests(totalRequests, order === "interleaved");
 
         reportFields = {
           consensusVersion: VEBO_CONSENSUS_VERSION,
           refSlot: refSlot,
-          requestsCount: generated.requests.length,
-          data: encodeWithdrawalRequests(generated.requests),
+          requestsCount: requests.length,
+          data: encodeWithdrawalRequests(requests),
         };
         // the module mocks read seeded keys from storage, as real modules do
         await seedMockModuleSigningKeys(
           mockModules,
-          generated.requests.map(({ moduleId, nodeOpId, keyIndex }) => ({
+          requests.map(({ moduleId, nodeOpId, keyIndex }) => ({
             moduleId,
             nodeOpId: Number(nodeOpId),
             keyIndex: Number(keyIndex),
@@ -193,8 +195,8 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, reportHash);
         expect((await oracle.getConsensusReport()).processingStarted).to.equal(true);
 
-        const first = generated.requests[0];
-        const last = generated.requests[generated.requests.length - 1];
+        const first = requests[0];
+        const last = requests[requests.length - 1];
 
         await expect(tx)
           .to.emit(oracle, "WithdrawalRequested")
@@ -206,20 +208,15 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
 
         const { gasUsed } = receipt;
 
-        gasUsages.push({
-          totalRequests,
-          requestsPerModule: generated.requestsPerModule,
-          requestsPerNodeOp: generated.requestsPerNodeOp,
-          gasUsed: Number(gasUsed),
-        });
+        gasUsages.push({ order, totalRequests, gasUsed: Number(gasUsed) });
       });
 
       it(`reports are marked as processed`, async () => {
         const procState = await oracle.getProcessingState();
         expect(procState.dataHash).to.equal(reportHash);
         expect(procState.dataSubmitted).to.equal(true);
-        expect(procState.requestsCount).to.equal(generated.requests.length);
-        expect(procState.requestsSubmitted).to.equal(generated.requests.length);
+        expect(procState.requestsCount).to.equal(requests.length);
+        expect(procState.requestsSubmitted).to.equal(requests.length);
       });
 
       it("some time passes", async () => {

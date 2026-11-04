@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -17,6 +18,11 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v4", () => {
   let originalState: string;
 
   const NEW_CONSENSUS_VERSION = VEBO_CONSENSUS_VERSION + 1n;
+
+  const EXIT_BALANCE_LIMIT_SLOT = ethers.keccak256(ethers.toUtf8Bytes("lido.ValidatorsExitBus.exitBalanceLimitEth"));
+  const MAX_VALIDATORS_PER_REPORT_SLOT = ethers.keccak256(
+    ethers.toUtf8Bytes("lido.ValidatorsExitBus.maxValidatorsPerReport"),
+  );
 
   before(async () => {
     [admin] = await ethers.getSigners();
@@ -44,6 +50,21 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v4", () => {
 
     expect(await oracle.getContractVersion()).to.equal(4);
     expect(await oracle.getConsensusVersion()).to.equal(NEW_CONSENSUS_VERSION);
+  });
+
+  it("should clear the deprecated exit limit slots", async () => {
+    // emulate v3 state: the slots hold stale limit config
+    const nonZero = ethers.zeroPadValue("0x01", 32);
+    const oracleAddress = await oracle.getAddress();
+    await ethers.provider.send("hardhat_setStorageAt", [oracleAddress, EXIT_BALANCE_LIMIT_SLOT, nonZero]);
+    await ethers.provider.send("hardhat_setStorageAt", [oracleAddress, MAX_VALIDATORS_PER_REPORT_SLOT, nonZero]);
+    expect(await ethers.provider.getStorage(oracleAddress, EXIT_BALANCE_LIMIT_SLOT)).to.equal(nonZero);
+    expect(await ethers.provider.getStorage(oracleAddress, MAX_VALIDATORS_PER_REPORT_SLOT)).to.equal(nonZero);
+
+    await oracle.finalizeUpgrade_v4(NEW_CONSENSUS_VERSION);
+
+    expect(await ethers.provider.getStorage(oracleAddress, EXIT_BALANCE_LIMIT_SLOT)).to.equal(ZeroHash);
+    expect(await ethers.provider.getStorage(oracleAddress, MAX_VALIDATORS_PER_REPORT_SLOT)).to.equal(ZeroHash);
   });
 
   it("should revert on a second call", async () => {

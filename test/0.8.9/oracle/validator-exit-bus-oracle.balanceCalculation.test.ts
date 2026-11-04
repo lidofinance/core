@@ -10,7 +10,13 @@ import {
   ValidatorsExitBus__Harness,
 } from "typechain-types";
 
-import { deployVEBO, encodeWithdrawalRequests, makeMockPubkey, WithdrawalRequest } from "test/deploy";
+import {
+  deployVEBO,
+  encodeWithdrawalRequests,
+  makeMockPubkey,
+  seedMockModuleSigningKeys,
+  WithdrawalRequest,
+} from "test/deploy";
 import { Snapshot } from "test/suite";
 
 // Module IDs used in tests
@@ -31,6 +37,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
   let sanityChecker: OracleReportSanityChecker;
   let stakingRouter: StakingRouter__MockForValidatorsExitBus;
   let mockModule: StakingModule__MockForKeyVerification;
+  let mockModules: Awaited<ReturnType<typeof deployVEBO>>["mockModules"];
 
   let originalState: string;
 
@@ -57,7 +64,8 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
     oracle = deployed.oracle;
     sanityChecker = deployed.oracleReportSanityChecker;
     stakingRouter = deployed.stakingRouter;
-    mockModule = deployed.mockModules.module1;
+    mockModules = deployed.mockModules;
+    mockModule = mockModules.module1;
 
     // 0x02 modules accept partial withdrawals
     for (const moduleId of [MAXEB_MODULE_ID_1, MAXEB_MODULE_ID_2, MAXEB_MODULE_ID_3]) {
@@ -208,6 +216,45 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         await expect(oracle.processWithdrawalRequests(encodeWithdrawalRequests([request])))
           .to.emit(oracle, "WithdrawalRequested")
           .withArgs(MAX_MODULE_ID, MAX_NODE_OP_ID, pubkey, 0n);
+      });
+    });
+
+    describe("Module cache", () => {
+      it("should use each module's own key and weight when modules interleave", async () => {
+        // the same operator and key index in both modules, but different keys
+        const legacyPubkey = "0x" + "11".repeat(48);
+        const maxEBPubkey = "0x" + "22".repeat(48);
+        await seedMockModuleSigningKeys(mockModules, [
+          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, keyIndex: 10, pubkey: legacyPubkey },
+          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 1, keyIndex: 10, pubkey: maxEBPubkey },
+        ]);
+
+        const { intents, totalExitBalanceEth } = await process([
+          fwr(LEGACY_MODULE_ID, 1, 10),
+          fwr(MAXEB_MODULE_ID_1, 1, 10),
+          fwr(LEGACY_MODULE_ID, 1, 10),
+          fwr(MAXEB_MODULE_ID_1, 1, 10),
+        ]);
+
+        expect(intents.map((intent) => intent.pubkey)).to.deep.equal([
+          legacyPubkey,
+          maxEBPubkey,
+          legacyPubkey,
+          maxEBPubkey,
+        ]);
+        expect(totalExitBalanceEth).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 2n + MAXEB_MODULE_MAX_BALANCE_ETH * 2n);
+      });
+
+      it("should check partial withdrawals against the record's own module", async () => {
+        await expect(
+          process([
+            pwr(MAXEB_MODULE_ID_1, 1, 10, GWEI_PER_ETH),
+            fwr(LEGACY_MODULE_ID, 1, 11),
+            pwr(LEGACY_MODULE_ID, 1, 12, GWEI_PER_ETH),
+          ]),
+        )
+          .to.be.revertedWithCustomError(oracle, "PartialWithdrawalsNotAllowed")
+          .withArgs(LEGACY_MODULE_ID);
       });
     });
 

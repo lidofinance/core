@@ -28,6 +28,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
 
     mapping(uint256 => StakingModuleData) internal _modules;
     mapping(uint256 => bool) internal _moduleConfigured;
+    uint256 internal _modulesCount;
 
     /// @notice Mock function to set up module configuration for tests
     /// @param moduleId The module ID
@@ -35,7 +36,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     function setStakingModuleWithdrawalCredentialsType(uint256 moduleId, uint8 withdrawalCredentialsType) external {
         _modules[moduleId].id = uint24(moduleId);
         _modules[moduleId].withdrawalCredentialsType = withdrawalCredentialsType;
-        _moduleConfigured[moduleId] = true;
+        _markConfigured(moduleId);
         // Set a placeholder address - tests can override with setStakingModuleAddress if needed
         if (_modules[moduleId].stakingModuleAddress == address(0)) {
             _modules[moduleId].stakingModuleAddress = address(uint160(moduleId + 0x1000));
@@ -47,7 +48,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     /// @param moduleAddress The module address
     function setStakingModuleAddress(uint256 moduleId, address moduleAddress) external {
         _modules[moduleId].stakingModuleAddress = moduleAddress;
-        _moduleConfigured[moduleId] = true;
+        _markConfigured(moduleId);
     }
 
     /// @notice Mock function to allow or disallow partial withdrawals for a module
@@ -73,6 +74,17 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
                 withdrawalCredentialsType: data.withdrawalCredentialsType,
                 partialWithdrawalsAllowed: data.partialWithdrawalsAllowed
             });
+    }
+
+    function getStakingModulesCount() external view returns (uint256) {
+        return _modulesCount;
+    }
+
+    function _markConfigured(uint256 moduleId) internal {
+        if (!_moduleConfigured[moduleId]) {
+            _moduleConfigured[moduleId] = true;
+            _modulesCount++;
+        }
     }
 
     function _validateModuleId(uint256 _moduleId) internal view {
