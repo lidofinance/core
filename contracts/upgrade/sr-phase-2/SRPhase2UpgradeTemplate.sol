@@ -57,6 +57,7 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE =
         keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
+    bytes32 internal constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
 
     /// @dev The StakingRouter implementation is swapped without a reinitializer.
     uint256 internal constant STAKING_ROUTER_CONTRACT_VERSION = 4;
@@ -228,6 +229,7 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         address bus = config.TRIGGERABLE_WITHDRAWALS_BUS();
         address circuitBreaker = config.CIRCUIT_BREAKER();
         address resealManager = config.RESEAL_MANAGER();
+        address vebo = config.VALIDATORS_EXIT_BUS_ORACLE();
 
         // --- Locator ---
         IOssifiableProxy locatorProxy = IOssifiableProxy(locatorAddr);
@@ -272,6 +274,16 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
             "sr-exiting-status-members", stakingRouter.getRoleMemberCount(REPORT_VALIDATOR_EXITING_STATUS_ROLE), 0
         );
 
+        // --- VEBO: the exit request hash delivery role is revoked ---
+        // No pre-check: a wrong or second holder leaves a member here. The Easy Track factories need no check:
+        // removing an unknown factory reverts, and the Aragon Voting removes them in the transaction that
+        // submits this proposal.
+        _assertUint(
+            "vebo-report-hash-members",
+            IAccessControlEnumerable(vebo).getRoleMemberCount(SUBMIT_REPORT_HASH_ROLE),
+            0
+        );
+
         // --- New gateway ---
         IAccessControlEnumerable gatewayAcl = IAccessControlEnumerable(newGateway);
         _assertSingleRoleHolder("new-gateway-admin", gatewayAcl, DEFAULT_ADMIN_ROLE, agent);
@@ -303,7 +315,7 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
 
         // --- Bus ---
         IAccessControlEnumerable busAcl = IAccessControlEnumerable(bus);
-        _assertSingleRoleHolder("bus-publisher", busAcl, ADD_WITHDRAWAL_INTENTS_ROLE, config.VALIDATORS_EXIT_BUS_ORACLE());
+        _assertSingleRoleHolder("bus-publisher", busAcl, ADD_WITHDRAWAL_INTENTS_ROLE, vebo);
         // Only a DAO vote that clears the queue may hold this role, and only within that vote
         _assertUint("bus-clear-members", busAcl.getRoleMemberCount(CLEAR_WITHDRAWAL_INTENTS_ROLE), 0);
     }

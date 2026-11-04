@@ -15,6 +15,7 @@ contract SRPhase2UpgradeConfig {
     error BusLimitsMissing();
     error InvalidGatewayConsumersCount(uint256 count);
     error DuplicateGatewayConsumer(address consumer);
+    error DuplicateEasyTrackFactory(address factory);
 
     /// @notice The bus and three staking module ejectors; the vote script has one explicit item per consumer
     uint256 public constant GATEWAY_CONSUMERS_COUNT = 4;
@@ -45,6 +46,11 @@ contract SRPhase2UpgradeConfig {
     address public immutable TRIGGERABLE_WITHDRAWALS_BUS;
 
     address public immutable VALIDATOR_EXIT_DELAY_VERIFIER;
+
+    address public immutable EASY_TRACK;
+    address public immutable EASY_TRACK_EVM_SCRIPT_EXECUTOR;
+    address public immutable CURATED_SUBMIT_EXIT_REQUEST_HASHES_FACTORY;
+    address public immutable SDVT_SUBMIT_EXIT_REQUEST_HASHES_FACTORY;
 
     GatewayConsumerLimits[] internal _gatewayConsumers;
 
@@ -78,6 +84,17 @@ contract SRPhase2UpgradeConfig {
         TRIGGERABLE_WITHDRAWALS_BUS = _nonZero(params.triggerableWithdrawalsBus, "triggerableWithdrawalsBus");
 
         VALIDATOR_EXIT_DELAY_VERIFIER = _nonZero(params.validatorExitDelayVerifier, "validatorExitDelayVerifier");
+
+        EASY_TRACK = _nonZero(params.easyTrack, "easyTrack");
+        EASY_TRACK_EVM_SCRIPT_EXECUTOR = _nonZero(params.easyTrackEvmScriptExecutor, "easyTrackEvmScriptExecutor");
+        CURATED_SUBMIT_EXIT_REQUEST_HASHES_FACTORY =
+            _nonZero(params.curatedSubmitExitRequestHashesFactory, "curatedSubmitExitRequestHashesFactory");
+        SDVT_SUBMIT_EXIT_REQUEST_HASHES_FACTORY =
+            _nonZero(params.sdvtSubmitExitRequestHashesFactory, "sdvtSubmitExitRequestHashesFactory");
+        // Removing one factory twice would revert the Aragon vote on enactment
+        if (params.curatedSubmitExitRequestHashesFactory == params.sdvtSubmitExitRequestHashesFactory) {
+            revert DuplicateEasyTrackFactory(params.curatedSubmitExitRequestHashesFactory);
+        }
 
         _setGatewayConsumers(params.gatewayConsumers, params.triggerableWithdrawalsBus);
 

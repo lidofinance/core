@@ -251,6 +251,12 @@ const UpgradeVoteScriptSchema = z.object({
   enabledDaySpanEnd: NonNegativeIntSchema.optional(),
 });
 
+// SR phase 2 (LIP-38) vote script params: also removes the Easy Track factories of the exit request hash delivery
+const SRPhase2UpgradeVoteScriptSchema = UpgradeVoteScriptSchema.extend({
+  curatedSubmitExitRequestHashesFactory: EthereumAddressSchema,
+  sdvtSubmitExitRequestHashesFactory: EthereumAddressSchema,
+});
+
 // CircuitBreaker schema (for scratch deployment)
 const CircuitBreakerSchema = z.object({
   minPauseDuration: PositiveIntSchema,
@@ -446,7 +452,7 @@ export const UpgradeParametersSchema = z.object({
   curatedModule: CuratedModuleConfigSchema,
 
   upgradeVoteScript: UpgradeVoteScriptSchema,
-  srPhase2UpgradeVoteScript: UpgradeVoteScriptSchema,
+  srPhase2UpgradeVoteScript: SRPhase2UpgradeVoteScriptSchema,
 
   // old and optional
   vaultHub: VaultHubSchema.optional(),

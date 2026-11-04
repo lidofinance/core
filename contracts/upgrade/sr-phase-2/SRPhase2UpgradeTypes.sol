@@ -35,6 +35,11 @@ struct SRPhase2UpgradeParameters {
     address triggerableWithdrawalsBus;
     // removed from the protocol
     address validatorExitDelayVerifier;
+    // exit request hash delivery removed from the VEBO: the role holder and the Easy Track factories using it
+    address easyTrack;
+    address easyTrackEvmScriptExecutor;
+    address curatedSubmitExitRequestHashesFactory;
+    address sdvtSubmitExitRequestHashesFactory;
     // limits the vote sets on the new gateway: the bus, then the CSM, CSM 0x02 and CMv2 ejectors
     GatewayConsumerLimits[] gatewayConsumers;
 }
@@ -113,4 +118,11 @@ interface IDualGovernanceTiebreaker {
 
 interface IStakingRouter {
     function getContractVersion() external view returns (uint256);
+}
+
+/// @dev Factory changes are gated by the Easy Track admin role, which the Aragon Voting holds, not the Agent.
+interface IEasyTrack {
+    function isEVMScriptFactory(address maybeEVMScriptFactory) external view returns (bool);
+
+    function removeEVMScriptFactory(address evmScriptFactory) external;
 }

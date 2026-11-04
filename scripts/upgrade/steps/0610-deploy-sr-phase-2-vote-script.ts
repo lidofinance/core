@@ -79,6 +79,31 @@ export async function main() {
     ...ejectorNames.map(ejectorLimits),
   ];
 
+  // The Aragon Voting removes these factories before the template runs, so the template cannot vet them:
+  // check here that each one is live in Easy Track and submits hashes to this VEBO
+  const validatorsExitBusOracle = await locator.validatorsExitBusOracle();
+  const easyTrackAddress = nonZeroAddress(getAddress(Sk.easyTrack, state), "easyTrack");
+  const easyTrack = new ethers.Contract(
+    easyTrackAddress,
+    ["function evmScriptExecutor() view returns (address)", "function isEVMScriptFactory(address) view returns (bool)"],
+    ethers.provider,
+  );
+  const { curatedSubmitExitRequestHashesFactory, sdvtSubmitExitRequestHashesFactory } =
+    parameters.srPhase2UpgradeVoteScript;
+  for (const factory of [curatedSubmitExitRequestHashesFactory, sdvtSubmitExitRequestHashesFactory]) {
+    if (!(await easyTrack.isEVMScriptFactory(factory))) {
+      throw new Error(`${factory} is not an Easy Track factory`);
+    }
+    const hashFactory = new ethers.Contract(
+      factory,
+      ["function validatorsExitBusOracle() view returns (address)"],
+      ethers.provider,
+    );
+    if ((await hashFactory.validatorsExitBusOracle()).toLowerCase() !== validatorsExitBusOracle.toLowerCase()) {
+      throw new Error(`Easy Track factory ${factory} does not submit exit request hashes to the VEBO`);
+    }
+  }
+
   const upgradeParams: SRPhase2UpgradeParametersStruct = {
     chainId,
 
@@ -91,7 +116,7 @@ export async function main() {
     oldLocatorImplementation: await locatorProxy.proxy__getImplementation(),
     newLocatorImplementation: state[Sk.lidoLocator].implementation.address,
 
-    validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
+    validatorsExitBusOracle,
     circuitBreaker: nonZeroAddress(getAddress(Sk.circuitBreaker, state), "circuitBreaker"),
     circuitBreakerCommittee: nonZeroAddress(state[Sk.gateSeal].sealingCommittee, "circuitBreakerCommittee"),
     resealManager: nonZeroAddress(getAddress(Sk.resealManager, state), "resealManager"),
@@ -106,6 +131,11 @@ export async function main() {
     triggerableWithdrawalsBus: triggerableWithdrawalsBusAddress,
 
     validatorExitDelayVerifier: await liveLocator.validatorExitDelayVerifier(),
+
+    easyTrack: easyTrackAddress,
+    easyTrackEvmScriptExecutor: await easyTrack.evmScriptExecutor(),
+    curatedSubmitExitRequestHashesFactory,
+    sdvtSubmitExitRequestHashesFactory,
 
     gatewayConsumers,
   };
