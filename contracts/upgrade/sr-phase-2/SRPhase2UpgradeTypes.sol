@@ -21,6 +21,7 @@ struct SRPhase2UpgradeParameters {
     address newLocatorImplementation;
     // untouched contracts the vote reads or grants roles on
     address validatorsExitBusOracle;
+    address oracleReportSanityChecker;
     address circuitBreaker;
     address circuitBreakerCommittee;
     address resealManager;
@@ -42,6 +43,8 @@ struct SRPhase2UpgradeParameters {
     address sdvtSubmitExitRequestHashesFactory;
     // limits the vote sets on the new gateway: the bus, then the CSM, CSM 0x02 and CMv2 ejectors
     GatewayConsumerLimits[] gatewayConsumers;
+    // sanity limit the vote sets, in whole ETH; LIP-38 makes it equal to the bus PWR maxLimit
+    uint256 maxBalanceExitRequestedPerReportInEth;
 }
 
 /// @notice Limits the vote sets for one consumer of the new TriggerableWithdrawalsGateway (LIP-38 "Initial limits").
@@ -118,6 +121,32 @@ interface IDualGovernanceTiebreaker {
 
 interface IStakingRouter {
     function getContractVersion() external view returns (uint256);
+}
+
+/// @dev `LimitsList` mirrors the deployed 0.8.9 checker field by field; the vote sets only one of them.
+interface IOracleReportSanityChecker {
+    struct LimitsList {
+        uint256 exitedEthAmountPerDayLimit;
+        uint256 appearedEthAmountPerDayLimit;
+        uint256 annualBalanceIncreaseBPLimit;
+        uint256 simulatedShareRateDeviationBPLimit;
+        uint256 maxBalanceExitRequestedPerReportInEth;
+        uint256 maxEffectiveBalanceWeightWCType01;
+        uint256 maxEffectiveBalanceWeightWCType02;
+        uint256 maxItemsPerExtraDataTransaction;
+        uint256 maxNodeOperatorsPerExtraDataItem;
+        uint256 requestTimestampMargin;
+        uint256 maxPositiveTokenRebase;
+        uint256 maxCLBalanceDecreaseBP;
+        uint256 clBalanceOraclesErrorUpperBPLimit;
+        uint256 consolidationEthAmountPerDayLimit;
+        uint256 exitedValidatorEthAmountLimit;
+        uint256 externalPendingBalanceCapEth;
+    }
+
+    function setMaxBalanceExitRequestedPerReportInEth(uint256 _maxBalanceExitRequestedPerReportInEth) external;
+
+    function getOracleReportLimits() external view returns (LimitsList memory);
 }
 
 /// @dev Factory changes are gated by the Easy Track admin role, which the Aragon Voting holds, not the Agent.

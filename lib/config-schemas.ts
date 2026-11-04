@@ -255,6 +255,7 @@ const UpgradeVoteScriptSchema = z.object({
 const SRPhase2UpgradeVoteScriptSchema = UpgradeVoteScriptSchema.extend({
   curatedSubmitExitRequestHashesFactory: EthereumAddressSchema,
   sdvtSubmitExitRequestHashesFactory: EthereumAddressSchema,
+  maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
 });
 
 // CircuitBreaker schema (for scratch deployment)

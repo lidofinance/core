@@ -13,6 +13,7 @@ import {SRPhase2UpgradeChecksBase} from "./SRPhase2UpgradeChecksBase.sol";
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
 import {
     GatewayConsumerLimits,
+    IOracleReportSanityChecker,
     IStakingRouter,
     ITriggerableWithdrawalsGateway,
     IWithdrawalsManagerProxy,
@@ -84,6 +85,20 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertUint(
             "vebo-report-hash-members",
             IAccessControlEnumerable(vebo).getRoleMemberCount(SUBMIT_REPORT_HASH_ROLE),
+            0
+        );
+
+        // --- OracleReportSanityChecker: one VEBO report fits into the bus PWR quota ---
+        // No pre-check of the role: a second holder leaves a member here.
+        address sanityChecker = config.ORACLE_REPORT_SANITY_CHECKER();
+        _assertUint(
+            "sanity-exit-limit",
+            IOracleReportSanityChecker(sanityChecker).getOracleReportLimits().maxBalanceExitRequestedPerReportInEth,
+            config.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH()
+        );
+        _assertUint(
+            "sanity-exit-limit-members",
+            IAccessControlEnumerable(sanityChecker).getRoleMemberCount(MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE),
             0
         );
 

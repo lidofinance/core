@@ -189,3 +189,5 @@ expiryTimestamp = 1830297599 # December 31, 2027 at 23:59:59 UTC
 # Easy Track factories of the exit request hash delivery that LIP-38 removes from the VEBO
 curatedSubmitExitRequestHashesFactory = "0x397206ecdbdcb1A55A75e60Fc4D054feC72E5f63"
 sdvtSubmitExitRequestHashesFactory = "0xAa3D6A8B52447F272c1E8FAaA06EA06658bd95E2"
+# Sanity limit the vote sets on the OracleReportSanityChecker (live: 19,200); equals the bus PWR maxLimit (LIP-38)
+maxBalanceExitRequestedPerReportInEth = 11520   # ETH

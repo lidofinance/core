@@ -18,6 +18,7 @@ import {
     GatewayConsumerLimits,
     IDualGovernanceTiebreaker,
     IEasyTrack,
+    IOracleReportSanityChecker,
     ITriggerableWithdrawalsGateway,
     IWithdrawalsManagerProxy
 } from "./SRPhase2UpgradeTypes.sol";
@@ -41,7 +42,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
     uint256 public constant DG_ITEMS_COUNT = 4;
     uint256 public constant VOTING_ITEMS_COUNT = 2;
     /// @notice Agent actions of the first Dual Governance call
-    uint256 public constant RAW_ACTIONS_COUNT = 18;
+    uint256 public constant RAW_ACTIONS_COUNT = 21;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -52,6 +53,8 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE =
         keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
     bytes32 internal constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
+    bytes32 internal constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
+        keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
 
     address public immutable TEMPLATE;
     address public immutable CONFIG;
@@ -94,6 +97,8 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
                 abi.encodeCall(IEasyTrack.removeEVMScriptFactory, (config.SDVT_SUBMIT_EXIT_REQUEST_HASHES_FACTORY()))
             )
         });
+
+        // TODO add the Easy Track factory for the ACTIVE_REBALANCING_* OracleDaemonConfig keys once it exists.
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory items) {
@@ -165,6 +170,9 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             config.STAKING_ROUTER(),
             abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (config.NEW_STAKING_ROUTER_IMPL()))
         );
+
+        // TODO allow partial withdrawals for CMv2 once the StakingRouter has setStakingModulePartialWithdrawalsAllowed.
+
         // Empty setupCalldata: only the TRIGGERABLE_WITHDRAWALS_GATEWAY immutable changes, nothing to finalize.
         items[i++] = _item(
             "1.1.4. Upgrade WithdrawalVault implementation",
@@ -273,6 +281,31 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             config.VALIDATORS_EXIT_BUS_ORACLE(),
             abi.encodeCall(IAccessControl.revokeRole, (SUBMIT_REPORT_HASH_ROLE, config.EASY_TRACK_EVM_SCRIPT_EXECUTOR()))
         );
+
+        // --- OracleReportSanityChecker: one VEBO report must fit into the bus PWR quota ---
+        // Nobody holds the setter role, so the Agent holds it only within this vote.
+        address sanityChecker = config.ORACLE_REPORT_SANITY_CHECKER();
+        items[i++] = _item(
+            "1.1.19. Grant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE on the OracleReportSanityChecker to the Agent",
+            sanityChecker,
+            abi.encodeCall(IAccessControl.grantRole, (MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE, AGENT))
+        );
+        items[i++] = _item(
+            "1.1.20. Set maxBalanceExitRequestedPerReportInEth on the OracleReportSanityChecker to the PWR maxLimit of the TriggerableWithdrawalsBus",
+            sanityChecker,
+            abi.encodeCall(
+                IOracleReportSanityChecker.setMaxBalanceExitRequestedPerReportInEth,
+                (config.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH())
+            )
+        );
+        items[i++] = _item(
+            "1.1.21. Revoke MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE on the OracleReportSanityChecker from the Agent",
+            sanityChecker,
+            abi.encodeCall(IAccessControl.revokeRole, (MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE, AGENT))
+        );
+
+        // TODO set the six new OracleDaemonConfig keys once their initial values and encoding are fixed, and grant
+        // CONFIG_MANAGER_ROLE to the Easy Track EVMScriptExecutor once the ACTIVE_REBALANCING_* factory exists.
 
         if (i != RAW_ACTIONS_COUNT) revert InvalidItemsCount(i, RAW_ACTIONS_COUNT);
     }

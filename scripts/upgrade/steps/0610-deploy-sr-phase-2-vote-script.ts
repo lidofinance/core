@@ -117,6 +117,7 @@ export async function main() {
     newLocatorImplementation: state[Sk.lidoLocator].implementation.address,
 
     validatorsExitBusOracle,
+    oracleReportSanityChecker: await locator.oracleReportSanityChecker(),
     circuitBreaker: nonZeroAddress(getAddress(Sk.circuitBreaker, state), "circuitBreaker"),
     circuitBreakerCommittee: nonZeroAddress(state[Sk.gateSeal].sealingCommittee, "circuitBreakerCommittee"),
     resealManager: nonZeroAddress(getAddress(Sk.resealManager, state), "resealManager"),
@@ -138,6 +139,7 @@ export async function main() {
     sdvtSubmitExitRequestHashesFactory,
 
     gatewayConsumers,
+    maxBalanceExitRequestedPerReportInEth: parameters.srPhase2UpgradeVoteScript.maxBalanceExitRequestedPerReportInEth,
   };
 
   const templateConstructorArgs: ConstructorArgs<SRPhase2UpgradeTemplate__factory> = [
