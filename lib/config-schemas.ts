@@ -311,12 +311,9 @@ const OracleSchema = z.object({
   consensusVersion: PositiveIntSchema,
 });
 
+// LIP-38: the exit limits moved to the TriggerableWithdrawalsGateway; the record cap is a constructor immutable
 const ValidatorsExitBusOracleSchema = OracleSchema.extend({
-  maxValidatorsPerReport: PositiveIntSchema,
-  maxExitBalanceEth: PositiveIntSchema,
-  balancePerFrameEth: PositiveIntSchema,
-  frameDurationInSec: PositiveIntSchema,
-  consensusVersion: PositiveIntSchema,
+  maxRequestsPerReport: PositiveIntSchema,
 });
 
 // Deposit security module schema
