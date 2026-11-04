@@ -3,30 +3,29 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
+
+import { VEBO_CONSENSUS_VERSION } from "lib";
+
 import {
-  HashConsensus__Harness,
-  OracleReportSanityChecker,
-  StakingModule__MockForKeyVerification,
-  ValidatorsExitBus__Harness,
-} from "typechain-types";
-
-import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
-
-import { DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO } from "test/deploy";
+  calcVEBOReportDataHash,
+  deployVEBO,
+  encodeWithdrawalRequests,
+  initVEBO,
+  VEBOReportFields,
+  WithdrawalRequest,
+} from "test/deploy";
 import { Snapshot } from "test/suite";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-  "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-];
-
-// Constants from WithdrawalCredentials.sol
 const LEGACY_MODULE_ID = 1; // Module with 0x01 withdrawal credentials (32 ETH)
+const MAXEB_MODULE_ID_1 = 3; // Module with 0x02 withdrawal credentials (2048 ETH)
+const MAXEB_MODULE_ID_2 = 5; // Another module with 0x02 withdrawal credentials
+
+// FWR weights from OracleReportSanityChecker set by the fixture
 const LEGACY_MODULE_MAX_BALANCE_ETH = 32n; // 32 ETH
 const MAXEB_MODULE_MAX_BALANCE_ETH = 2048n; // 2048 ETH
+
+const GWEI_PER_ETH = 10n ** 9n;
 
 describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   let consensus: HashConsensus__Harness;
@@ -36,58 +35,16 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   let member1: HardhatEthersSigner;
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
-  let mockModules: {
-    module1: StakingModule__MockForKeyVerification;
-    module2: StakingModule__MockForKeyVerification;
-    module3: StakingModule__MockForKeyVerification;
-    module5: StakingModule__MockForKeyVerification;
-    module7: StakingModule__MockForKeyVerification;
-  };
 
   let oracleVersion: bigint;
 
-  interface ExitRequest {
-    moduleId: number;
-    nodeOpId: number;
-    valIndex: number;
-    valPubkey: string;
-    keyIndex?: number; // Optional for format 2
-  }
-
-  const encodeExitRequestHexV1 = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
-  };
-
-  const encodeExitRequestHexV2 = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    return (
-      numberToHex(moduleId, 3) +
-      numberToHex(nodeOpId, 5) +
-      numberToHex(valIndex, 8) +
-      numberToHex(keyIndex || 0, 8) +
-      pubkeyHex
-    );
-  };
-
-  const encodeExitRequestsDataList = (requests: ExitRequest[], dataFormat: number) => {
-    const encoder = dataFormat === DATA_FORMAT_LIST ? encodeExitRequestHexV1 : encodeExitRequestHexV2;
-    return "0x" + requests.map(encoder).join("");
-  };
-
-  const calcValidatorsExitBusReportDataHash = (items: {
-    consensusVersion: bigint;
-    refSlot: bigint;
-    requestsCount: number;
-    dataFormat: number;
-    data: string;
-  }) => {
-    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
-    const reportDataHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
-    );
-    return reportDataHash;
-  };
+  const fwr = (moduleId: number, nodeOpId: number, keyIndex: number) => ({ moduleId, nodeOpId, keyIndex, amount: 0n });
+  const pwr = (moduleId: number, nodeOpId: number, keyIndex: number, amount: bigint) => ({
+    moduleId,
+    nodeOpId,
+    keyIndex,
+    amount,
+  });
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
@@ -96,61 +53,36 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
-  const prepareReportAndSubmitHash = async (
-    requests: ExitRequest[],
-    dataFormat: number = DATA_FORMAT_LIST,
-    options = { reportFields: {} },
-  ) => {
+  // Builds a report from the requests and brings the committee to consensus on its hash
+  const prepareReportAndSubmitHash = async (requests: WithdrawalRequest[]): Promise<VEBOReportFields> => {
     const { refSlot } = await consensus.getCurrentFrame();
     const reportData = {
       consensusVersion: VEBO_CONSENSUS_VERSION,
-      dataFormat,
       refSlot,
       requestsCount: requests.length,
-      data: encodeExitRequestsDataList(requests, dataFormat),
-      ...options.reportFields,
+      data: encodeWithdrawalRequests(requests),
     };
 
-    const reportHash = calcValidatorsExitBusReportDataHash(reportData);
+    await triggerConsensusOnHash(calcVEBOReportDataHash(reportData));
 
-    await triggerConsensusOnHash(reportHash);
+    return reportData;
+  };
 
-    return { reportData, reportHash };
+  const setLimit = async (limitEth: bigint) => {
+    await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(limitEth);
   };
 
   before(async () => {
-    const signers = await ethers.getSigners();
-    admin = signers[0];
-    member1 = signers[1];
-    member2 = signers[2];
-    member3 = signers[3];
+    [admin, member1, member2, member3] = await ethers.getSigners();
 
-    const deployed = await deployVEBO(await admin.getAddress());
+    const deployed = await deployVEBO(admin.address);
     consensus = deployed.consensus;
     oracle = deployed.oracle;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
-    mockModules = deployed.mockModules;
 
-    // Configure signing keys for Format 2 testing (key verification)
-    // Set up keys for all combinations used in tests
-    for (let i = 0; i < PUBKEYS.length; i++) {
-      // Module 1 (legacy): keys for nodeOpId 1, keyIndex 1-5
-      await mockModules.module1.setSigningKey(1, i + 1, PUBKEYS[i]);
-
-      // Module 3 (MaxEB): keys for nodeOpId 1, keyIndex 10-14
-      await mockModules.module3.setSigningKey(1, 10 + i, PUBKEYS[i]);
-
-      // Module 3 (MaxEB): keys for nodeOpId 2, keyIndex 20
-      // Multiple PUBKEYS can map to the same keyIndex for different tests
-      await mockModules.module3.setSigningKey(2, 20, PUBKEYS[0]); // Used in mixed validator test
-
-      // Module 5 (MaxEB): keys for nodeOpId 2, keyIndex 20
-      await mockModules.module5.setSigningKey(2, 20, PUBKEYS[1]); // Used in MaxEB validator test
-    }
-
-    // Additional keys for "same balance" comparison test
-    await mockModules.module1.setSigningKey(1, 100, PUBKEYS[0]); // Format 1 vs Format 2 test
-    await mockModules.module3.setSigningKey(2, 200, PUBKEYS[1]); // Format 1 vs Format 2 test
+    // 0x02 modules accept partial withdrawals
+    await deployed.stakingRouter.setStakingModulePartialWithdrawalsAllowed(MAXEB_MODULE_ID_1, true);
+    await deployed.stakingRouter.setStakingModulePartialWithdrawalsAllowed(MAXEB_MODULE_ID_2, true);
 
     await initVEBO({
       admin: admin.address,
@@ -184,57 +116,106 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       await Snapshot.restore(originalState);
     });
 
-    it("should pass sanity check for legacy validators (Format 2)", async () => {
-      // Set limit to allow 10 legacy validators (320 ETH)
-      const limit = LEGACY_MODULE_MAX_BALANCE_ETH * 10n;
-      await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(limit);
+    context("FWR", () => {
+      it("should pass sanity check for legacy validators", async () => {
+        // Set limit to allow 10 legacy validators (320 ETH)
+        await setLimit(LEGACY_MODULE_MAX_BALANCE_ETH * 10n);
 
-      const requests: ExitRequest[] = [
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
+        const reportData = await prepareReportAndSubmitHash([
+          fwr(LEGACY_MODULE_ID, 1, 1),
+          fwr(LEGACY_MODULE_ID, 1, 2),
+          fwr(LEGACY_MODULE_ID, 1, 3),
+        ]);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      });
+
+      it("should pass sanity check for MaxEB validators at the limit", async () => {
+        // Set limit to allow exactly 2 MaxEB validators (4096 ETH)
+        await setLimit(MAXEB_MODULE_MAX_BALANCE_ETH * 2n);
+
+        const reportData = await prepareReportAndSubmitHash([
+          fwr(MAXEB_MODULE_ID_1, 1, 10),
+          fwr(MAXEB_MODULE_ID_2, 2, 20),
+        ]);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      });
+
+      const mixedRequests = [
+        fwr(LEGACY_MODULE_ID, 1, 1),
+        fwr(LEGACY_MODULE_ID, 1, 2),
+        fwr(LEGACY_MODULE_ID, 1, 3),
+        fwr(LEGACY_MODULE_ID, 1, 4),
+        fwr(LEGACY_MODULE_ID, 1, 5),
+        fwr(MAXEB_MODULE_ID_1, 2, 20),
       ];
+      // 5 legacy (160 ETH) + 1 MaxEB (2048 ETH) = 2208 ETH
+      const mixedTotal = LEGACY_MODULE_MAX_BALANCE_ETH * 5n + MAXEB_MODULE_MAX_BALANCE_ETH;
 
-      const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      it("should pass sanity check for mixed validators at the limit", async () => {
+        await setLimit(mixedTotal);
 
-      // Should not revert - balance is within limit
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+        const reportData = await prepareReportAndSubmitHash(mixedRequests);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      });
+
+      it("should revert if mixed validators exceed the limit", async () => {
+        await setLimit(mixedTotal - 1n);
+
+        const reportData = await prepareReportAndSubmitHash(mixedRequests);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
+          .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSumOfExitBalancePerReport")
+          .withArgs(mixedTotal);
+      });
     });
 
-    it("should pass sanity check for MaxEB validators (Format 2)", async () => {
-      // Set limit to allow 2 MaxEB validators (4096 ETH)
-      const limit = MAXEB_MODULE_MAX_BALANCE_ETH * 2n;
-      await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(limit);
+    context("PWR", () => {
+      it("should weigh a PWR at its amount, not at the module weight", async () => {
+        await setLimit(100n);
 
-      const requests: ExitRequest[] = [
-        { moduleId: 3, nodeOpId: 1, valIndex: 10, keyIndex: 10, valPubkey: PUBKEYS[0] },
-        { moduleId: 5, nodeOpId: 2, valIndex: 20, keyIndex: 20, valPubkey: PUBKEYS[1] },
-      ];
+        const reportData = await prepareReportAndSubmitHash([pwr(MAXEB_MODULE_ID_1, 1, 10, 100n * GWEI_PER_ETH)]);
 
-      const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      });
 
-      // Should not revert - balance is within limit
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
-    });
+      it("should revert if rounding the PWR amount up exceeds the limit", async () => {
+        await setLimit(100n);
 
-    it("should pass sanity check for mixed validators (Format 2)", async () => {
-      // Set limit to allow: 5 legacy (160 ETH) + 1 MaxEB (2048 ETH) = 2208 ETH
-      const limit = LEGACY_MODULE_MAX_BALANCE_ETH * 5n + MAXEB_MODULE_MAX_BALANCE_ETH * 1n;
-      await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(limit);
+        const reportData = await prepareReportAndSubmitHash([pwr(MAXEB_MODULE_ID_1, 1, 10, 100n * GWEI_PER_ETH + 1n)]);
 
-      const requests: ExitRequest[] = [
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 13, keyIndex: 4, valPubkey: PUBKEYS[3] },
-        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 14, keyIndex: 5, valPubkey: PUBKEYS[4] },
-        { moduleId: 3, nodeOpId: 2, valIndex: 20, keyIndex: 20, valPubkey: PUBKEYS[0] },
-      ];
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
+          .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSumOfExitBalancePerReport")
+          .withArgs(101n);
+      });
 
-      const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      it("should pass a mixed PWR and FWR report at the limit", async () => {
+        await setLimit(100n);
 
-      // Should not revert - balance is within limit
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+        // 32 ETH FWR + 68 ETH PWR = 100 ETH
+        const reportData = await prepareReportAndSubmitHash([
+          fwr(LEGACY_MODULE_ID, 1, 1),
+          pwr(MAXEB_MODULE_ID_1, 1, 10, 68n * GWEI_PER_ETH),
+        ]);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
+      });
+
+      it("should revert a mixed PWR and FWR report over the limit", async () => {
+        await setLimit(100n);
+
+        // 32 ETH FWR + 68 ETH and 1 gwei PWR = 101 ETH after rounding up
+        const reportData = await prepareReportAndSubmitHash([
+          fwr(LEGACY_MODULE_ID, 1, 1),
+          pwr(MAXEB_MODULE_ID_1, 1, 10, 68n * GWEI_PER_ETH + 1n),
+        ]);
+
+        await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
+          .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSumOfExitBalancePerReport")
+          .withArgs(101n);
+      });
     });
   });
 });

@@ -4,41 +4,30 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+
+import { VEBO_CONSENSUS_VERSION } from "lib";
+
 import {
-  HashConsensus__Harness,
-  StakingModule__MockForKeyVerification,
-  ValidatorsExitBus__Harness,
-} from "typechain-types";
-
-import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
-
-import { DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO, seedMockModuleSigningKeys } from "test/deploy";
+  calcVEBOReportDataHash,
+  deployVEBO,
+  encodeWithdrawalRequests,
+  initVEBO,
+  VEBOReportFields,
+  WithdrawalRequest,
+} from "test/deploy";
 import { Snapshot } from "test/suite";
-
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-];
 
 describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let originalState: string;
-  let mockModules: {
-    module1: StakingModule__MockForKeyVerification;
-    module2: StakingModule__MockForKeyVerification;
-    module3: StakingModule__MockForKeyVerification;
-    module4: StakingModule__MockForKeyVerification;
-    module5: StakingModule__MockForKeyVerification;
-    module7: StakingModule__MockForKeyVerification;
-  };
 
   let initTx: ContractTransactionResponse;
   let oracleVersion: bigint;
-  let exitRequests: ExitRequest[];
-  let reportFields: ReportFields;
+  let requests: WithdrawalRequest[];
+  let reportFields: VEBOReportFields;
   let reportHash: string;
 
   let member1: HardhatEthersSigner;
@@ -47,51 +36,10 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   let stranger: HardhatEthersSigner;
   let account1: HardhatEthersSigner;
 
-  interface ExitRequest {
-    moduleId: number;
-    nodeOpId: number;
-    valIndex: number;
-    keyIndex: number;
-    valPubkey: string;
-  }
-
-  interface ReportFields {
-    consensusVersion: bigint;
-    refSlot: bigint;
-    requestsCount: number;
-    dataFormat: number;
-    data: string;
-  }
-
-  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
-    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
-    const reportDataHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
-    );
-    return reportDataHash;
-  };
-
-  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return (
-      numberToHex(moduleId, 3) +
-      numberToHex(nodeOpId, 5) +
-      numberToHex(valIndex, 8) +
-      numberToHex(keyIndex, 8) +
-      pubkeyHex
-    );
-  };
-
-  const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
-    return "0x" + requests.map(encodeExitRequestHex).join("");
-  };
-
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    mockModules = deployed.mockModules;
 
     initTx = await initVEBO({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
 
@@ -102,62 +50,26 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     await consensus.addMember(member3, 2);
 
     const { refSlot } = await consensus.getCurrentFrame();
-    exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, keyIndex: 2, valPubkey: PUBKEYS[2] },
+    requests = [
+      { moduleId: 1, nodeOpId: 0, keyIndex: 0, amount: 0n },
+      { moduleId: 1, nodeOpId: 0, keyIndex: 1, amount: 0n },
+      { moduleId: 2, nodeOpId: 0, keyIndex: 2, amount: 0n },
     ];
-    await seedMockModuleSigningKeys(mockModules, exitRequests);
 
     reportFields = {
       consensusVersion: VEBO_CONSENSUS_VERSION,
       refSlot: refSlot,
-      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
-      requestsCount: exitRequests.length,
-      data: encodeExitRequestsDataList(exitRequests),
+      requestsCount: requests.length,
+      data: encodeWithdrawalRequests(requests),
     };
 
-    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
+    reportHash = calcVEBOReportDataHash(reportFields);
     await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
     await consensus.connect(member3).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
   };
 
   before(async () => {
     [admin, member1, member2, member3, stranger, account1] = await ethers.getSigners();
-
-    const deployed = await deployVEBO(admin.address);
-    oracle = deployed.oracle;
-    consensus = deployed.consensus;
-
-    initTx = await initVEBO({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
-
-    oracleVersion = await oracle.getContractVersion();
-
-    await consensus.addMember(member1, 1);
-    await consensus.addMember(member2, 2);
-    await consensus.addMember(member3, 2);
-
-    const { refSlot } = await consensus.getCurrentFrame();
-    exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, keyIndex: 2, valPubkey: PUBKEYS[2] },
-    ];
-
-    reportFields = {
-      consensusVersion: VEBO_CONSENSUS_VERSION,
-      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
-      // consensusVersion: CONSENSUS_VERSION,
-      refSlot: refSlot,
-      requestsCount: exitRequests.length,
-      data: encodeExitRequestsDataList(exitRequests),
-    };
-
-    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
-
-    await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
-    await seedMockModuleSigningKeys(deployed.mockModules, exitRequests);
 
     await deploy();
   });
@@ -167,12 +79,12 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("deploying", () => {
-    it("deploying accounting oracle", async () => {
+    it("deploying validators exit bus oracle", async () => {
       expect(oracle).to.be.not.null;
       expect(consensus).to.be.not.null;
       expect(initTx).to.be.not.null;
       expect(oracleVersion).to.be.not.null;
-      expect(exitRequests).to.be.not.null;
+      expect(requests).to.be.not.null;
       expect(reportFields).to.be.not.null;
       expect(reportHash).to.be.not.null;
     });
@@ -186,16 +98,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(
-            ZeroAddress,
-            await consensus.getAddress(),
-            VEBO_CONSENSUS_VERSION,
-            0,
-            600,
-            13_000n, // 13,000 ETH
-            32n, // 32 ETH
-            48,
-          ),
+          oracle.initialize(ZeroAddress, await consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

@@ -540,6 +540,18 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         SRLib._setModuleStatus(_stakingModuleId, _status);
     }
 
+    /// @notice Allows or disallows partial withdrawal requests (PWRs) for the staking module's validators.
+    /// @param _stakingModuleId Id of the staking module to be updated.
+    /// @param _allowed Whether PWRs are allowed; `true` requires 0x02 withdrawal credentials.
+    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
+    function setStakingModulePartialWithdrawalsAllowed(uint256 _stakingModuleId, bool _allowed)
+        external
+        onlyRole(STAKING_MODULE_MANAGE_ROLE)
+    {
+        SRUtils._requireModuleIdExists(_stakingModuleId);
+        SRLib._setModulePartialWithdrawalsAllowed(_stakingModuleId, _allowed);
+    }
+
     /// @notice Returns whether the staking module is stopped.
     /// @param _stakingModuleId Id of the staking module.
     /// @return True if the staking module is stopped, false otherwise.

@@ -8,7 +8,7 @@ import { HashConsensus__Harness, ValidatorsExitBus__Harness, ValidatorsExitBusOr
 
 import { SECONDS_PER_SLOT, VEBO_CONSENSUS_VERSION } from "lib";
 
-import { deployVEBO, initVEBO } from "test/deploy";
+import { deployVEBO, initVEBO, MAX_REQUESTS_PER_REPORT } from "test/deploy";
 
 describe("ValidatorsExitBusOracle.sol:deploy", () => {
   context("Deployment and initial configuration", () => {
@@ -23,22 +23,8 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
     it("initialize reverts if admin address is zero", async () => {
       const deployed = await deployVEBO(admin.address);
 
-      const maxValidatorsPerReport = 50;
-      const maxExitRequestsLimit = 100;
-      const exitsPerFrame = 1;
-      const frameDuration = 48;
-
       await expect(
-        deployed.oracle.initialize(
-          ZeroAddress,
-          await deployed.consensus.getAddress(),
-          VEBO_CONSENSUS_VERSION,
-          0,
-          maxValidatorsPerReport,
-          maxExitRequestsLimit,
-          exitsPerFrame,
-          frameDuration,
-        ),
+        deployed.oracle.initialize(ZeroAddress, await deployed.consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0),
       ).to.be.revertedWithCustomError(defaultOracle, "AdminCannotBeZero");
     });
 
@@ -47,6 +33,12 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
         defaultOracle,
         "SecondsPerSlotCannotBeZero",
       );
+    });
+
+    it("reverts when maxRequestsPerReport is zero", async () => {
+      await expect(deployVEBO(admin.address, { maxRequestsPerReport: 0 }))
+        .to.be.revertedWithCustomError(defaultOracle, "ZeroArgument")
+        .withArgs("maxRequestsPerReport");
     });
 
     context("deployment and init finishes successfully (default setup)", async () => {
@@ -81,6 +73,8 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
         expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
         expect(await oracle.getConsensusVersion()).to.equal(VEBO_CONSENSUS_VERSION);
         expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
+        expect(await oracle.getContractVersion()).to.equal(4);
+        expect(await oracle.MAX_REQUESTS_PER_REPORT()).to.equal(MAX_REQUESTS_PER_REPORT);
         expect(await oracle.isPaused()).to.equal(true);
       });
 
