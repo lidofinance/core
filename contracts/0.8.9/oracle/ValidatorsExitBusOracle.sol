@@ -129,13 +129,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         uint256 amountGwei
     );
 
-    struct DataProcessingState {
-        uint64 refSlot;
-        uint64 requestsCount;
-        uint64 requestsProcessed;
-        //uint16 _deprecatedDataFormat
-    }
-
     /// @dev Staking module data cached while iterating over report records
     struct ModuleCache {
         uint256 moduleId;
@@ -151,8 +144,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     /// @notice An ACL role granting the permission to resume accepting report data
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
 
-    /// @dev Storage slot: DataProcessingState dataProcessingState
-    bytes32 internal constant DATA_PROCESSING_STATE_POSITION =
+    /// @dev [DEPRECATED] Storage slot: DataProcessingState dataProcessingState
+    /// Per-report processing counters; a report is processed in a single transaction. Cleared in v4.
+    bytes32 internal constant DEPRECATED_DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.dataProcessingState");
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
@@ -344,14 +338,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         /// @notice Hash of the report data. Zero bytes if consensus on the hash hasn't
         /// been reached yet for the current reporting frame.
         bytes32 dataHash;
-        /// @notice Whether any report data for the for the current reporting frame has been
+        /// @notice Whether any report data for the current reporting frame has been
         /// already submitted.
         bool dataSubmitted;
-        /// @notice Total number of validator exit requests for the current reporting frame.
-        uint256 requestsCount;
-        /// @notice How many validator exit requests are already submitted for the current
-        /// reporting frame.
-        uint256 requestsSubmitted;
     }
 
     /// @notice Returns data processing state for the current reporting frame.
@@ -367,16 +356,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
         result.processingDeadlineTime = report.processingDeadlineTime;
         result.dataHash = report.hash;
-
-        DataProcessingState memory procState = _storageDataProcessingState().value;
-
-        result.dataSubmitted = procState.refSlot == result.currentFrameRefSlot;
-        if (!result.dataSubmitted) {
-            return result;
-        }
-
-        result.requestsCount = procState.requestsCount;
-        result.requestsSubmitted = procState.requestsProcessed;
+        result.dataSubmitted = report.refSlot == LAST_PROCESSING_REF_SLOT_POSITION.getStorageUint256();
     }
 
     /// @notice Returns the total number of withdrawal requests (full and partial) ever processed
@@ -433,12 +413,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(
             totalExitBalanceEth
         );
-
-        _storageDataProcessingState().value = DataProcessingState({
-            refSlot: data.refSlot.toUint64(),
-            requestsCount: data.requestsCount.toUint64(),
-            requestsProcessed: data.requestsCount.toUint64()
-        });
 
         if (data.requestsCount == 0) {
             return;
@@ -638,20 +612,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     /// Storage helpers
     ///
 
-    struct StorageDataProcessingState {
-        DataProcessingState value;
-    }
-
-    function _storageDataProcessingState() internal pure returns (StorageDataProcessingState storage r) {
-        bytes32 position = DATA_PROCESSING_STATE_POSITION;
-        assembly {
-            r.slot := position
-        }
-    }
-
-    /// @dev LimitData packs into a single slot, so zeroing the slot clears the whole struct
+    /// @dev LimitData and DataProcessingState each pack into a single slot, so zeroing the slot clears the whole struct
     function _clearDeprecatedSlots() internal {
         DEPRECATED_EXIT_BALANCE_LIMIT_POSITION.setStorageUint256(0);
         DEPRECATED_MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(0);
+        DEPRECATED_DATA_PROCESSING_STATE_POSITION.setStorageUint256(0);
     }
 }

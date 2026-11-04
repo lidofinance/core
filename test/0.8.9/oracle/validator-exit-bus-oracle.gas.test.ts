@@ -181,8 +181,6 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         const procState = await oracle.getProcessingState();
         expect(procState.dataHash).to.equal(reportHash);
         expect(procState.dataSubmitted).to.equal(false);
-        expect(procState.requestsCount).to.equal(0);
-        expect(procState.requestsSubmitted).to.equal(0);
       });
 
       it("some time passes", async () => {
@@ -215,8 +213,6 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         const procState = await oracle.getProcessingState();
         expect(procState.dataHash).to.equal(reportHash);
         expect(procState.dataSubmitted).to.equal(true);
-        expect(procState.requestsCount).to.equal(requests.length);
-        expect(procState.requestsSubmitted).to.equal(requests.length);
       });
 
       it("some time passes", async () => {

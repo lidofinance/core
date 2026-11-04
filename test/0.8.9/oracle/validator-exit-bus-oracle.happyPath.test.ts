@@ -92,8 +92,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.dataHash).to.equal(ZeroHash);
     expect(procState.processingDeadlineTime).to.equal(0);
     expect(procState.dataSubmitted).to.equal(false);
-    expect(procState.requestsCount).to.equal(0);
-    expect(procState.requestsSubmitted).to.equal(0);
   });
 
   it("reference slot of the empty initial consensus report is set to the last processing slot passed to the initialize function", async () => {
@@ -137,8 +135,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.dataHash).to.equal(reportHash);
     expect(procState.processingDeadlineTime).to.equal(computeTimestampAtSlot(frame.reportProcessingDeadlineSlot));
     expect(procState.dataSubmitted).to.equal(false);
-    expect(procState.requestsCount).to.equal(0);
-    expect(procState.requestsSubmitted).to.equal(0);
   });
 
   it("some time passes", async () => {
@@ -206,8 +202,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.dataHash).to.equal(reportHash);
     expect(procState.processingDeadlineTime).to.equal(computeTimestampAtSlot(frame.reportProcessingDeadlineSlot));
     expect(procState.dataSubmitted).to.equal(true);
-    expect(procState.requestsCount).to.equal(requests.length);
-    expect(procState.requestsSubmitted).to.equal(requests.length);
   });
 
   it("no data can be submitted for the same reference slot again", async () => {

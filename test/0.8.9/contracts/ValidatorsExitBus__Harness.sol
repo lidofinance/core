@@ -35,10 +35,6 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         return time;
     }
 
-    function getDataProcessingState() external view returns (DataProcessingState memory) {
-        return _storageDataProcessingState().value;
-    }
-
     function setContractVersion(uint256 version) external {
         CONTRACT_VERSION_POSITION.setStorageUint256(version);
     }

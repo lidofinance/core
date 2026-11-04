@@ -129,8 +129,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const state = await oracle.getProcessingState();
       expect(state.dataHash).to.equal(ZeroHash);
       expect(state.dataSubmitted).to.equal(false);
-      expect(state.requestsCount).to.equal(0);
-      expect(state.requestsSubmitted).to.equal(0);
     });
 
     it("reverts on trying to submit the discarded report", async () => {
@@ -284,7 +282,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
       it("reverts the whole report if the bus reverts", async () => {
         await triggerableWithdrawalsBus.setRevertOnAdd(true);
-        const stateBefore = await oracle.getDataProcessingState();
+        const lastProcessingRefSlotBefore = await oracle.getLastProcessingRefSlot();
         const totalBefore = await oracle.getTotalRequestsProcessed();
 
         const { reportData } = await prepareReportAndSubmitHash(requests);
@@ -292,7 +290,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
           "TWB mock: revert",
         );
 
-        expect(await oracle.getDataProcessingState()).to.deep.equal(stateBefore);
+        expect((await oracle.getProcessingState()).dataSubmitted).to.equal(false);
+        expect(await oracle.getLastProcessingRefSlot()).to.equal(lastProcessingRefSlotBefore);
         expect(await oracle.getTotalRequestsProcessed()).to.equal(totalBefore);
       });
     });
@@ -377,24 +376,18 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
 
     it("updates processing state", async () => {
-      const storageBefore = await oracle.getDataProcessingState();
-      expect(storageBefore.refSlot).to.equal(0);
-      expect(storageBefore.requestsCount).to.equal(0);
-
-      expect(storageBefore.requestsProcessed).to.equal(0);
-
       const { refSlot } = await consensus.getCurrentFrame();
       const requests = [
         { moduleId: 4, nodeOpId: 3, keyIndex: 1, amount: 0n },
         { moduleId: 5, nodeOpId: 3, keyIndex: 2, amount: 0n },
       ];
       const { reportData } = await prepareReportAndSubmitHash(requests);
+      expect((await oracle.getProcessingState()).dataSubmitted).to.equal(false);
+
       await oracle.connect(member1).submitReportData(reportData, oracleVersion);
 
-      const storageAfter = await oracle.getDataProcessingState();
-      expect(storageAfter.refSlot).to.equal(refSlot);
-      expect(storageAfter.requestsCount).to.equal(requests.length);
-      expect(storageAfter.requestsProcessed).to.equal(requests.length);
+      expect((await oracle.getProcessingState()).dataSubmitted).to.equal(true);
+      expect(await oracle.getLastProcessingRefSlot()).to.equal(refSlot);
     });
 
     it("updates total requests processed count", async () => {
@@ -584,14 +577,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
     it("has correct defaults on init", async () => {
       const state = await oracle.getProcessingState();
-      expect(Object.values(state)).to.deep.equal([
-        (await consensus.getCurrentFrame()).refSlot,
-        0,
-        ZeroHash,
-        false,
-        0,
-        0,
-      ]);
+      expect(Object.values(state)).to.deep.equal([(await consensus.getCurrentFrame()).refSlot, 0, ZeroHash, false]);
     });
 
     it("consensus report submitted", async () => {
@@ -606,8 +592,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         computeTimestampAtSlot((await consensus.getCurrentFrame()).reportProcessingDeadlineSlot),
         hash,
         false,
-        0,
-        0,
       ]);
     });
 
@@ -619,22 +603,13 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         computeTimestampAtSlot((await consensus.getCurrentFrame()).reportProcessingDeadlineSlot),
         hash,
         true,
-        2,
-        2,
       ]);
     });
 
     it("at next frame state resets", async () => {
       await consensus.advanceTimeToNextFrameStart();
       const state = await oracle.getProcessingState();
-      expect(Object.values(state)).to.deep.equal([
-        (await consensus.getCurrentFrame()).refSlot,
-        0,
-        ZeroHash,
-        false,
-        0,
-        0,
-      ]);
+      expect(Object.values(state)).to.deep.equal([(await consensus.getCurrentFrame()).refSlot, 0, ZeroHash, false]);
     });
   });
 
@@ -656,10 +631,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       await expect(tx).to.not.emit(oracle, "WithdrawalRequested");
       expect(await triggerableWithdrawalsBus.addWithdrawalIntentsCalls()).to.equal(0);
 
-      const state = await oracle.getDataProcessingState();
-      expect(state.refSlot).to.equal(refSlot);
-      expect(state.requestsCount).to.equal(0);
-      expect(state.requestsProcessed).to.equal(0);
+      expect((await oracle.getProcessingState()).dataSubmitted).to.equal(true);
+      expect(await oracle.getLastProcessingRefSlot()).to.equal(refSlot);
     });
   });
 });
