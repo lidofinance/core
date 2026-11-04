@@ -232,6 +232,8 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
                 (consumers[0].consumer, consumers[0].pwrLimit, consumers[0].fwrLimit)
             )
         );
+        // TODO replace the CSM, CSM 0x02 and CMv2 ejectors with the CSM release ones that call triggerWithdrawals,
+        // and wire them into their modules. The live ejectors call triggerFullWithdrawals, which the new gateway lacks.
         items[i++] = _item(
             "1.1.12. Set the limits of the CSM ejector on the new TriggerableWithdrawalsGateway",
             newGateway,
