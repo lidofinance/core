@@ -12,7 +12,7 @@ import {
   WithdrawalVault,
 } from "typechain-types";
 
-import { advanceChainTime, ether, impersonate, readWithdrawalRequests } from "lib";
+import { ether, impersonate, readWithdrawalRequests } from "lib";
 import { randomValidatorPubkey } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
@@ -25,6 +25,7 @@ import {
   reachConsensus,
   setTriggerableWithdrawalsConsumerLimits,
   updateOracleReportLimits,
+  waitNextAvailableReportTime,
 } from "lib/protocol/helpers";
 import { NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
 import { LoadedContract } from "lib/protocol/types";
@@ -252,15 +253,11 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
     const pubkeyOf = async ({ moduleId, nodeOpId, keyIndex }: WithdrawalRequest) =>
       (await moduleById(moduleId).getSigningKey(nodeOpId, keyIndex)).key;
 
-    /** Reaches consensus on a report of `requests` in a frame the VEBO has not processed yet, then submits it. */
+    /** Reaches consensus on a report of `requests` at the start of the next frame, then submits it. */
     const submitReport = async (requests: WithdrawalRequest[]) => {
-      let { refSlot } = await veboConsensus.getCurrentFrame();
-      if ((await vebo.getLastProcessingRefSlot()) >= refSlot) {
-        const { slotsPerEpoch, secondsPerSlot } = await veboConsensus.getChainConfig();
-        const { epochsPerFrame } = await veboConsensus.getFrameConfig();
-        await advanceChainTime(epochsPerFrame * slotsPerEpoch * secondsPerSlot);
-        ({ refSlot } = await veboConsensus.getCurrentFrame());
-      }
+      // A new frame is not processed yet and leaves the whole frame before the processing deadline:
+      // on a fork a large report reads its keys from the remote node and takes minutes
+      const { reportRefSlot: refSlot } = await waitNextAvailableReportTime(ctx, veboConsensus);
 
       const report = {
         consensusVersion: await vebo.getConsensusVersion(),

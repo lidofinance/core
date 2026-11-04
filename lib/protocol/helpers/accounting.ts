@@ -551,8 +551,10 @@ export async function reportWithoutExtraData(
   return { reportTx, data, submitter, extraDataChunks, extraDataChunkHashes };
 }
 
-export const getReportTimeElapsed = async (ctx: ProtocolContext) => {
-  const { hashConsensus } = ctx.contracts;
+export const getReportTimeElapsed = async (
+  ctx: ProtocolContext,
+  hashConsensus: HashConsensus = ctx.contracts.hashConsensus,
+) => {
   const { slotsPerEpoch, secondsPerSlot, genesisTime } = await hashConsensus.getChainConfig();
   const { refSlot } = await hashConsensus.getCurrentFrame();
   const time = await getCurrentBlockTimestamp();
@@ -603,18 +605,19 @@ export const getNextReportContext = async (
 /**
  * Wait for the next available report time.
  * Returns the report timestamp and the ref slot of the next frame.
+ * Defaults to the AccountingOracle consensus; pass another oracle's HashConsensus to wait for its frame.
  */
 export const waitNextAvailableReportTime = async (
   ctx: ProtocolContext,
+  hashConsensus: HashConsensus = ctx.contracts.hashConsensus,
 ): Promise<{ reportTimestamp: bigint; reportRefSlot: bigint }> => {
-  const { hashConsensus } = ctx.contracts;
   const { slotsPerEpoch } = await hashConsensus.getChainConfig();
   const { epochsPerFrame } = await hashConsensus.getFrameConfig();
   const { refSlot } = await hashConsensus.getCurrentFrame();
 
   const slotsPerFrame = slotsPerEpoch * epochsPerFrame;
 
-  const { nextFrameStartWithOffset, timeElapsed, nextFrameStart } = await getReportTimeElapsed(ctx);
+  const { nextFrameStartWithOffset, timeElapsed, nextFrameStart } = await getReportTimeElapsed(ctx, hashConsensus);
 
   await advanceChainTime(timeElapsed);
 
