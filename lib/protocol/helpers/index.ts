@@ -32,6 +32,7 @@ export {
   submitReportDataWithConsensusAndEmptyExtraData,
   getDepositedSinceLastReport,
   normalizeWithdrawalVaultBaseline,
+  reachConsensus,
 } from "./accounting";
 
 export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm";

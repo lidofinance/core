@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { AccountingOracle } from "typechain-types";
+import { AccountingOracle, HashConsensus } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.sol/Accounting";
 
 import {
@@ -1063,13 +1063,13 @@ type ReachConsensusParams = {
 
 /**
  * Submit reports from all fast lane members to reach consensus on the report.
+ * Defaults to the AccountingOracle consensus; pass another oracle's HashConsensus to report there.
  */
-const reachConsensus = async (
+export const reachConsensus = async (
   ctx: ProtocolContext,
   { refSlot, reportHash, consensusVersion }: ReachConsensusParams,
+  hashConsensus: HashConsensus = ctx.contracts.hashConsensus,
 ) => {
-  const { hashConsensus } = ctx.contracts;
-
   const { addresses } = await hashConsensus.getFastLaneMembers();
 
   let submitter: HardhatEthersSigner | null = null;
@@ -1159,10 +1159,14 @@ const getOracleCommitteeMemberAddress = (id: number) => certainAddress(`AO:HC:OC
 
 /**
  * Ensure that the oracle committee has the required number of members.
+ * Defaults to the AccountingOracle consensus; pass another oracle's HashConsensus to set up its committee.
  */
-export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount: bigint, quorum: bigint) => {
-  const { hashConsensus } = ctx.contracts;
-
+export const ensureOracleCommitteeMembers = async (
+  ctx: ProtocolContext,
+  minMembersCount: bigint,
+  quorum: bigint,
+  hashConsensus: HashConsensus = ctx.contracts.hashConsensus,
+) => {
   const members = await hashConsensus.getFastLaneMembers();
   const addresses = members.addresses.map((address) => address.toLowerCase());
 
@@ -1210,10 +1214,12 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
 /**
  * Ensure that the oracle committee members have consensus on the initial epoch.
+ * Defaults to the AccountingOracle consensus.
  */
-export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
-  const { hashConsensus } = ctx.contracts;
-
+export const ensureHashConsensusInitialEpoch = async (
+  ctx: ProtocolContext,
+  hashConsensus: HashConsensus = ctx.contracts.hashConsensus,
+) => {
   const { initialEpoch } = await hashConsensus.getFrameConfig();
   const latestBlockTimestamp = await getCurrentBlockTimestamp();
   const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
