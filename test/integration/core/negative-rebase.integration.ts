@@ -103,10 +103,12 @@ describe("Integration: Negative rebase", () => {
       clRebaseDecreaseHardBPLimit: 500n,
     });
 
+    // Read before `reportWithoutClActivation()` moves to the next frame: only
+    // `depositedSinceLastReport` already includes current-frame deposits that the report will count.
     const getPrincipalCLBalance = async () => {
-      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedForCurrentReport } =
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
         await lido.getBalanceStats();
-      return clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedForCurrentReport;
+      return clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport;
     };
     const initialPrincipal = await getPrincipalCLBalance();
 
@@ -133,10 +135,11 @@ describe("Integration: Negative rebase", () => {
       clRebaseDecreaseHardBPLimit: 500n,
     });
 
-    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedForCurrentReport } =
+    // Read before the report moves to the next frame, so current-frame deposits must be included.
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
       await lido.getBalanceStats();
     const principalCLBalance =
-      clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedForCurrentReport;
+      clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport;
     const decreaseAboveHardLimit = ((principalCLBalance * 600n) / 10_000n / ONE_GWEI) * ONE_GWEI;
 
     await expect(

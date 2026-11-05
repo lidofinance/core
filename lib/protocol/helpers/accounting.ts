@@ -199,7 +199,10 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
 
   let isBunkerMode = false;
 
-  const postCLBalanceGwei = postCLBalance / ONE_GWEI;
+  // CL balances are reported in gwei, while the checker adds the wei-denominated WVB back.
+  // Round the CL part up, so a sub-gwei WVB remainder never shows up as a CL decrease:
+  // with a zero soft decrease limit any decrease requires a second-opinion hash.
+  const postCLBalanceGwei = (postCLBalance + ONE_GWEI - 1n) / ONE_GWEI;
   if (clPendingBalanceGwei > postCLBalanceGwei) {
     throw new Error(
       `Reported CL pending balance ${clPendingBalanceGwei} exceeds total CL balance ${postCLBalanceGwei}`,
@@ -207,14 +210,16 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
   }
   const clValidatorsBalanceGwei = postCLBalanceGwei - clPendingBalanceGwei;
   const clPendingBalance = clPendingBalanceGwei * ONE_GWEI;
-  const clValidatorsBalance = postCLBalance - clPendingBalance;
+  const clValidatorsBalance = clValidatorsBalanceGwei * ONE_GWEI;
 
+  // Simulate exactly the values that are submitted, including the full Burner request.
   const simulatedReport = await simulateReport(ctx, {
     refSlot,
     clValidatorsBalance,
     clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
+    sharesRequestedToBurn: sharesRequestedToBurn ?? 0n,
   });
 
   if (!simulatedReport) {
@@ -282,7 +287,7 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
 
   return submitReport(ctx, {
     ...reportData,
-    clBalance: postCLBalance,
+    clBalance: postCLBalanceGwei * ONE_GWEI,
     extraDataList,
   });
 };
@@ -508,6 +513,7 @@ type SimulateReportParams = {
   clPendingBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
+  sharesRequestedToBurn?: bigint;
 };
 
 type SimulateReportResult = {
@@ -526,6 +532,7 @@ export const simulateReport = async (
     clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
+    sharesRequestedToBurn = 0n,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -549,7 +556,7 @@ export const simulateReport = async (
     clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    sharesRequestedToBurn: 0n,
+    sharesRequestedToBurn,
     withdrawalFinalizationBatches: [],
     simulatedShareRate: 10n ** 27n,
   };
