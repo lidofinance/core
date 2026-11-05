@@ -10,14 +10,19 @@ import {GatewayConsumerLimits, SRPhase2UpgradeParameters} from "./SRPhase2Upgrad
 /// @dev The gateway consumer limits are a list, so they live in storage; nothing changes them after deployment.
 contract SRPhase2UpgradeConfig {
     error ZeroAddress(string field);
+    error ZeroValue(string field);
     error InvalidChainId(uint256 chainId);
     error NotReplaced(string field, address value);
     error BusLimitsMissing();
     error InvalidGatewayConsumersCount(uint256 count);
     error DuplicateGatewayConsumer(address consumer);
+    error DuplicateEasyTrackFactory(address factory);
+    error SanityLimitMismatch(uint256 limitInEth, uint256 busPwrMaxLimit);
 
     /// @notice The bus and three staking module ejectors; the vote script has one explicit item per consumer
     uint256 public constant GATEWAY_CONSUMERS_COUNT = 4;
+
+    uint256 internal constant GWEI_PER_ETH = 1e9;
 
     uint256 public immutable CHAIN_ID;
 
@@ -31,6 +36,12 @@ contract SRPhase2UpgradeConfig {
     address public immutable NEW_LOCATOR_IMPLEMENTATION;
 
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
+    address public immutable NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
+    /// @notice The consensus version of the new report format, set by `finalizeUpgrade_v4`
+    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION;
+    /// @notice The record cap the new implementation must carry in its immutable
+    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT;
+    address public immutable ORACLE_REPORT_SANITY_CHECKER;
     address public immutable CIRCUIT_BREAKER;
     address public immutable CIRCUIT_BREAKER_COMMITTEE;
     address public immutable RESEAL_MANAGER;
@@ -45,6 +56,14 @@ contract SRPhase2UpgradeConfig {
     address public immutable TRIGGERABLE_WITHDRAWALS_BUS;
 
     address public immutable VALIDATOR_EXIT_DELAY_VERIFIER;
+
+    address public immutable EASY_TRACK;
+    address public immutable EASY_TRACK_EVM_SCRIPT_EXECUTOR;
+    address public immutable CURATED_SUBMIT_EXIT_REQUEST_HASHES_FACTORY;
+    address public immutable SDVT_SUBMIT_EXIT_REQUEST_HASHES_FACTORY;
+
+    /// @notice The sanity limit the vote sets, in whole ETH
+    uint256 public immutable MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH;
 
     GatewayConsumerLimits[] internal _gatewayConsumers;
 
@@ -62,6 +81,15 @@ contract SRPhase2UpgradeConfig {
         NEW_LOCATOR_IMPLEMENTATION = _nonZero(params.newLocatorImplementation, "newLocatorImplementation");
 
         VALIDATORS_EXIT_BUS_ORACLE = _nonZero(params.validatorsExitBusOracle, "validatorsExitBusOracle");
+        NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL =
+            _nonZero(params.newValidatorsExitBusOracleImpl, "newValidatorsExitBusOracleImpl");
+        VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION =
+            _nonZeroUint(params.validatorsExitBusOracleConsensusVersion, "validatorsExitBusOracleConsensusVersion");
+        VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT = _nonZeroUint(
+            params.validatorsExitBusOracleMaxRequestsPerReport,
+            "validatorsExitBusOracleMaxRequestsPerReport"
+        );
+        ORACLE_REPORT_SANITY_CHECKER = _nonZero(params.oracleReportSanityChecker, "oracleReportSanityChecker");
         CIRCUIT_BREAKER = _nonZero(params.circuitBreaker, "circuitBreaker");
         CIRCUIT_BREAKER_COMMITTEE = _nonZero(params.circuitBreakerCommittee, "circuitBreakerCommittee");
         RESEAL_MANAGER = _nonZero(params.resealManager, "resealManager");
@@ -79,7 +107,20 @@ contract SRPhase2UpgradeConfig {
 
         VALIDATOR_EXIT_DELAY_VERIFIER = _nonZero(params.validatorExitDelayVerifier, "validatorExitDelayVerifier");
 
+        EASY_TRACK = _nonZero(params.easyTrack, "easyTrack");
+        EASY_TRACK_EVM_SCRIPT_EXECUTOR = _nonZero(params.easyTrackEvmScriptExecutor, "easyTrackEvmScriptExecutor");
+        CURATED_SUBMIT_EXIT_REQUEST_HASHES_FACTORY =
+            _nonZero(params.curatedSubmitExitRequestHashesFactory, "curatedSubmitExitRequestHashesFactory");
+        SDVT_SUBMIT_EXIT_REQUEST_HASHES_FACTORY =
+            _nonZero(params.sdvtSubmitExitRequestHashesFactory, "sdvtSubmitExitRequestHashesFactory");
+        // Removing one factory twice would revert the Aragon vote on enactment
+        if (params.curatedSubmitExitRequestHashesFactory == params.sdvtSubmitExitRequestHashesFactory) {
+            revert DuplicateEasyTrackFactory(params.curatedSubmitExitRequestHashesFactory);
+        }
+
         _setGatewayConsumers(params.gatewayConsumers, params.triggerableWithdrawalsBus);
+        _checkSanityLimit(params.maxBalanceExitRequestedPerReportInEth, params.gatewayConsumers[0].pwrLimit.maxLimit);
+        MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH = params.maxBalanceExitRequestedPerReportInEth;
 
         // A parameters file that repeats an address on both sides would make the vote a no-op
         // and the template's pre/post checks contradictory, so reject it here.
@@ -111,12 +152,26 @@ contract SRPhase2UpgradeConfig {
         }
     }
 
+    /// @dev LIP-38 sizes the bus PWR quota (in gwei) as the most one VEBO report can carry, so it equals the sanity
+    ///      limit. The checker keeps the limit in whole ETH in a uint16. Zero would reject every report with exit
+    ///      requests.
+    function _checkSanityLimit(uint256 limitInEth, uint256 busPwrMaxLimit) private pure {
+        if (limitInEth == 0 || limitInEth > type(uint16).max || limitInEth * GWEI_PER_ETH != busPwrMaxLimit) {
+            revert SanityLimitMismatch(limitInEth, busPwrMaxLimit);
+        }
+    }
+
     function _replaced(string memory field, address oldValue, address newValue) private pure {
         if (oldValue == newValue) revert NotReplaced(field, oldValue);
     }
 
     function _nonZero(address value, string memory field) private pure returns (address) {
         if (value == address(0)) revert ZeroAddress(field);
+        return value;
+    }
+
+    function _nonZeroUint(uint256 value, string memory field) private pure returns (uint256) {
+        if (value == 0) revert ZeroValue(field);
         return value;
     }
 }

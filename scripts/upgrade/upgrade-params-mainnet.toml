@@ -74,11 +74,8 @@ consensusVersion = 7
 
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
-maxValidatorsPerReport = 600
-maxExitBalanceEth = 358400
-balancePerFrameEth = 32
-frameDurationInSec = 48
-consensusVersion = 5
+maxRequestsPerReport = 400   # Maximum records per report (LIP-38)
+consensusVersion = 6         # LIP-38 report format, set by finalizeUpgrade_v4 (live: 5)
 
 [validatorExitDelayVerifier]
 firstSupportedSlot = 11_649_024
@@ -182,3 +179,8 @@ expiryTimestamp = 1798761599 # December 31, 2026 at 23:59:59 UTC
 # Expiry timestamp after which the SR phase 2 (LIP-38) upgrade transaction will revert
 # TODO: placeholder, set the real deadline once the SR phase 2 vote is scheduled.
 expiryTimestamp = 1830297599 # December 31, 2027 at 23:59:59 UTC
+# Easy Track factories of the exit request hash delivery that LIP-38 removes from the VEBO
+curatedSubmitExitRequestHashesFactory = "0x4F716AD3Cc7A3A5cdA2359e5B2c84335c171dCde"
+sdvtSubmitExitRequestHashesFactory = "0x58A59dDC6Aea9b1D5743D024E15DfA4badB56E37"
+# Sanity limit the vote sets on the OracleReportSanityChecker (live: 19,200); equals the bus PWR maxLimit (LIP-38)
+maxBalanceExitRequestedPerReportInEth = 11520   # ETH

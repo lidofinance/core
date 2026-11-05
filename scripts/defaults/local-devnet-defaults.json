@@ -99,10 +99,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "maxValidatorsPerReport": 600,
-      "maxExitBalanceEth": 416000,
-      "balancePerFrameEth": 32,
-      "frameDurationInSec": 48,
+      "maxRequestsPerReport": 400,
       "consensusVersion": 6
     }
   },

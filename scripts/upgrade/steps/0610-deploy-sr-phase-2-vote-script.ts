@@ -35,8 +35,8 @@ function nonZeroAddress(value: string | undefined, field: string): string {
 }
 
 /**
- * Deploys `SRPhase2UpgradeTemplate` (which builds `SRPhase2UpgradeConfig` in its constructor) and the
- * `SRPhase2UpgradeVoteScript` omnibus on top of it.
+ * Deploys `SRPhase2UpgradeTemplate` (which builds `SRPhase2UpgradeConfig` and the pre/post upgrade checks in its
+ * constructor) and the `SRPhase2UpgradeVoteScript` omnibus on top of it.
  *
  * @dev The outgoing gateway, verifier and locator implementation are read from the live locator, not from
  *      the state file: `0600` has already overwritten those entries with the incoming addresses.
@@ -79,6 +79,31 @@ export async function main() {
     ...ejectorNames.map(ejectorLimits),
   ];
 
+  // The Aragon Voting removes these factories before the template runs, so the template cannot vet them:
+  // check here that each one is live in Easy Track and submits hashes to this VEBO
+  const validatorsExitBusOracle = await locator.validatorsExitBusOracle();
+  const easyTrackAddress = nonZeroAddress(getAddress(Sk.easyTrack, state), "easyTrack");
+  const easyTrack = new ethers.Contract(
+    easyTrackAddress,
+    ["function evmScriptExecutor() view returns (address)", "function isEVMScriptFactory(address) view returns (bool)"],
+    ethers.provider,
+  );
+  const { curatedSubmitExitRequestHashesFactory, sdvtSubmitExitRequestHashesFactory } =
+    parameters.srPhase2UpgradeVoteScript;
+  for (const factory of [curatedSubmitExitRequestHashesFactory, sdvtSubmitExitRequestHashesFactory]) {
+    if (!(await easyTrack.isEVMScriptFactory(factory))) {
+      throw new Error(`${factory} is not an Easy Track factory`);
+    }
+    const hashFactory = new ethers.Contract(
+      factory,
+      ["function validatorsExitBusOracle() view returns (address)"],
+      ethers.provider,
+    );
+    if ((await hashFactory.validatorsExitBusOracle()).toLowerCase() !== validatorsExitBusOracle.toLowerCase()) {
+      throw new Error(`Easy Track factory ${factory} does not submit exit request hashes to the VEBO`);
+    }
+  }
+
   const upgradeParams: SRPhase2UpgradeParametersStruct = {
     chainId,
 
@@ -91,7 +116,11 @@ export async function main() {
     oldLocatorImplementation: await locatorProxy.proxy__getImplementation(),
     newLocatorImplementation: state[Sk.lidoLocator].implementation.address,
 
-    validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
+    validatorsExitBusOracle,
+    newValidatorsExitBusOracleImpl: state[Sk.validatorsExitBusOracle].implementation.address,
+    validatorsExitBusOracleConsensusVersion: parameters.validatorsExitBusOracle.consensusVersion,
+    validatorsExitBusOracleMaxRequestsPerReport: parameters.validatorsExitBusOracle.maxRequestsPerReport,
+    oracleReportSanityChecker: await locator.oracleReportSanityChecker(),
     circuitBreaker: nonZeroAddress(getAddress(Sk.circuitBreaker, state), "circuitBreaker"),
     circuitBreakerCommittee: nonZeroAddress(state[Sk.gateSeal].sealingCommittee, "circuitBreakerCommittee"),
     resealManager: nonZeroAddress(getAddress(Sk.resealManager, state), "resealManager"),
@@ -107,7 +136,13 @@ export async function main() {
 
     validatorExitDelayVerifier: await liveLocator.validatorExitDelayVerifier(),
 
+    easyTrack: easyTrackAddress,
+    easyTrackEvmScriptExecutor: await easyTrack.evmScriptExecutor(),
+    curatedSubmitExitRequestHashesFactory,
+    sdvtSubmitExitRequestHashesFactory,
+
     gatewayConsumers,
+    maxBalanceExitRequestedPerReportInEth: parameters.srPhase2UpgradeVoteScript.maxBalanceExitRequestedPerReportInEth,
   };
 
   const templateConstructorArgs: ConstructorArgs<SRPhase2UpgradeTemplate__factory> = [
@@ -131,6 +166,16 @@ export async function main() {
     contract: await getContractPath("SRPhase2UpgradeConfig"),
     address: configAddress,
     constructorArgs: [upgradeParams],
+  });
+  updateObjectInState(Sk.srPhase2PreUpgradeChecks, {
+    contract: await getContractPath("SRPhase2PreUpgradeChecks"),
+    address: await template.getFunction("PRE_UPGRADE_CHECKS")(),
+    constructorArgs: [],
+  });
+  updateObjectInState(Sk.srPhase2PostUpgradeChecks, {
+    contract: await getContractPath("SRPhase2PostUpgradeChecks"),
+    address: await template.getFunction("POST_UPGRADE_CHECKS")(),
+    constructorArgs: [],
   });
 
   const scriptParams: SRPhase2UpgradeVoteScript.ScriptParamsStruct = { upgradeTemplate: template.address };

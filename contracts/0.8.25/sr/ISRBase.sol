@@ -27,6 +27,7 @@ interface ISRBase {
     );
     event MaxTopUpPerBlockGweiSet(uint256 maxTopUpPerBlockGwei, address setBy);
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
+    event StakingModulePartialWithdrawalsAllowedSet(uint256 indexed stakingModuleId, bool allowed, address setBy);
 
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
 

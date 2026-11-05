@@ -297,7 +297,12 @@ export async function main() {
     "ValidatorsExitBusOracle",
     proxyContractsOwner,
     deployer,
-    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address],
+    [
+      chainSpec.secondsPerSlot,
+      chainSpec.genesisTime,
+      locator.address,
+      validatorsExitBusOracleParams.maxRequestsPerReport,
+    ],
   );
 
   const hashConsensusForVebo = await deployWithoutProxy(
@@ -323,10 +328,6 @@ export async function main() {
       hashConsensusForVebo.address,
       validatorsExitBusOracleParams.consensusVersion,
       ZERO_LAST_PROCESSING_REF_SLOT,
-      validatorsExitBusOracleParams.maxValidatorsPerReport,
-      validatorsExitBusOracleParams.maxExitBalanceEth,
-      validatorsExitBusOracleParams.balancePerFrameEth,
-      validatorsExitBusOracleParams.frameDurationInSec,
     ],
     { from: deployer },
   );

@@ -138,6 +138,8 @@ export enum Sk {
   upgradeVoteScript = "upgradeVoteScript",
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
   srPhase2UpgradeConfig = "srPhase2UpgradeConfig",
+  srPhase2PreUpgradeChecks = "srPhase2PreUpgradeChecks",
+  srPhase2PostUpgradeChecks = "srPhase2PostUpgradeChecks",
   srPhase2UpgradeTemplate = "srPhase2UpgradeTemplate",
   srPhase2UpgradeVoteScript = "srPhase2UpgradeVoteScript",
   // Staking modules

@@ -29,6 +29,7 @@ export {
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   getDepositedSinceLastReport,
+  reachConsensus,
   setWithdrawalVaultBalance,
 } from "./accounting";
 
