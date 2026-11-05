@@ -122,8 +122,8 @@
       "requestTimestampMargin": 128,
       "annualCLRebaseIncreaseHardBPLimit": 1750,
       "clRebaseDecreaseSoftBPLimit": 0,
-      "dailyCLRebaseDecreaseHardBPLimit": 25,
-      "clRebaseDecreaseHardBPLimit": 500,
+      "dailyCLRebaseDecreaseHardBPLimit": 20,
+      "clRebaseDecreaseHardBPLimit": 200,
       "consolidationEthAmountPerDayLimit": 93375,
       "exitedValidatorEthAmountLimit": 32,
       "externalPendingBalanceCapEth": 500
