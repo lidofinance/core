@@ -6,11 +6,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ether, impersonate, log } from "lib";
 import {
-  ensureFirstPostMigrationReport,
   getProtocolContext,
-  normalizeWithdrawalVaultBaseline,
   ProtocolContext,
   reportWithoutClActivation,
+  setWithdrawalVaultBalance,
 } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
@@ -42,8 +41,7 @@ describe("Scenario: Burn Shares", () => {
   it("Should allow stranger to submit ETH", async () => {
     const { lido } = ctx.contracts;
 
-    await ensureFirstPostMigrationReport(ctx);
-    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    await setWithdrawalVaultBalance(ctx, 0n);
 
     // The stranger is a well-known hardhat account that may already hold stETH on a live fork,
     // so check the balance delta rather than the absolute value.

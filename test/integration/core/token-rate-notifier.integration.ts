@@ -8,12 +8,10 @@ import { TokenRateNotifier, TokenRatePusher__Mock, TokenRatePusherWithArgs__Mock
 
 import { ether } from "lib";
 import {
-  ensureFirstPostMigrationReport,
   getProtocolContext,
-  normalizeWithdrawalVaultBaseline,
   ProtocolContext,
   reportWithoutClActivation,
-  resetCLBalanceDecreaseWindow,
+  setWithdrawalVaultBalance,
 } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
@@ -44,22 +42,11 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     notifier = await ethers.getContractAt("TokenRateNotifier", notifierAddress);
     agent = await ctx.getSigner("agent");
 
-    // Snapshot the post-migration baseline BEFORE the warm-up so `after` can roll back everything
-    // this suite does to the fork (the +37d time jump in resetCLBalanceDecreaseWindow, warm-up
-    // reports, etc.) instead of leaving it advanced on a persistent node.
+    // Snapshot the baseline before warm-up so `after` can roll back all fork mutations.
     suiteSnapshot = await Snapshot.take();
 
-    // On mainnet forks the ORSC carries a non-zero withdrawal-vault baseline, which makes the
-    // vault-excluding reports below trip the WVB guard. Normalize it to 0 first (both helpers are
-    // no-ops where already satisfied, e.g. scratch/hoodi; the first post-migration report must
-    // precede the normalize call).
-    await ensureFirstPostMigrationReport(ctx);
-    await normalizeWithdrawalVaultBaseline(ctx, 0n);
-
-    // Land on a steady reporting baseline. On forks the last on-chain report can be stale, so a
-    // naive clDiff=0 report trips IncorrectCLBalanceDecrease; this advances past the 36-day window
-    // and submits a neutral report to reset it. Harmless on scratch.
-    await resetCLBalanceDecreaseWindow(ctx);
+    await setWithdrawalVaultBalance(ctx, 0n);
+    await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
   });
 
   // Roll back all fork mutations made by this suite (warm-up + time jump) once it finishes.

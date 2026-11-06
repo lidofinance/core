@@ -16,7 +16,7 @@ import {
   log,
   prepareExtraData,
   RewardDistributionState,
-  setAnnualBalanceIncreaseLimit,
+  setAnnualCLRebaseIncreaseLimits,
 } from "lib";
 import { getProtocolContext, ProtocolContext, seedProtocolPendingBaseline, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
@@ -83,7 +83,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
     const { oracleReportSanityChecker } = ctx.contracts;
     // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
     // with not that much TVL
-    await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
+    await setAnnualCLRebaseIncreaseLimits(oracleReportSanityChecker, MAX_BASIS_POINTS);
 
     // Need this to pass the annual balance / appeared validators per day
     // increase limit check in sanity checker for scratch deploy with not that much TVL

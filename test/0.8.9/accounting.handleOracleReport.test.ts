@@ -108,17 +108,16 @@ describe("Accounting.sol:report", () => {
   }
 
   context("simulateOracleReport", () => {
-    it("should not revert if the report is not valid", async () => {
+    it("does not run report sanity checks", async () => {
+      await oracleReportSanityChecker.mock__checkAccountingOracleReportReverts(true);
+
       const preTotalPooledEther = await lido.getTotalPooledEther();
       const preTotalShares = await lido.getTotalShares();
 
       const simulated = await accounting.simulateOracleReport(report());
 
-      expect(simulated.withdrawalsVaultTransfer).to.equal(0n);
-      expect(simulated.elRewardsVaultTransfer).to.equal(0n);
       expect(simulated.etherToFinalizeWQ).to.equal(0n);
       expect(simulated.sharesToFinalizeWQ).to.equal(0n);
-      expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
       expect(simulated.totalSharesToBurn).to.equal(0n);
       expect(simulated.sharesToMintAsFees).to.equal(0n);
       expect(simulated.feeDistribution.moduleFeeRecipients).to.deep.equal([]);
@@ -130,6 +129,29 @@ describe("Accounting.sol:report", () => {
       expect(simulated.postInternalEther).to.equal(preTotalPooledEther);
       expect(simulated.postTotalShares).to.equal(preTotalShares);
       expect(simulated.postTotalPooledEther).to.equal(preTotalPooledEther);
+    });
+
+    it("applies reported vault balances and Burner requests without smoothing", async () => {
+      const sharesToFinalizeWQ = 5n;
+      await withdrawalQueue.mock__prefinalizeReturn(ether("4"), sharesToFinalizeWQ);
+
+      const preTotalPooledEther = await lido.getTotalPooledEther();
+      const preTotalShares = await lido.getTotalShares();
+
+      const simulated = await accounting.simulateOracleReport(
+        report({
+          withdrawalVaultBalance: ether("1"),
+          elRewardsVaultBalance: ether("2"),
+          sharesRequestedToBurn: 3n,
+          withdrawalFinalizationBatches: [1n],
+        }),
+      );
+
+      expect(simulated.etherToFinalizeWQ).to.equal(ether("4"));
+      expect(simulated.sharesToFinalizeWQ).to.equal(sharesToFinalizeWQ);
+      expect(simulated.totalSharesToBurn).to.equal(3n + sharesToFinalizeWQ);
+      expect(simulated.postInternalEther).to.equal(preTotalPooledEther - ether("1"));
+      expect(simulated.postInternalShares).to.equal(preTotalShares - 3n - sharesToFinalizeWQ);
     });
   });
 
@@ -169,6 +191,19 @@ describe("Accounting.sol:report", () => {
         oracleReportSanityChecker,
         "CheckAccountingOracleReportReverts",
       );
+    });
+
+    it("runs report sanity checks before report calculations", async () => {
+      await oracleReportSanityChecker.mock__checkAccountingOracleReportReverts(true);
+      const preTotalShares = await lido.getTotalShares();
+
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            sharesRequestedToBurn: preTotalShares + 1n,
+          }),
+        ),
+      ).to.be.revertedWithCustomError(oracleReportSanityChecker, "CheckAccountingOracleReportReverts");
     });
 
     it("Reverts if the `checkWithdrawalQueueOracleReport` sanity check fails", async () => {
@@ -237,18 +272,35 @@ describe("Accounting.sol:report", () => {
         ),
       )
         .to.emit(burner, "Mock__StETHBurnRequested")
-        .withArgs(isCover, await accounting.getAddress(), steth, sharesToBurn);
+        .withArgs(isCover, await accounting.getAddress(), steth, sharesToBurn)
+        .and.to.emit(burner, "Mock__CommitSharesToBurnWasCalled")
+        .withArgs(sharesToBurn);
     });
 
-    it("ensures that `Lido.collectRewardsAndProcessWithdrawals` is called from `Accounting`", async () => {
+    it("passes the full reported vault balances to `Lido.collectRewardsAndProcessWithdrawals`", async () => {
       // `Mock__CollectRewardsAndProcessWithdrawals` event is only emitted on the mock to verify
       // that `Lido.collectRewardsAndProcessWithdrawals` was actually called
-      await expect(accounting.handleOracleReport(report())).to.emit(lido, "Mock__CollectRewardsAndProcessWithdrawals");
+      const reportData = report({
+        withdrawalVaultBalance: ether("1"),
+        elRewardsVaultBalance: ether("2"),
+      });
+
+      await expect(accounting.handleOracleReport(reportData))
+        .to.emit(lido, "Mock__CollectRewardsAndProcessWithdrawals")
+        .withArgs(
+          reportData.timestamp,
+          0n,
+          0n,
+          reportData.withdrawalVaultBalance,
+          reportData.elRewardsVaultBalance,
+          0n,
+          reportData.simulatedShareRate,
+          0n,
+        );
     });
 
-    it("Burns shares if there are shares to burn as returned from `smoothenTokenRebaseReturn`", async () => {
+    it("burns all shares requested in the report", async () => {
       const sharesRequestedToBurn = 1n;
-      await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(0n, 0n, 0n, sharesRequestedToBurn);
 
       await expect(
         accounting.handleOracleReport(
