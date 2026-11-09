@@ -132,6 +132,12 @@ NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP = 100  # Node operator network pe
 PREDICTION_DURATION_IN_SLOTS = 50400                  # Prediction duration in slots
 FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT = 1350   # Finalization max negative rebase epoch shift
 EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS = 7200           # Lookback window for exit events in slots (1 day)
+EXIT_ITERATION_CHUNK = 32                             # Oracle iterator step in ETH (LIP-38)
+ACTIVE_REBALANCING_ENABLED = 0                        # Phase 3 of the oracle iterator on/off (LIP-38)
+ACTIVE_REBALANCING_RATE_LIMIT = 0                     # Max stake to rebalance per report in ETH (LIP-38)
+ACTIVE_REBALANCING_OPERATOR_EXCESS_BP = 0             # Operator-level rebalancing trigger (BP) (LIP-38)
+ACTIVE_REBALANCING_MODULE_EXCESS_BP = 0               # Module-level rebalancing trigger (BP) (LIP-38)
+ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS = 0            # New operator grace period in epochs (LIP-38)
 
 # Node operators registry configuration
 [nodeOperatorsRegistry]

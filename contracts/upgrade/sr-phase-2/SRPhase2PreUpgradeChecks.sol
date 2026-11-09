@@ -13,6 +13,7 @@ import {SRPhase2UpgradeChecksBase} from "./SRPhase2UpgradeChecksBase.sol";
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
 import {
     GatewayConsumerLimits,
+    IEjector,
     ILidoLocatorWithVerifier,
     IStakingRouter,
     ITriggerableWithdrawalsBus,
@@ -103,6 +104,14 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
             config.VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT()
         );
 
+        // The module id allowed partial withdrawals belongs to the CMv2 ejector, consumer 3 of the config
+        GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
+        _assertAddress(
+            "cmv2-module",
+            IStakingRouter(config.STAKING_ROUTER()).getStakingModule(config.CMV2_STAKING_MODULE_ID()).stakingModuleAddress,
+            IEjector(consumers[3].consumer).MODULE()
+        );
+
         // --- StakingRouter roles removed with the exit hooks ---
         IAccessControlEnumerable stakingRouter = IAccessControlEnumerable(config.STAKING_ROUTER());
         _assertSingleRoleHolder("sr-exit-triggered-role", stakingRouter, REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE, oldGateway);
@@ -131,7 +140,6 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertAddress("new-gateway-pauser", ICircuitBreaker(config.CIRCUIT_BREAKER()).getPauser(newGateway), address(0));
 
         // No consumer has limits yet, so each one the vote configures starts with a full quota
-        GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
         for (uint256 i = 0; i < consumers.length; ++i) {
             (
                 ITriggerableWithdrawalsGateway.LimitInfo memory pwrLimit,

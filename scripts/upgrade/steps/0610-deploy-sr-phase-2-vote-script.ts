@@ -16,6 +16,7 @@ import { SRPhase2UpgradeVoteScript } from "typechain-types/contracts/upgrade/sr-
 import {
   ConstructorArgs,
   deployWithoutProxy,
+  en0x,
   getAddress,
   getContractPath,
   getDeployerSigner,
@@ -35,7 +36,7 @@ function nonZeroAddress(value: string | undefined, field: string): string {
 }
 
 /**
- * Deploys `SRPhase2UpgradeTemplate` (which builds `SRPhase2UpgradeConfig` and the pre/post upgrade checks in its
+ * Deploys the pre/post upgrade checks, `SRPhase2UpgradeTemplate` (which builds `SRPhase2UpgradeConfig` in its
  * constructor) and the `SRPhase2UpgradeVoteScript` omnibus on top of it.
  *
  * @dev The outgoing gateway, verifier and locator implementation are read from the live locator, not from
@@ -104,6 +105,8 @@ export async function main() {
     }
   }
 
+  const daemonConfigValues = parameters.srPhase2UpgradeVoteScript.oracleDaemonConfig;
+
   const upgradeParams: SRPhase2UpgradeParametersStruct = {
     chainId,
 
@@ -120,6 +123,7 @@ export async function main() {
     newValidatorsExitBusOracleImpl: state[Sk.validatorsExitBusOracle].implementation.address,
     validatorsExitBusOracleConsensusVersion: parameters.validatorsExitBusOracle.consensusVersion,
     validatorsExitBusOracleMaxRequestsPerReport: parameters.validatorsExitBusOracle.maxRequestsPerReport,
+    oracleDaemonConfig: await locator.oracleDaemonConfig(),
     oracleReportSanityChecker: await locator.oracleReportSanityChecker(),
     circuitBreaker: nonZeroAddress(getAddress(Sk.circuitBreaker, state), "circuitBreaker"),
     circuitBreakerCommittee: nonZeroAddress(state[Sk.gateSeal].sealingCommittee, "circuitBreakerCommittee"),
@@ -142,11 +146,35 @@ export async function main() {
     sdvtSubmitExitRequestHashesFactory,
 
     gatewayConsumers,
+    cmv2StakingModuleId: parameters.srPhase2UpgradeVoteScript.cmv2StakingModuleId,
     maxBalanceExitRequestedPerReportInEth: parameters.srPhase2UpgradeVoteScript.maxBalanceExitRequestedPerReportInEth,
+    oracleDaemonConfigValues: {
+      exitIterationChunk: en0x(daemonConfigValues.EXIT_ITERATION_CHUNK),
+      activeRebalancingEnabled: en0x(daemonConfigValues.ACTIVE_REBALANCING_ENABLED),
+      activeRebalancingRateLimit: en0x(daemonConfigValues.ACTIVE_REBALANCING_RATE_LIMIT),
+      activeRebalancingOperatorExcessBp: en0x(daemonConfigValues.ACTIVE_REBALANCING_OPERATOR_EXCESS_BP),
+      activeRebalancingModuleExcessBp: en0x(daemonConfigValues.ACTIVE_REBALANCING_MODULE_EXCESS_BP),
+      activeRebalancingGracePeriodEpochs: en0x(daemonConfigValues.ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS),
+    },
   };
+
+  const preUpgradeChecks = await deployWithoutProxy(
+    Sk.srPhase2PreUpgradeChecks,
+    "SRPhase2PreUpgradeChecks",
+    deployer,
+    [],
+  );
+  const postUpgradeChecks = await deployWithoutProxy(
+    Sk.srPhase2PostUpgradeChecks,
+    "SRPhase2PostUpgradeChecks",
+    deployer,
+    [],
+  );
 
   const templateConstructorArgs: ConstructorArgs<SRPhase2UpgradeTemplate__factory> = [
     upgradeParams,
+    preUpgradeChecks.address,
+    postUpgradeChecks.address,
     parameters.srPhase2UpgradeVoteScript.expiryTimestamp,
   ];
 
@@ -166,16 +194,6 @@ export async function main() {
     contract: await getContractPath("SRPhase2UpgradeConfig"),
     address: configAddress,
     constructorArgs: [upgradeParams],
-  });
-  updateObjectInState(Sk.srPhase2PreUpgradeChecks, {
-    contract: await getContractPath("SRPhase2PreUpgradeChecks"),
-    address: await template.getFunction("PRE_UPGRADE_CHECKS")(),
-    constructorArgs: [],
-  });
-  updateObjectInState(Sk.srPhase2PostUpgradeChecks, {
-    contract: await getContractPath("SRPhase2PostUpgradeChecks"),
-    address: await template.getFunction("POST_UPGRADE_CHECKS")(),
-    constructorArgs: [],
   });
 
   const scriptParams: SRPhase2UpgradeVoteScript.ScriptParamsStruct = { upgradeTemplate: template.address };

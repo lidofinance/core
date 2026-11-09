@@ -14,8 +14,8 @@ import {SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
 /// @dev `startUpgrade` and `finishUpgrade` must run in the same transaction, so the whole vote
 ///      reverts if the observed state does not match what was deployed. The Dual Governance calls of the vote
 ///      run between them, so both checks cover the tiebreaker sealable withdrawal blockers too.
-///      The checks themselves live in two contracts the constructor creates next to the config, so each
-///      contract stays below the EIP-170 limit.
+///      The checks themselves live in two contracts deployed before the template, so each contract stays
+///      below the EIP-170 limit, and the template initcode with its constructor arguments below the EIP-3860 limit.
 contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
     event UpgradeStarted();
     event UpgradeFinished();
@@ -25,6 +25,7 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
     error StartAlreadyCalledInThisTx();
     error Expired();
     error InvalidExpiry();
+    error ZeroChecksAddress();
     error InvalidChainId(uint256 actual, uint256 expected);
     error UpgradeAlreadyStarted();
     error UpgradeAlreadyFinished();
@@ -41,14 +42,19 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
     uint256 public upgradeBlockNumber = UPGRADE_NOT_STARTED;
     bool public override isUpgradeFinished;
 
-    constructor(SRPhase2UpgradeParameters memory params, uint256 expireSinceInclusive) {
+    constructor(
+        SRPhase2UpgradeParameters memory params,
+        address preUpgradeChecks,
+        address postUpgradeChecks,
+        uint256 expireSinceInclusive
+    ) {
         if (params.chainId != block.chainid) revert InvalidChainId(block.chainid, params.chainId);
+        if (preUpgradeChecks == address(0) || postUpgradeChecks == address(0)) revert ZeroChecksAddress();
         if (expireSinceInclusive <= block.timestamp) revert InvalidExpiry();
 
-        SRPhase2UpgradeConfig config = new SRPhase2UpgradeConfig(params);
-        CONFIG = address(config);
-        PRE_UPGRADE_CHECKS = address(new SRPhase2PreUpgradeChecks());
-        POST_UPGRADE_CHECKS = address(new SRPhase2PostUpgradeChecks());
+        CONFIG = address(new SRPhase2UpgradeConfig(params));
+        PRE_UPGRADE_CHECKS = preUpgradeChecks;
+        POST_UPGRADE_CHECKS = postUpgradeChecks;
         EXPIRE_SINCE_INCLUSIVE = expireSinceInclusive;
     }
 

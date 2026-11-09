@@ -35,6 +35,7 @@ abstract contract SRPhase2UpgradeChecksBase {
     bytes32 internal constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
     bytes32 internal constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
         keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
+    bytes32 internal constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
 
     /// @dev The StakingRouter implementation is swapped without a reinitializer.
     uint256 internal constant STAKING_ROUTER_CONTRACT_VERSION = 4;
@@ -51,6 +52,7 @@ abstract contract SRPhase2UpgradeChecksBase {
         _assertAddress(
             "locator-sanity-checker", locator.oracleReportSanityChecker(), config.ORACLE_REPORT_SANITY_CHECKER()
         );
+        _assertAddress("locator-daemon-config", locator.oracleDaemonConfig(), config.ORACLE_DAEMON_CONFIG());
     }
 
     function _assertSingleRoleHolder(

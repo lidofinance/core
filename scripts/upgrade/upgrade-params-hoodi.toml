@@ -188,3 +188,17 @@ curatedSubmitExitRequestHashesFactory = "0x397206ecdbdcb1A55A75e60Fc4D054feC72E5
 sdvtSubmitExitRequestHashesFactory = "0xAa3D6A8B52447F272c1E8FAaA06EA06658bd95E2"
 # Sanity limit the vote sets on the OracleReportSanityChecker (live: 19,200); equals the bus PWR maxLimit (LIP-38)
 maxBalanceExitRequestedPerReportInEth = 11520   # ETH
+# The only staking module with partial withdrawals allowed after the vote (LIP-38); checked against the CMv2 ejector
+cmv2StakingModuleId = 5
+
+# Keys the vote adds to the OracleDaemonConfig (LIP-38). `set` rejects an empty value, so 0 is stored as one zero byte.
+[srPhase2UpgradeVoteScript.oracleDaemonConfig]
+EXIT_ITERATION_CHUNK = 32   # ETH, LIP-38 default
+# TODO: placeholders, LIP-38 has no initial values for the keys below. Set the real values once the oracle team and
+# the LIP authors fix them. With ACTIVE_REBALANCING_ENABLED = 0 Phase 3 is off, so the rate limit and the excess keys
+# stay unused; the grace period also shapes the CMv2 target stake in Phase 1, so 0 there means no grace period.
+ACTIVE_REBALANCING_ENABLED = 0               # 0 or 1
+ACTIVE_REBALANCING_RATE_LIMIT = 0            # ETH per report
+ACTIVE_REBALANCING_OPERATOR_EXCESS_BP = 0    # BP
+ACTIVE_REBALANCING_MODULE_EXCESS_BP = 0      # BP
+ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS = 0   # epochs

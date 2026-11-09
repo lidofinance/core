@@ -5,6 +5,16 @@
 
 pragma solidity 0.8.25;
 
+import {ModuleStateConfig, StakingModule} from "contracts/0.8.25/sr/SRTypes.sol";
+
+// OracleDaemonConfig keys the vote adds (LIP-38)
+string constant EXIT_ITERATION_CHUNK = "EXIT_ITERATION_CHUNK";
+string constant ACTIVE_REBALANCING_ENABLED = "ACTIVE_REBALANCING_ENABLED";
+string constant ACTIVE_REBALANCING_RATE_LIMIT = "ACTIVE_REBALANCING_RATE_LIMIT";
+string constant ACTIVE_REBALANCING_OPERATOR_EXCESS_BP = "ACTIVE_REBALANCING_OPERATOR_EXCESS_BP";
+string constant ACTIVE_REBALANCING_MODULE_EXCESS_BP = "ACTIVE_REBALANCING_MODULE_EXCESS_BP";
+string constant ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS = "ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS";
+
 /// @notice Every address the SR phase 2 (LIP-38) upgrade touches.
 /// @dev `old*` entries are the live contracts the vote replaces; `new*` entries and the bus are deployed by
 ///      `0600-deploy-sr-phase-2-contracts` before the vote script is built.
@@ -25,6 +35,7 @@ struct SRPhase2UpgradeParameters {
     uint256 validatorsExitBusOracleConsensusVersion;
     uint256 validatorsExitBusOracleMaxRequestsPerReport;
     // untouched contracts the vote reads or grants roles on
+    address oracleDaemonConfig;
     address oracleReportSanityChecker;
     address circuitBreaker;
     address circuitBreakerCommittee;
@@ -47,8 +58,23 @@ struct SRPhase2UpgradeParameters {
     address sdvtSubmitExitRequestHashesFactory;
     // limits the vote sets on the new gateway: the bus, then the CSM, CSM 0x02 and CMv2 ejectors
     GatewayConsumerLimits[] gatewayConsumers;
+    // the only staking module with partial withdrawals allowed after the vote
+    uint256 cmv2StakingModuleId;
     // sanity limit the vote sets, in whole ETH; LIP-38 makes it equal to the bus PWR maxLimit
     uint256 maxBalanceExitRequestedPerReportInEth;
+    // values of the keys the vote adds to the OracleDaemonConfig
+    OracleDaemonConfigValues oracleDaemonConfigValues;
+}
+
+/// @notice Encoded values of the new OracleDaemonConfig keys, one field per key.
+/// @dev `OracleDaemonConfig.set` rejects an empty value, so a false or a zero is one zero byte.
+struct OracleDaemonConfigValues {
+    bytes exitIterationChunk;
+    bytes activeRebalancingEnabled;
+    bytes activeRebalancingRateLimit;
+    bytes activeRebalancingOperatorExcessBp;
+    bytes activeRebalancingModuleExcessBp;
+    bytes activeRebalancingGracePeriodEpochs;
 }
 
 /// @notice Limits the vote sets for one consumer of the new TriggerableWithdrawalsGateway (LIP-38 "Initial limits").
@@ -123,8 +149,23 @@ interface IDualGovernanceTiebreaker {
     function getTiebreakerDetails() external view returns (TiebreakerDetails memory);
 }
 
+/// @dev The live implementation returns the module state config without the partial withdrawals flag, so only
+///      the post-upgrade checks may read it.
 interface IStakingRouter {
     function getContractVersion() external view returns (uint256);
+
+    function getStakingModuleIds() external view returns (uint256[] memory);
+
+    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
+
+    function getStakingModuleStateConfig(uint256 _stakingModuleId) external view returns (ModuleStateConfig memory);
+
+    function setStakingModulePartialWithdrawalsAllowed(uint256 _stakingModuleId, bool _allowed) external;
+}
+
+/// @dev Module ejectors keep their staking module in an immutable.
+interface IEjector {
+    function MODULE() external view returns (address);
 }
 
 interface IValidatorsExitBusOracle {
@@ -165,6 +206,12 @@ interface IOracleReportSanityChecker {
     function setMaxBalanceExitRequestedPerReportInEth(uint256 _maxBalanceExitRequestedPerReportInEth) external;
 
     function getOracleReportLimits() external view returns (LimitsList memory);
+}
+
+interface IOracleDaemonConfig {
+    function set(string calldata _key, bytes calldata _value) external;
+
+    function get(string calldata _key) external view returns (bytes memory);
 }
 
 /// @dev Factory changes are gated by the Easy Track admin role, which the Aragon Voting holds, not the Agent.
