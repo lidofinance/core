@@ -58,7 +58,7 @@
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
     "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
     "postinstall": "husky",
-    "test:integration:chronix": "SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true SKIP_LINT_SOLIDITY=true hardhat --network chronix test test/integration/chronix/verifiers.integration.ts"
+    "test:integration:chronix": "SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true SKIP_LINT_SOLIDITY=true hardhat --network chronix test test/integration/chronix/verifiers.devnet.ts"
   },
   "lint-staged": {
     "./**/*.ts": [

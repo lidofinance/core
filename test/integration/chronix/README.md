@@ -36,13 +36,18 @@ docker rm --volumes chronix-core
 ```
 
 The service must provide fresh Gloas genesis with automine off; the suite performs its own deployment
-and warmup. The suite never stops the service. The **Integration Tests Chronix** workflow runs on
-every push, like the other integration workflows, using `ghcr.io/lidofinance/chronix-gloas:latest`.
-It also supports a manual run with a published version tag or image digest from the same repository
-when needed. CI records the selected image in its summary. A missing `latest`, authentication and
-network failures stop the job.
+and warmup. The suite never stops the service.
 
-Read [verifiers.integration.ts](verifiers.integration.ts) for the scenarios. Chronix calls go
+The suite is separate from the other integration tests. `yarn test:integration` and the integration
+CI workflows run only `*.integration.ts` files, and this suite is `verifiers.devnet.ts`. Run it with
+`yarn test:integration:chronix`.
+
+The **Integration Tests Chronix** workflow does not run on push. Start it manually
+(`workflow_dispatch`) with `ghcr.io/lidofinance/chronix-gloas:latest` or a published version tag or
+image digest from the same repository. CI records the selected image in its summary. A missing
+`latest`, authentication and network failures stop the job.
+
+Read [verifiers.devnet.ts](verifiers.devnet.ts) for the scenarios. Chronix calls go
 through the SDK. The Lido checks of genesis, Gloas execution and finality, protocol fixture setup,
 the existing scratch command and SSZ proof construction live in `helpers/`. As in the other core
 integration tests, `getChronixProtocolContext()` returns a ready context with typed `ctx.contracts`,

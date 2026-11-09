@@ -34,7 +34,7 @@ else
   TEST_FILES=()
   while IFS= read -r -d '' test_file; do
     TEST_FILES+=("$test_file")
-  done < <(find test/integration -type f -name '*.ts' -print0 | LC_ALL=C sort -z)
+  done < <(find test/integration -type f -name '*.integration.ts' -print0 | LC_ALL=C sort -z)
 fi
 
 yarn hardhat --network "$RUN_NETWORK" test "${TEST_FILES[@]}" "${TRACE_ARGS[@]}"

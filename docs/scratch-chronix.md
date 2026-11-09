@@ -15,11 +15,14 @@ through the Chronix SDK, `@lidofinance/chronix-client`, and leaves the externall
 running when it ends. Validator import uses Chronix's control API; keymanager
 credentials stay inside Chronix. The test runner needs neither Deno nor a Chronix checkout.
 
-The **Integration Tests Chronix** workflow runs on every push with
-`ghcr.io/lidofinance/chronix-gloas:latest`, following the latest successful stable Chronix publication.
-If that tag does not exist, the job fails. The selected image is recorded in the workflow summary;
-authentication or network errors also fail the job.
-A published version tag or image digest from the same repository can be supplied through the manual
+The suite is separate from the other integration tests: `yarn test:integration` and the other
+integration workflows run only `*.integration.ts` files, and this suite is `verifiers.devnet.ts`.
+
+The **Integration Tests Chronix** workflow runs only when started manually (`workflow_dispatch`), not
+on push. By default it uses `ghcr.io/lidofinance/chronix-gloas:latest`, following the latest successful
+stable Chronix publication. If that tag does not exist, the job fails. The selected image is recorded
+in the workflow summary; authentication or network errors also fail the job.
+A published version tag or image digest from the same repository can be supplied through the
 workflow's `image` input. It starts the image as a privileged service
 with its own Docker daemon and binds the controller to `127.0.0.1:18547:8545`. Deno and the Chronix
 runtime are contained in the image. The workflow uses the command above; scratch deployment remains
@@ -67,7 +70,7 @@ yarn check
 ```
 
 The Chronix integration uses the existing Hardhat/Mocha command above and
-[verifiers.integration.ts](../test/integration/chronix/verifiers.integration.ts). Its current
+[verifiers.devnet.ts](../test/integration/chronix/verifiers.devnet.ts). Its current
 coverage and limitations are documented in the [suite README](../test/integration/chronix/README.md).
 
 This is the upstream scratch scope: EasyTrack is still its upstream `EasyTrackEVMScriptExecutorStub`.

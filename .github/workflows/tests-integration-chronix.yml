@@ -1,7 +1,7 @@
 name: Integration Tests Chronix
 
 on:
-  push:
+  # Manual only: the suite needs a Chronix service image and does not run on push
   workflow_dispatch:
     inputs:
       image:
