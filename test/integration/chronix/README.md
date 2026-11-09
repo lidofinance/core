@@ -1,7 +1,7 @@
 # Core verifiers on Chronix
 
 One Hardhat/Mocha suite connects to **one running Chronix service**, performs **one scratch
-deployment**, then checks the four core verifiers in order. The suite talks to Chronix only through
+deployment**, then checks the three core verifiers in order. The suite talks to Chronix only through
 its SDK, [`@lidofinance/chronix-client`](https://github.com/lidofinance/chronix/blob/main/docs/client.md),
 pinned to a release commit in `package.json`.
 
@@ -55,7 +55,7 @@ transaction and saves its receipt. Module IDs come from actual StakingRouter reg
 operator and key references used by the verifier fixtures are explicit.
 
 Run the whole file: the groups form one sequential scenario. The validator deposited in the PDG
-group is later activated, used as a consolidation target, and voluntarily exited. There are no
+group is later activated and used as a consolidation target. There are no
 snapshots or hidden redeployments between groups. Use `--bail` to stop the whole scenario on its
 first failure. The shared `bailOnFailure` helper also skips remaining tests within a failed group,
 as in the protocol happy-path suite.
@@ -76,13 +76,9 @@ as in the protocol happy-path suite.
   foreign source remains active. This small mainnet-preset network also has zero consolidation
   churn capacity, so this case does not isolate the CL credentials check or claim a successful
   consolidation.
-- **ValidatorExitDelayVerifier:** real VEB delivery → protocol eligibility deadline → recent
-  validator proof → StakingRouter/registry event. The historical path uses the summary actually
-  created by CL. Corrupted headers and historical branches must revert. After Lighthouse accepts
-  a signed voluntary exit, the real changed validator state must invalidate the exit-unset proof.
-  The suite then checks resumed CL/EL finality and a fresh proof.
+- **Finality:** the suite ends by checking that CL/EL finality advances and a fresh proof passes.
 
-Only the four core entrypoints are in scope. External CSM/CMv2 verifiers, funded top-up allocation
+Only the three core entrypoints are in scope. External CSM/CMv2 verifiers, funded top-up allocation
 and successful consolidation processing are separate scenarios.
 
 ## Evidence and time
@@ -97,13 +93,11 @@ its Gloas bid and payload envelope agree on the captured Beacon root/slot and ex
 and the canonical EL block agrees on hash, parent, number and timestamp. The beacon root must also
 match both the EL child header and EIP-4788. Captures record the checked execution hash and number.
 Deposit processing waits for a CL checkpoint confirmed by EL, using Gloas's checkpoint execution
-parent rule. The final recovery test requires both CL finalized epoch and confirmed EL block number
+parent rule. The final test requires both CL finalized epoch and confirmed EL block number
 to advance.
 
-The exit/history scenarios explicitly call `advanceTo(..., { mode: "fast" })`, using skipped slots
-and real state transitions. The client's omitted mode preserves Chronix's honest default. These fast scenarios do **not** certify complete validator
-duty coverage or absence of missed-duty penalties. Voting and validator activation advance full
-slots. Protocol delays and fork constants are unchanged.
+Voting, validator activation and finality advance full slots. Protocol delays and fork constants
+are unchanged.
 
 The SSZ schema is pinned to the Lighthouse version in `gloas:chronix`:
 `2d281dfa1b407f7c81cd123954a9fd18ee8f02d2`. A different layout must fail root equality rather than

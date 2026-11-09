@@ -131,7 +131,8 @@ struct ModuleStateConfig {
     StakingModuleStatus status;
     /// @notice Withdrawal credentials type (0x01/0x02)
     uint8 withdrawalCredentialsType;
-    // uint8 _reserved;
+    /// @notice Whether partial withdrawal requests (PWRs) are allowed for this module's validators
+    bool partialWithdrawalsAllowed;
     // uint8 _reserved;
 }
 
@@ -272,10 +273,4 @@ struct ValidatorsCountsCorrection {
     uint256 newModuleExitedValidatorsCount;
     /// @notice The corrected number of exited validators of the node operator.
     uint256 newNodeOperatorExitedValidatorsCount;
-}
-
-struct ValidatorExitData {
-    uint256 stakingModuleId;
-    uint256 nodeOperatorId;
-    bytes pubkey;
 }

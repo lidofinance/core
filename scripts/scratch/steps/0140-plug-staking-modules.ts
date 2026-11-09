@@ -164,6 +164,7 @@ async function enableExternalModule(
   setup: ExternalModuleSetup,
   state: ReturnType<typeof readNetworkState>,
   deployer: string,
+  withdrawalCredentialsType: WithdrawalCredentialsType,
 ) {
   const agent = state[Sk.appAgent].proxy.address;
   const calls: DaoCall[] = [];
@@ -178,10 +179,18 @@ async function enableExternalModule(
   );
 
   await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_MY_STETH_ROLE(), setup.accounting], { from: deployer });
+
+  // The ejector is a gateway consumer: its limits depend on the module WC type, since a 0x02 validator
+  // can hold up to 2048 ETH. The deployer holds TW_EXIT_LIMIT_MANAGER_ROLE since `0083`.
+  const gatewayParams = state[Sk.triggerableWithdrawalsGateway].deployParameters;
+  const ejectorLimits =
+    withdrawalCredentialsType === WithdrawalCredentialsType.WC0x02
+      ? gatewayParams.ejectorLimitsWC0x02
+      : gatewayParams.ejectorLimitsWC0x01;
   await makeTx(
     triggerableWithdrawalsGateway,
-    "grantRole",
-    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), setup.ejector],
+    "setConsumerLimits",
+    [setup.ejector, ejectorLimits.pwr, ejectorLimits.fwr],
     { from: deployer },
   );
 
@@ -297,7 +306,7 @@ export async function main() {
       ],
       { from: deployer },
     );
-    agentCalls.push(...(await enableExternalModule(setup, state, deployer)));
+    agentCalls.push(...(await enableExternalModule(setup, state, deployer, CSM_WITHDRAWAL_TYPE)));
   }
 
   if (state[Sk.sm_CM]?.proxy?.address) {
@@ -320,7 +329,7 @@ export async function main() {
       ],
       { from: deployer },
     );
-    agentCalls.push(...(await enableExternalModule(setup, state, deployer)));
+    agentCalls.push(...(await enableExternalModule(setup, state, deployer, CMV2_WITHDRAWAL_TYPE)));
 
     // ConsolidationMigrator is deployed earlier (0083) with an immutable target module id
     // predicted from deploy params. Verify the id actually assigned to CMv2 matches it.

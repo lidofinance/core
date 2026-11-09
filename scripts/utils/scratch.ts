@@ -60,6 +60,7 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     chainSpec: {
       slotsPerEpoch: params.chainSpec.slotsPerEpoch,
       secondsPerSlot: params.chainSpec.secondsPerSlot,
+      capellaSlot: params.chainSpec.capellaSlot,
       genesisTime: null, // Set via environment variables
       depositContract: null, // Set via environment variables
     },
@@ -100,6 +101,9 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     oracleReportSanityChecker: {
       deployParameters: params.oracleReportSanityChecker,
     },
+    secondOpinionOracle: {
+      address: null,
+    },
     oracleDaemonConfig: {
       deployParameters: params.oracleDaemonConfig,
     },
@@ -115,9 +119,6 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
         symbol: params.withdrawalQueueERC721.symbol,
         baseUri: null, // Set by deployment scripts
       },
-    },
-    validatorExitDelayVerifier: {
-      deployParameters: params.validatorExitDelayVerifier,
     },
     triggerableWithdrawalsGateway: {
       deployParameters: params.triggerableWithdrawalsGateway,

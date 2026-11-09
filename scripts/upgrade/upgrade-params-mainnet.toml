@@ -24,7 +24,11 @@ appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
 maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
 maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
-maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
+annualCLRebaseIncreaseSoftBPLimit = 700                # Soft annual CL rebase increase limit (BP)
+annualCLRebaseIncreaseHardBPLimit = 1700               # Hard annual CL rebase increase limit (BP)
+clRebaseDecreaseSoftBPLimit = 0                        # Soft CL rebase decrease limit per report (BP)
+dailyCLRebaseDecreaseHardBPLimit = 20                  # Hard CL rebase decrease limit per day of elapsed time (BP); provisional, under analysis
+clRebaseDecreaseHardBPLimit = 200                      # Hard CL rebase decrease ceiling per report (BP); provisional, under analysis
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
@@ -38,22 +42,40 @@ withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#specification
 consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250
-exitsPerFrame = 1
-frameDurationInSec = 240
+# Limits the SR phase 2 vote sets on the new triggerable withdrawals gateway (LIP-38 "Initial limits"):
+# `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators; all zero disables a limit.
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full VEBO report of either kind restores within 8 hours
+pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
+
+# Staking module ejectors: the live ejectors from the Lido KB access-control registry (block 26126589, 2026-10-05),
+# not yet read on-chain. Replace them if the CSM release deploys new ejectors that call `triggerWithdrawals`.
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM"   # 0x01
+address = "0x610B517D380f287c239C93F8eF6FfBd567AA4bA5"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 400, limitPerFrame = 1, frameDurationInSec = 192 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM 0x02"   # 0x02
+address = "0x2EE500885870b020e84E86a09A5d26D1EEec3E5E"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CMv2"   # 0x02
+address = "0xe181A377A2d2BDE9A83f1474BC3DB7A412de091E"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 
 # Accounting oracle configuration
 [accountingOracle]
-consensusVersion = 6
+consensusVersion = 7
 
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
-maxValidatorsPerReport = 600
-maxExitBalanceEth = 358400
-balancePerFrameEth = 32
-frameDurationInSec = 48
-consensusVersion = 5
+maxRequestsPerReport = 400   # Maximum records per report (LIP-38)
+consensusVersion = 6         # LIP-38 report format, set by finalizeUpgrade_v4 (live: 5)
 
 [validatorExitDelayVerifier]
 firstSupportedSlot = 11_649_024
@@ -152,3 +174,13 @@ hashConsensusInitialEpoch = 467564
 # The upgrade transaction must be executed before this deadline
 # TODO: placeholder, set the real deadline once the Gloas vote is scheduled.
 expiryTimestamp = 1798761599 # December 31, 2026 at 23:59:59 UTC
+
+[srPhase2UpgradeVoteScript]
+# Expiry timestamp after which the SR phase 2 (LIP-38) upgrade transaction will revert
+# TODO: placeholder, set the real deadline once the SR phase 2 vote is scheduled.
+expiryTimestamp = 1830297599 # December 31, 2027 at 23:59:59 UTC
+# Easy Track factories of the exit request hash delivery that LIP-38 removes from the VEBO
+curatedSubmitExitRequestHashesFactory = "0x4F716AD3Cc7A3A5cdA2359e5B2c84335c171dCde"
+sdvtSubmitExitRequestHashesFactory = "0x58A59dDC6Aea9b1D5743D024E15DfA4badB56E37"
+# Sanity limit the vote sets on the OracleReportSanityChecker (live: 19,200); equals the bus PWR maxLimit (LIP-38)
+maxBalanceExitRequestedPerReportInEth = 11520   # ETH

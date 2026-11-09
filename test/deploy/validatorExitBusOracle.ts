@@ -1,4 +1,3 @@
-import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import {
@@ -12,6 +11,7 @@ import {
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_EPOCH,
+  numberToHex,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
   VEBO_CONSENSUS_VERSION,
@@ -20,12 +20,44 @@ import {
 import { deployHashConsensus } from "./hashConsensus";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 
-export const DATA_FORMAT_LIST = 1;
-export const DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
+export const MAX_REQUESTS_PER_REPORT = 400;
 
 // MaxEB weights (in ETH)
 export const MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01 = 32n; // 32 ETH for WC 0x01 validators
 export const MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02 = 2048n; // 2048 ETH for 0x02 validators
+
+// amount in gwei: 0 is a full withdrawal (FWR), > 0 is a partial one (PWR)
+export interface WithdrawalRequest {
+  moduleId: number;
+  nodeOpId: number | bigint;
+  keyIndex: number | bigint;
+  amount: bigint;
+}
+
+export interface VEBOReportFields {
+  consensusVersion: bigint;
+  refSlot: bigint;
+  requestsCount: number;
+  data: string;
+}
+
+// | 3 bytes: moduleId | 5 bytes: nodeOpId | 8 bytes: keyIndex | 8 bytes: amount (gwei) |
+export function encodeWithdrawalRequests(requests: WithdrawalRequest[]): string {
+  return (
+    "0x" +
+    requests
+      .map(
+        ({ moduleId, nodeOpId, keyIndex, amount }) =>
+          numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(keyIndex, 8) + numberToHex(amount, 8),
+      )
+      .join("")
+  );
+}
+
+export function calcVEBOReportDataHash(report: VEBOReportFields): string {
+  const reportData = [report.consensusVersion, report.refSlot, report.requestsCount, report.data];
+  return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,bytes)"], [reportData]));
+}
 
 async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, genesisTime = GENESIS_TIME) {
   const lido = await ethers.deployContract("Accounting__MockForAccountingOracle");
@@ -39,29 +71,36 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
 
 async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, accounting: string, admin: string) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accounting, admin, {
-      exitedEthAmountPerDayLimit: 0n,
-      appearedEthAmountPerDayLimit: 0n,
-      annualBalanceIncreaseBPLimit: 0n,
-      simulatedShareRateDeviationBPLimit: 0n,
-      maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
-      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-      maxItemsPerExtraDataTransaction: 0n,
-      maxNodeOperatorsPerExtraDataItem: 0n,
-      requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 1n,
-      maxCLBalanceDecreaseBP: 360n,
-      clBalanceOraclesErrorUpperBPLimit: 0n,
-      consolidationEthAmountPerDayLimit: 0n,
-      exitedValidatorEthAmountLimit: 1n,
-      externalPendingBalanceCapEth: 0n,
-    }),
+    f.deploy(
+      lidoLocator,
+      accounting,
+      admin,
+      {
+        exitedEthAmountPerDayLimit: 0n,
+        appearedEthAmountPerDayLimit: 0n,
+        annualCLRebaseIncreaseSoftBPLimit: 0n,
+        simulatedShareRateDeviationBPLimit: 0n,
+        maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+        maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+        maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+        maxItemsPerExtraDataTransaction: 0n,
+        maxNodeOperatorsPerExtraDataItem: 0n,
+        requestTimestampMargin: 0n,
+        annualCLRebaseIncreaseHardBPLimit: 0n,
+        clRebaseDecreaseSoftBPLimit: 0n,
+        dailyCLRebaseDecreaseHardBPLimit: 10_000n,
+        clRebaseDecreaseHardBPLimit: 10_000n,
+        consolidationEthAmountPerDayLimit: 0n,
+        exitedValidatorEthAmountLimit: 1n,
+        externalPendingBalanceCapEth: 0n,
+      },
+      ethers.ZeroAddress,
+    ),
   );
 }
 
-async function deployTWG() {
-  return await ethers.deployContract("TriggerableWithdrawalsGateway__MockForVEB");
+async function deployTWB() {
+  return await ethers.deployContract("TriggerableWithdrawalsBus__MockForVEB");
 }
 
 export async function deployVEBO(
@@ -72,6 +111,7 @@ export async function deployVEBO(
     slotsPerEpoch = SLOTS_PER_EPOCH,
     genesisTime = GENESIS_TIME,
     initialEpoch = INITIAL_EPOCH,
+    maxRequestsPerReport = MAX_REQUESTS_PER_REPORT,
   } = {},
 ) {
   const locator = await deployLidoLocator();
@@ -94,8 +134,8 @@ export async function deployVEBO(
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(100, 0x01);
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(101, 0x01);
 
-  // Deploy universal mock modules for key verification (Format 2 testing)
-  // These mocks return requested keys and work for both legacy and new interfaces
+  // Deploy universal mock modules: they return signing keys by keyIndex
+  // and work for both legacy and new interfaces
   const mockModule1 = await ethers.deployContract("StakingModule__MockForKeyVerification");
   const mockModule2 = await ethers.deployContract("StakingModule__MockForKeyVerification");
   const mockModule3 = await ethers.deployContract("StakingModule__MockForKeyVerification");
@@ -114,12 +154,12 @@ export async function deployVEBO(
     stakingRouter: stakingRouterAddr,
   });
 
-  // Deploy mock NodeOperatorsRegistry
-  // In permissive mode (default), it returns empty keys which causes ValidatorsExitBus
-  // to skip validation. Tests can explicitly configure keys if needed.
-  const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
-
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [secondsPerSlot, genesisTime, locatorAddr]);
+  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
+    secondsPerSlot,
+    genesisTime,
+    locatorAddr,
+    maxRequestsPerReport,
+  ]);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle as unknown as ReportProcessor__Mock,
@@ -129,7 +169,7 @@ export async function deployVEBO(
   });
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
-  const triggerableWithdrawalsGateway = await deployTWG();
+  const triggerableWithdrawalsBus = await deployTWB();
 
   const accountingOracleAddress = await ao.getAddress();
   const accountingAddress = await locator.accounting();
@@ -137,7 +177,7 @@ export async function deployVEBO(
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: accountingOracleAddress,
-    triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
+    triggerableWithdrawalsBus: await triggerableWithdrawalsBus.getAddress(),
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
@@ -149,7 +189,7 @@ export async function deployVEBO(
   await updateLidoLocatorImplementation(locatorAddr, {
     validatorsExitBusOracle: await oracle.getAddress(),
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
-    triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
+    triggerableWithdrawalsBus: await triggerableWithdrawalsBus.getAddress(),
   });
 
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
@@ -160,8 +200,7 @@ export async function deployVEBO(
     oracle,
     consensus,
     oracleReportSanityChecker,
-    triggerableWithdrawalsGateway,
-    nodeOperatorsRegistry,
+    triggerableWithdrawalsBus,
     stakingRouter,
     mockModules: {
       module1: mockModule1,
@@ -196,7 +235,7 @@ export async function seedMockModuleSigningKeys(
     module5: StakingModule__MockForKeyVerification;
     module7: StakingModule__MockForKeyVerification;
   },
-  requests: { moduleId: number; nodeOpId: number; keyIndex?: number; valIndex: number; valPubkey?: string }[],
+  requests: { moduleId: number; nodeOpId: number; keyIndex: number; pubkey?: string }[],
 ) {
   const modMap: Record<number, StakingModule__MockForKeyVerification> = {
     1: mockModules.module1,
@@ -210,9 +249,8 @@ export async function seedMockModuleSigningKeys(
   for (const r of requests) {
     const mod = modMap[r.moduleId];
     if (!mod || !mod.setSigningKey) continue;
-    const keyIdx = r.keyIndex ?? r.valIndex;
-    const pubkey = r.valPubkey ?? makeMockPubkey(r.nodeOpId, keyIdx);
-    await mod.setSigningKey(r.nodeOpId, keyIdx, pubkey);
+    const pubkey = r.pubkey ?? makeMockPubkey(r.nodeOpId, r.keyIndex);
+    await mod.setSigningKey(r.nodeOpId, r.keyIndex, pubkey);
   }
 }
 
@@ -224,10 +262,6 @@ interface VEBOConfig {
   consensusVersion?: bigint;
   lastProcessingRefSlot?: number;
   resumeAfterDeploy?: boolean;
-  maxRequestsPerBatch?: number;
-  maxExitBalanceEth?: bigint;
-  balancePerFrameEth?: bigint;
-  frameDurationInSec?: number;
 }
 
 export async function initVEBO({
@@ -238,21 +272,8 @@ export async function initVEBO({
   consensusVersion = VEBO_CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
-  maxRequestsPerBatch = 600,
-  maxExitBalanceEth = 13_000n, // 13,000 ETH
-  balancePerFrameEth = 32n, // 32 ETH (1 legacy validator per frame)
-  frameDurationInSec = 48,
 }: VEBOConfig) {
-  const initTx = await oracle.initialize(
-    admin,
-    await consensus.getAddress(),
-    consensusVersion,
-    lastProcessingRefSlot,
-    maxRequestsPerBatch,
-    maxExitBalanceEth,
-    balancePerFrameEth,
-    frameDurationInSec,
-  );
+  const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);
@@ -262,8 +283,6 @@ export async function initVEBO({
   if (dataSubmitter) {
     await oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), dataSubmitter);
   }
-
-  expect(await oracle.DATA_FORMAT_LIST()).to.equal(DATA_FORMAT_LIST);
 
   if (resumeAfterDeploy) {
     await oracle.resume();

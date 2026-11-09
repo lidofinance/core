@@ -12,7 +12,7 @@ CHRONIX_URL=http://127.0.0.1:18547 yarn test:integration:chronix --bail
 
 The service must expose a fresh Gloas chain (block 0, slot 0, automine off). The suite connects to it
 through the Chronix SDK, `@lidofinance/chronix-client`, and leaves the externally owned service
-running when it ends. Validator import and voluntary exits use Chronix's control API; keymanager
+running when it ends. Validator import uses Chronix's control API; keymanager
 credentials stay inside Chronix. The test runner needs neither Deno nor a Chronix checkout.
 
 The **Integration Tests Chronix** workflow runs on every push with
@@ -30,13 +30,13 @@ The Hardhat suite uses one fresh Chronix network and invokes the ordinary `yarn 
 command through the TypeScript [deployment helper](../test/integration/chronix/helpers/deploy.ts).
 The helper enables transaction-driven mining, waits for Geth indexer readiness, and records wall
 time, migration steps and output under `.local/chronix/core-<id>/`. Each run has its own
-`deployment.json`. The suite then checks the four core verifiers. Docker or CI owns the service
+`deployment.json`. The suite then checks the three core verifiers. Docker or CI owns the service
 lifecycle. See the [suite documentation](../test/integration/chronix/README.md) for prerequisites
 and coverage.
 The standard public Hardhat development key is used only against this local Gloas network.
 
 The supplied scratch TOML keeps the original token allocations and vote durations, but assigns
-the local deployer the largest LDO allocation and sets the four Gloas activation slots to zero.
+the local deployer the largest LDO allocation and sets the three Gloas activation slots to zero.
 Genesis time, fork version and deposit contract address match the existing Gloas bake.
 
 ## Changes

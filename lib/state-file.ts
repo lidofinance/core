@@ -84,6 +84,7 @@ export enum Sk {
   hashConsensusForValidatorsExitBusOracle = "hashConsensusForValidatorsExitBusOracle",
   oracleDaemonConfig = "oracleDaemonConfig",
   oracleReportSanityChecker = "oracleReportSanityChecker",
+  secondOpinionOracle = "secondOpinionOracle",
   validatorsExitBusOracle = "validatorsExitBusOracle",
   withdrawalQueueERC721 = "withdrawalQueueERC721",
   depositContract = "depositContract",
@@ -100,6 +101,7 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  triggerableWithdrawalsBus = "triggerableWithdrawalsBus",
   consolidationGateway = "consolidationGateway",
   consolidationBus = "consolidationBus",
   consolidationMigrator = "consolidationMigrator",
@@ -135,6 +137,11 @@ export enum Sk {
   upgradeTemplate = "upgradeTemplate",
   upgradeVoteScript = "upgradeVoteScript",
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
+  srPhase2UpgradeConfig = "srPhase2UpgradeConfig",
+  srPhase2PreUpgradeChecks = "srPhase2PreUpgradeChecks",
+  srPhase2PostUpgradeChecks = "srPhase2PostUpgradeChecks",
+  srPhase2UpgradeTemplate = "srPhase2UpgradeTemplate",
+  srPhase2UpgradeVoteScript = "srPhase2UpgradeVoteScript",
   // Staking modules
   sm_CSM = "sm:CSM",
   sm_CM = "sm:CM",
@@ -173,6 +180,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.triggerableWithdrawalsBus:
     case Sk.sm_CSM:
     case Sk.sm_CM:
       return state[contractKey].proxy.address;
@@ -200,6 +208,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.miniMeTokenFactory:
     case Sk.oracleDaemonConfig:
     case Sk.oracleReportSanityChecker:
+    case Sk.secondOpinionOracle:
     case Sk.wstETH:
     case Sk.depositContract:
     case Sk.tokenRebaseNotifier:
@@ -219,6 +228,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.upgradeTemporaryAdmin:
     case Sk.upgradeTemplate:
     case Sk.upgradeVoteScript:
+    case Sk.srPhase2UpgradeTemplate:
+    case Sk.srPhase2UpgradeVoteScript:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:

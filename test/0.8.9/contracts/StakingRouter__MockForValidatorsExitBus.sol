@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingRouter} from "contracts/0.8.9/oracle/ValidatorsExitBus.sol";
+import {IStakingRouter} from "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol";
 
 contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     error StakingModuleUnregistered();
@@ -23,10 +23,12 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
         uint64 maxDepositsPerBlock;
         uint64 minDepositBlockDistance;
         uint8 withdrawalCredentialsType;
+        bool partialWithdrawalsAllowed;
     }
 
     mapping(uint256 => StakingModuleData) internal _modules;
     mapping(uint256 => bool) internal _moduleConfigured;
+    uint256 internal _modulesCount;
 
     /// @notice Mock function to set up module configuration for tests
     /// @param moduleId The module ID
@@ -34,7 +36,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     function setStakingModuleWithdrawalCredentialsType(uint256 moduleId, uint8 withdrawalCredentialsType) external {
         _modules[moduleId].id = uint24(moduleId);
         _modules[moduleId].withdrawalCredentialsType = withdrawalCredentialsType;
-        _moduleConfigured[moduleId] = true;
+        _markConfigured(moduleId);
         // Set a placeholder address - tests can override with setStakingModuleAddress if needed
         if (_modules[moduleId].stakingModuleAddress == address(0)) {
             _modules[moduleId].stakingModuleAddress = address(uint160(moduleId + 0x1000));
@@ -46,7 +48,14 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     /// @param moduleAddress The module address
     function setStakingModuleAddress(uint256 moduleId, address moduleAddress) external {
         _modules[moduleId].stakingModuleAddress = moduleAddress;
-        _moduleConfigured[moduleId] = true;
+        _markConfigured(moduleId);
+    }
+
+    /// @notice Mock function to allow or disallow partial withdrawals for a module
+    /// @param moduleId The module ID
+    /// @param allowed Whether partial withdrawals are allowed
+    function setStakingModulePartialWithdrawalsAllowed(uint256 moduleId, bool allowed) external {
+        _modules[moduleId].partialWithdrawalsAllowed = allowed;
     }
 
     function getStakingModuleStateConfig(
@@ -62,8 +71,20 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
                 stakeShareLimit: data.stakeShareLimit,
                 priorityExitShareThreshold: data.priorityExitShareThreshold,
                 status: data.status,
-                withdrawalCredentialsType: data.withdrawalCredentialsType
+                withdrawalCredentialsType: data.withdrawalCredentialsType,
+                partialWithdrawalsAllowed: data.partialWithdrawalsAllowed
             });
+    }
+
+    function getStakingModulesCount() external view returns (uint256) {
+        return _modulesCount;
+    }
+
+    function _markConfigured(uint256 moduleId) internal {
+        if (!_moduleConfigured[moduleId]) {
+            _moduleConfigured[moduleId] = true;
+            _modulesCount++;
+        }
     }
 
     function _validateModuleId(uint256 _moduleId) internal view {

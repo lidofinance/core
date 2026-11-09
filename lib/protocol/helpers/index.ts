@@ -9,7 +9,7 @@ export {
 
 export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
 
-export { setMaxPositiveTokenRebase, updateOracleReportLimits } from "./sanity-checker";
+export { updateOracleReportLimits } from "./sanity-checker";
 
 export {
   calcReportDataHash,
@@ -19,7 +19,6 @@ export {
   getNextReportContext,
   getReportTimeElapsed,
   adjustReportModuleBalances,
-  ensureFirstPostMigrationReport,
   waitNextAvailableReportTime,
   handleOracleReport,
   OracleReportParams,
@@ -27,11 +26,11 @@ export {
   report,
   reportWithEffectiveClDiff,
   reportWithoutClActivation,
-  resetCLBalanceDecreaseWindow,
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   getDepositedSinceLastReport,
-  normalizeWithdrawalVaultBaseline,
+  reachConsensus,
+  setWithdrawalVaultBalance,
 } from "./accounting";
 
 export { ensureDsmGuardians, setGuardians, setSingleGuardian } from "./dsm";
@@ -78,6 +77,14 @@ export {
 } from "./topup";
 export type { TopUpValidatorState, TopUpWitnessBundle } from "./topup";
 export { calcNodeOperatorRewards } from "./staking-module";
+export {
+  DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT,
+  drainWithdrawalRequestsQueue,
+  ensureRoleFromAgent,
+  fixedTriggerableWithdrawalsLimit,
+  setTriggerableWithdrawalsConsumerLimits,
+} from "./triggerable-withdrawals";
+export type { TriggerableWithdrawalsLimitConfig } from "./triggerable-withdrawals";
 
 export * from "./vaults";
 export * from "./operatorGrid";

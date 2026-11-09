@@ -16,7 +16,6 @@ import {
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting,
-    ValidatorExitData,
     ValidatorsCountsCorrection,
     RouterStateAccounting
 } from "./SRTypes.sol";
@@ -115,7 +114,8 @@ library SRLib {
                 stakeShareLimit: smOld.stakeShareLimit,
                 priorityExitShareThreshold: smOld.priorityExitShareThreshold,
                 status: StakingModuleStatus(smOld.status),
-                withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01
+                withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01,
+                partialWithdrawalsAllowed: false
             });
 
             // 1 SSTORE
@@ -369,6 +369,14 @@ library SRLib {
         emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
     }
 
+    function _setModulePartialWithdrawalsAllowed(uint256 _moduleId, bool _allowed) public {
+        ModuleStateConfig storage stateConfig = _moduleId.getModuleState().config;
+        /// @dev PWRs are supported only for modules with 0x02 withdrawal credentials
+        if (_allowed) SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
+        stateConfig.partialWithdrawalsAllowed = _allowed;
+        emit ISRBase.StakingModulePartialWithdrawalsAllowedSet(_moduleId, _allowed, msg.sender);
+    }
+
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
     function _getStakingModuleSummary(IStakingModule module)
         internal
@@ -555,61 +563,6 @@ library SRLib {
             }
 
             _capacities[i] = validatorsCapacity;
-        }
-    }
-
-    /// @notice Handles tracking and penalization logic for a node operator who failed to exit their validator within the defined exit window.
-    /// @dev This function is called to report the current exit-related status of a validator belonging to a specific node operator.
-    ///      It accepts a validator's public key, associated with the duration (in seconds) it was eligible to exit but has not exited.
-    ///      This data could be used to trigger penalties for the node operator if the validator has been non-exiting for too long.
-    /// @param _stakingModuleId The ID of the staking module.
-    /// @param _nodeOperatorId The ID of the node operator whose validator status is being delivered.
-    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
-    /// @param _publicKey The public key of the validator being reported.
-    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit after request but has not exited.
-    function _reportValidatorExitDelay(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes calldata _publicKey,
-        uint256 _eligibleToExitInSec
-    ) public {
-        SRUtils._requireModuleIdExists(_stakingModuleId);
-        _stakingModuleId.getIStakingModule()
-            .reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
-    }
-
-    /// @notice Handles the triggerable exit event for a set of validators.
-    /// @dev This function is called when validators are exited using triggerable exit requests on the Execution Layer.
-    /// @param validatorExitData An array of `ValidatorExitData` structs, each representing a validator
-    ///        for which a triggerable exit was requested. Each entry includes:
-    ///        - `stakingModuleId`: ID of the staking module.
-    ///        - `nodeOperatorId`: ID of the node operator.
-    ///        - `pubkey`: Validator public key, 48 bytes length.
-    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
-    /// @param _exitType The type of exit being performed.
-    ///        This parameter may be interpreted differently across various staking modules depending on their specific implementation.
-    function _onValidatorExitTriggered(
-        ValidatorExitData[] calldata validatorExitData,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) public {
-        ValidatorExitData calldata data;
-        for (uint256 i = 0; i < validatorExitData.length; ++i) {
-            data = validatorExitData[i];
-            SRUtils._requireModuleIdExists(data.stakingModuleId);
-            try data.stakingModuleId.getIStakingModule()
-                .onValidatorExitTriggered(data.nodeOperatorId, data.pubkey, _withdrawalRequestPaidFee, _exitType) {}
-            catch (bytes memory lowLevelRevertData) {
-                /// @dev This check is required to prevent incorrect gas estimation of the method.
-                ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                ///      return an invalid value when the onValidatorExitTriggered()
-                ///      reverts because of the "out of gas" error. Here we assume that the
-                ///      onValidatorExitTriggered() method doesn't have reverts with
-                ///      empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert ISRBase.UnrecoverableModuleError();
-                emit ISRBase.StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
-            }
         }
     }
 

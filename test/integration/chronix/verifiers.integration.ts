@@ -11,8 +11,6 @@ import { bailOnFailure } from "test/suite";
 
 import { deployScratch } from "./helpers/deploy";
 import {
-  advancePastExitDeadline,
-  advanceToHistoricalSummary,
   advanceUntilConsolidationRequest,
   advanceUntilFinalized,
   advanceUntilValidator,
@@ -24,14 +22,11 @@ import {
   damaged,
   DepositFixture,
   depositValidator,
-  exitEligibilityTimestamp,
-  ExitRequestBatch,
   getChronixProtocolContext,
   importValidator,
   readFinalizedCheckpoint,
   readValidator,
   recordTransaction,
-  submitExitRequests,
 } from "./helpers/protocol";
 import { initializeSSZ } from "./helpers/ssz";
 
@@ -292,104 +287,8 @@ describeChronix("Core verifiers on Chronix / Gloas", function () {
     });
   });
 
-  describe("ValidatorExitDelayVerifier: recent and historical CL evidence", () => {
-    let requests: ExitRequestBatch;
-    let eligible: AnchoredState;
-
-    before("deliver real VEB requests and advance to their unchanged eligibility deadline", async () => {
-      requests = await submitExitRequests(ctx, initial, [0, 1], ctx.modules.curated);
-      await advancePastExitDeadline(ctx, requests);
-      eligible = await anchorHead(ctx, "exit-eligible");
-    });
-
-    it("rejects a forged block header and a corrupted validator proof", async () => {
-      const { validatorExitDelayVerifier } = ctx.contracts;
-      const witness = eligible.witness(0).exit;
-      const forged = {
-        ...eligible.beacon,
-        header: { ...eligible.beacon.header, stateRoot: damaged(eligible.header.state_root) },
-      };
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(forged, [witness], requests),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
-      const corrupted = {
-        ...witness,
-        validatorProof: [damaged(witness.validatorProof[0]), ...witness.validatorProof.slice(1)],
-      };
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(eligible.beacon, [corrupted], requests),
-      ).to.be.revertedWithCustomError(sszErrors, "InvalidProof");
-    });
-
-    it("reports a proven recent exit delay through StakingRouter into the real registry", async () => {
-      const { validatorExitDelayVerifier, nor } = ctx.contracts;
-      const validator = eligible.state.validators[0];
-      const proofTimestamp = BigInt(ctx.genesis.genesis_time) + BigInt(eligible.header.slot) * 12n;
-      const committeePeriod = await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS();
-      const delay = proofTimestamp - exitEligibilityTimestamp(ctx, requests, validator, committeePeriod);
-      expect(await nor.isValidatorExitingKeyReported(validator.pubkey)).to.equal(false);
-
-      const tx = validatorExitDelayVerifier.verifyValidatorExitDelay(
-        eligible.beacon,
-        [eligible.witness(0).exit],
-        requests,
-      );
-      await recordTransaction(ctx, tx);
-      await expect(tx)
-        .to.emit(nor, "ValidatorExitStatusUpdated")
-        .withArgs(requests.module.operatorId, validator.pubkey, delay, proofTimestamp);
-      expect(await nor.isValidatorExitingKeyReported(validator.pubkey)).to.equal(true);
-    });
-
-    it("proves an older block through the historical summary actually created by CL", async () => {
-      const { validatorExitDelayVerifier, nor } = ctx.contracts;
-      const history = await advanceToHistoricalSummary(ctx, eligible);
-      const witness = { ...eligible.witness(1).exit, exitRequestIndex: 1 };
-      const broken = { ...history.old, proof: [damaged(history.old.proof[0]), ...history.old.proof.slice(1)] };
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          history.recent.beacon,
-          broken,
-          [witness],
-          requests,
-        ),
-      ).to.be.revertedWithCustomError(sszErrors, "InvalidProof");
-      const validator = eligible.state.validators[1];
-      const proofTimestamp = BigInt(ctx.genesis.genesis_time) + BigInt(eligible.header.slot) * 12n;
-      const committeePeriod = await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS();
-      const delay = proofTimestamp - exitEligibilityTimestamp(ctx, requests, validator, committeePeriod);
-      expect(await nor.isValidatorExitingKeyReported(validator.pubkey)).to.equal(false);
-
-      const tx = validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-        history.recent.beacon,
-        history.old,
-        [witness],
-        requests,
-      );
-      await recordTransaction(ctx, tx);
-      await expect(tx)
-        .to.emit(nor, "ValidatorExitStatusUpdated")
-        .withArgs(requests.module.operatorId, validator.pubkey, delay, proofTimestamp);
-      expect(await nor.isValidatorExitingKeyReported(validator.pubkey)).to.equal(true);
-    });
-
-    it("rejects an exit-delay proof after CL accepts a real signed voluntary exit", async () => {
-      const { validatorExitDelayVerifier } = ctx.contracts;
-      const exitRequest = await submitExitRequests(ctx, active, [validatorIndex], ctx.modules.curated);
-      await chronix.exitValidator(validDeposit.pubkey);
-      await chronix.advanceSlots(2);
-      const exiting = await anchorHead(ctx, "scheduled-exit");
-      expect(exiting.state.validators[validatorIndex].exit_epoch).not.to.equal((2n ** 64n - 1n).toString());
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(
-          exiting.beacon,
-          [exiting.witness(validatorIndex).exit],
-          exitRequest,
-        ),
-      ).to.be.revertedWithCustomError(sszErrors, "InvalidProof");
-    });
-
-    it("resumes real finality and accepts a fresh proof after the time jumps", async () => {
+  describe("Finality: CL and EL keep finalizing", () => {
+    it("advances real finality and accepts a fresh proof", async () => {
       const { predepositGuarantee } = ctx.contracts;
       const before = await readFinalizedCheckpoint(ctx);
       await chronix.advanceSlots(96);

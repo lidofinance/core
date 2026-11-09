@@ -116,13 +116,13 @@ const getCoreContracts = async (
     ...(skipV3AndTwContracts
       ? {}
       : {
-          validatorExitDelayVerifier: loadContract(
-            "ValidatorExitDelayVerifier",
-            config.get("validatorExitDelayVerifier") || (await locator.validatorExitDelayVerifier()),
-          ),
           triggerableWithdrawalsGateway: loadContract(
             "TriggerableWithdrawalsGateway",
             config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
+          ),
+          triggerableWithdrawalsBus: loadContract(
+            "TriggerableWithdrawalsBus",
+            config.get("triggerableWithdrawalsBus") || (await locator.triggerableWithdrawalsBus()),
           ),
           consolidationGateway: loadContract(
             "ConsolidationGateway",
@@ -260,7 +260,6 @@ export async function discover(skipV3Contracts: boolean) {
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
     "Withdrawal Vault": foundationContracts.withdrawalVault.address,
-    "Validator Exit Delay Verifier": foundationContracts.validatorExitDelayVerifier?.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
@@ -273,6 +272,7 @@ export async function discover(skipV3Contracts: boolean) {
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
     "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway?.address,
+    "Triggerable Withdrawals Bus": contracts.triggerableWithdrawalsBus?.address,
     "Consolidation Gateway": contracts.consolidationGateway?.address,
     "Consolidation Bus": contracts.consolidationBus?.address,
     "Consolidation Migrator": contracts.consolidationMigrator?.address,

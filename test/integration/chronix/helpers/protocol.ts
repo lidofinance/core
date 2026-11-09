@@ -10,8 +10,6 @@ import {
   ContractTransactionResponse,
   getBytes,
   hexlify,
-  keccak256,
-  toBeHex,
   zeroPadValue,
 } from "ethers";
 import { ethers } from "hardhat";
@@ -30,8 +28,6 @@ import {
   StakingRouter,
   TokenManager,
   TopUpGateway,
-  ValidatorExitDelayVerifier,
-  ValidatorsExitBus,
   Voting,
   WithdrawalVault,
 } from "typechain-types";
@@ -44,13 +40,11 @@ import {
   BeaconHeader,
   BeaconState,
   BeaconValidator,
-  concatIndex,
   DepositData,
   DepositMessage,
   ForkData,
   Header,
   hex,
-  proof,
   SigningData,
   State,
   validatorWitness,
@@ -108,8 +102,6 @@ export interface ChronixProtocolContracts {
   predepositGuarantee: PredepositGuarantee;
   topUpGateway: TopUpGateway;
   consolidationGateway: ConsolidationGateway;
-  validatorExitDelayVerifier: ValidatorExitDelayVerifier;
-  validatorsExitBusOracle: ValidatorsExitBus;
   lido: Lido;
   nor: NodeOperatorsRegistry;
   stakingRouter: StakingRouter;
@@ -145,14 +137,6 @@ export interface DepositFixture {
   withdrawalCredentials: string;
   deposit: { pubkey: string; signature: string; amount: bigint; depositDataRoot: string };
   y: { pubkeyY: FieldCoordinate; signatureY: { c0_a: string; c0_b: string; c1_a: string; c1_b: string } };
-}
-
-export interface ExitRequestBatch {
-  data: string;
-  dataFormat: number;
-  deliveryTimestamp: bigint;
-  module: ModuleFixture;
-  validators: BeaconValidator[];
 }
 
 export interface ChronixProtocolContext {
@@ -192,16 +176,6 @@ export async function getChronixProtocolContext(
     predepositGuarantee: await ethers.getContractAt("PredepositGuarantee", address(Sk.predepositGuarantee), signer),
     topUpGateway: await ethers.getContractAt("TopUpGateway", address(Sk.topUpGateway), signer),
     consolidationGateway: await ethers.getContractAt("ConsolidationGateway", address(Sk.consolidationGateway), signer),
-    validatorExitDelayVerifier: await ethers.getContractAt(
-      "ValidatorExitDelayVerifier",
-      address(Sk.validatorExitDelayVerifier),
-      signer,
-    ),
-    validatorsExitBusOracle: await ethers.getContractAt(
-      "ValidatorsExitBus",
-      address(Sk.validatorsExitBusOracle),
-      signer,
-    ),
     lido: await ethers.getContractAt("Lido", address(Sk.appLido), signer),
     nor: await ethers.getContractAt("NodeOperatorsRegistry", address(Sk.appNodeOperatorsRegistry), signer),
     stakingRouter: await ethers.getContractAt("StakingRouter", address(Sk.stakingRouter), signer),
@@ -277,13 +251,12 @@ function daoRunner(ctx: ChronixProtocolContext): DaoRunner {
 }
 
 async function enableVerifierCalls(ctx: ChronixProtocolContext) {
-  const { topUpGateway, consolidationGateway, validatorsExitBusOracle, lido } = ctx.contracts;
+  const { topUpGateway, consolidationGateway, lido } = ctx.contracts;
   const agent = ctx.deployment.state[Sk.appAgent].proxy.address;
   const calls: Call[] = [];
-  const grants: [TopUpGateway | ConsolidationGateway | ValidatorsExitBus, string][] = [
+  const grants: [TopUpGateway | ConsolidationGateway, string][] = [
     [topUpGateway, await topUpGateway.TOP_UP_ROLE()],
     [consolidationGateway, await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE()],
-    [validatorsExitBusOracle, await validatorsExitBusOracle.SUBMIT_REPORT_HASH_ROLE()],
   ];
   for (const [contract, role] of grants) {
     calls.push({
@@ -504,34 +477,6 @@ export function buildTopUpInput(anchor: AnchoredState, index: number, module: Mo
   };
 }
 
-export async function submitExitRequests(
-  ctx: ChronixProtocolContext,
-  anchor: AnchoredState,
-  indices: number[],
-  module: ModuleFixture,
-): Promise<ExitRequestBatch> {
-  const { validatorsExitBusOracle } = ctx.contracts;
-  const data = concat(
-    indices.map((index) =>
-      concat([
-        toBeHex(module.moduleId, 3),
-        toBeHex(module.operatorId, 5),
-        toBeHex(index, 8),
-        anchor.state.validators[index].pubkey,
-      ]),
-    ),
-  );
-  const request = { data, dataFormat: 1 };
-  const hash = keccak256(AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, 1]));
-  await recordTransaction(ctx, validatorsExitBusOracle.submitExitRequestsHash(hash));
-  await recordTransaction(ctx, validatorsExitBusOracle.submitExitRequestsData(request));
-  return {
-    ...request,
-    deliveryTimestamp: await validatorsExitBusOracle.getDeliveryTimestamp(hash),
-    module,
-    validators: indices.map((index) => anchor.state.validators[index]),
-  };
-}
 /** Gloas finalizes the checkpoint's execution parent, not its own payload. */
 async function readFinalized(ctx: ChronixProtocolContext) {
   const response = await ctx.chronix.beacon<BeaconResponse<{ finalized: { epoch: string; root: string } }>>(
@@ -563,21 +508,6 @@ export async function readFinalizedCheckpoint(ctx: ChronixProtocolContext) {
   assert.ok(checkpoint, "CL must finalize a non-genesis checkpoint");
   return checkpoint;
 }
-export async function advanceToHistoricalSummary(ctx: ChronixProtocolContext, capture: AnchoredState) {
-  const oldSlot = Number(capture.header.slot),
-    boundary = (Math.floor(oldSlot / 8192) + 1) * 8192;
-  // Explicit time-jump scenario: the current bake skips empty slots. This tests
-  // real historical transitions, not complete validator duty/economics coverage.
-  await ctx.chronix.advanceTo(Number(ctx.genesis.genesis_time) + boundary * 12 + 11.5, { mode: "fast" });
-  const recent = await anchorHead(ctx, "historical-anchor");
-  const index = Math.floor(oldSlot / 8192);
-  const roots = State.fields.block_roots.node(recent.state.block_roots);
-  assert.equal(recent.state.block_roots[oldSlot % 8192], capture.root);
-  assert.equal(hex(roots.root), recent.state.historical_summaries[index].block_summary_root);
-  const summaryGI = concatIndex(State.index("historical_summaries"), (2n << 24n) + BigInt(index));
-  const oldProof = [...proof(roots, 8192n + BigInt(oldSlot % 8192)), ...proof(recent.tree, concatIndex(summaryGI, 2n))];
-  return { recent, old: { header: headerInput(capture.header), proof: oldProof } };
-}
 export async function readValidator(ctx: ChronixProtocolContext, index: number): Promise<ValidatorRecord> {
   return (await ctx.chronix.beacon<BeaconResponse<ValidatorRecord>>(`/eth/v1/beacon/states/head/validators/${index}`))
     .data;
@@ -607,25 +537,4 @@ export async function advanceUntilConsolidationRequest(
     }
   }
   assert.fail("Consolidation request never reached CL parent_execution_requests");
-}
-export function exitEligibilityTimestamp(
-  ctx: ChronixProtocolContext,
-  request: ExitRequestBatch,
-  validator: BeaconValidator,
-  committeePeriod: bigint,
-): bigint {
-  const activationTimestamp = BigInt(ctx.genesis.genesis_time) + BigInt(validator.activation_epoch) * 32n * 12n;
-  const earliest = activationTimestamp + committeePeriod;
-  return request.deliveryTimestamp > earliest ? request.deliveryTimestamp : earliest;
-}
-
-export async function advancePastExitDeadline(ctx: ChronixProtocolContext, request: ExitRequestBatch): Promise<void> {
-  const { validatorExitDelayVerifier, nor } = ctx.contracts;
-  const committeePeriod = await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS();
-  const eligibility = request.validators.map((validator) =>
-    exitEligibilityTimestamp(ctx, request, validator, committeePeriod),
-  );
-  const latestEligibility = eligibility.reduce((latest, timestamp) => (timestamp > latest ? timestamp : latest));
-  const deadline = latestEligibility + (await nor.exitDeadlineThreshold(request.module.operatorId)) + 24n;
-  await ctx.chronix.advanceTo(Number(deadline) + 11.5, { mode: "fast" });
 }

@@ -10,7 +10,7 @@ import {
   writeUpgradeParameterAddresses,
 } from "scripts/utils/upgrade";
 
-import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
+import { HashConsensus, TopUpGateway } from "typechain-types";
 
 import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
@@ -340,15 +340,14 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
   const slotsPerEpoch = Number(chainSpec.slotsPerEpoch);
   const genesisTime = Number(chainSpec.genesisTime);
 
-  const validatorExitDelayVerifier = await loadContract<ValidatorExitDelayVerifier>(
-    "ValidatorExitDelayVerifier",
-    getAddress(Sk.validatorExitDelayVerifier, state),
-  );
-  const capellaSlot = Number(await validatorExitDelayVerifier.CAPELLA_SLOT());
+  // Only the local devnet deploy scripts of the external repo read the Capella epoch
+  const capellaSlot = Number(chainSpec.capellaSlot ?? 0);
   const capellaEpoch = Math.floor(capellaSlot / slotsPerEpoch);
+  // The modules share the Gloas fork slot of the core CL verifiers (LIP-38 removed ValidatorExitDelayVerifier).
+  const topUpGateway = await loadContract<TopUpGateway>("TopUpGateway", getAddress(Sk.topUpGateway, state));
   // An unscheduled fork is uint64 max: keep it in bigint and round down, so that the module's
   // epoch * slotsPerEpoch stays within uint64 and still lies in the far future.
-  const gloasEpoch = (await validatorExitDelayVerifier.GLOAS_SLOT()) / BigInt(slotsPerEpoch);
+  const gloasEpoch = (await topUpGateway.GLOAS_SLOT()) / BigInt(slotsPerEpoch);
   const hashConsensus = await loadContract<HashConsensus>(
     "HashConsensus",
     getAddress(Sk.hashConsensusForAccountingOracle, state),
