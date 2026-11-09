@@ -395,8 +395,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             daemonConfig,
             abi.encodeCall(IAccessControl.revokeRole, (CONFIG_MANAGER_ROLE, AGENT))
         );
-        // LIP-38: the role of the ACTIVE_REBALANCING_* Easy Track factory. Each factory has fixed permissions, so no
-        // live factory can reach the OracleDaemonConfig through this grant.
+        // For the ACTIVE_REBALANCING_* Easy Track factory.
         items[i++] = _item(
             "1.1.32. Grant CONFIG_MANAGER_ROLE on the OracleDaemonConfig to the Easy Track EVMScriptExecutor",
             daemonConfig,
