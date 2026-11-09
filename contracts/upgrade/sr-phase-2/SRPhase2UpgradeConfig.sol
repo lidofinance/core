@@ -7,8 +7,8 @@ import {GatewayConsumerLimits, OracleDaemonConfigValues, SRPhase2UpgradeParamete
 
 /// @title SRPhase2UpgradeConfig
 /// @notice Immutable address book for the SR phase 2 (LIP-38) upgrade, validated once at deployment.
-/// @dev The gateway consumer limits and the OracleDaemonConfig values have no fixed size, so they live in storage;
-///      nothing changes them after deployment.
+/// @dev The gateway consumer limits are an array and the OracleDaemonConfig values are `bytes`; neither can be
+///      `immutable`, so they live in storage. Nothing changes them after deployment.
 contract SRPhase2UpgradeConfig {
     error ZeroAddress(string field);
     error ZeroValue(string field);
