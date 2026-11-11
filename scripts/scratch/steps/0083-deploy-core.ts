@@ -38,7 +38,7 @@ export async function main() {
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
-  const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
+  const hashConsensusForWithdrawalsOracleParams = state[Sk.hashConsensusForWithdrawalsOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
 
   const proxyContractsOwner = deployer;
@@ -288,45 +288,40 @@ export async function main() {
   );
 
   //
-  // Deploy ValidatorsExitBusOracle and its HashConsensus
+  // Deploy WithdrawalsOracle and its HashConsensus
   //
 
-  const validatorsExitBusOracleParams = state[Sk.validatorsExitBusOracle].deployParameters;
-  const validatorsExitBusOracle = await deployBehindOssifiableProxy(
-    Sk.validatorsExitBusOracle,
-    "ValidatorsExitBusOracle",
+  const withdrawalsOracleParams = state[Sk.withdrawalsOracle].deployParameters;
+  const withdrawalsOracle = await deployBehindOssifiableProxy(
+    Sk.withdrawalsOracle,
+    "WithdrawalsOracle",
     proxyContractsOwner,
     deployer,
-    [
-      chainSpec.secondsPerSlot,
-      chainSpec.genesisTime,
-      locator.address,
-      validatorsExitBusOracleParams.maxRequestsPerReport,
-    ],
+    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address, withdrawalsOracleParams.maxRequestsPerReport],
   );
 
-  const hashConsensusForVebo = await deployWithoutProxy(
-    Sk.hashConsensusForValidatorsExitBusOracle,
+  const hashConsensusForWithdrawalsOracle = await deployWithoutProxy(
+    Sk.hashConsensusForWithdrawalsOracle,
     "HashConsensus",
     deployer,
     [
       chainSpec.slotsPerEpoch,
       chainSpec.secondsPerSlot,
       chainSpec.genesisTime,
-      hashConsensusForExitBusParams.epochsPerFrame,
-      hashConsensusForExitBusParams.fastLaneLengthSlots,
+      hashConsensusForWithdrawalsOracleParams.epochsPerFrame,
+      hashConsensusForWithdrawalsOracleParams.fastLaneLengthSlots,
       admin, // admin
-      validatorsExitBusOracle.address, // reportProcessor
+      withdrawalsOracle.address, // reportProcessor
     ],
   );
 
   await makeTx(
-    await loadContract("ValidatorsExitBusOracle", validatorsExitBusOracle.address),
+    await loadContract("WithdrawalsOracle", withdrawalsOracle.address),
     "initialize",
     [
       admin,
-      hashConsensusForVebo.address,
-      validatorsExitBusOracleParams.consensusVersion,
+      hashConsensusForWithdrawalsOracle.address,
+      withdrawalsOracleParams.consensusVersion,
       ZERO_LAST_PROCESSING_REF_SLOT,
     ],
     { from: deployer },
@@ -384,7 +379,7 @@ export async function main() {
   await makeTx(
     triggerableWithdrawalsBus,
     "grantRole",
-    [await triggerableWithdrawalsBus.ADD_WITHDRAWAL_INTENTS_ROLE(), validatorsExitBusOracle.address],
+    [await triggerableWithdrawalsBus.ADD_WITHDRAWAL_INTENTS_ROLE(), withdrawalsOracle.address],
     { from: deployer },
   );
 

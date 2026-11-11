@@ -7,8 +7,8 @@ import {
   TriggerableWithdrawalsBus,
   TriggerableWithdrawalsBus__factory,
   TriggerableWithdrawalsGateway__factory,
-  ValidatorsExitBusOracle,
-  ValidatorsExitBusOracle__factory,
+  WithdrawalsOracle,
+  WithdrawalsOracle__factory,
   WithdrawalVault__factory,
 } from "typechain-types";
 
@@ -36,7 +36,7 @@ import { encodeFunctionCall, InitializeArgs } from "lib/contract";
  * `TriggerableWithdrawalsGateway` is not upgradeable, so it gets a fresh address, and the new
  * `TriggerableWithdrawalsBus` is deployed behind a proxy. `WithdrawalVault` holds the gateway in an
  * immutable and `LidoLocator` lists it, so both get a new implementation; `StakingRouter` gets one
- * without the exit hooks, and `ValidatorsExitBusOracle` one that publishes its reports to the bus.
+ * without the exit hooks, and `WithdrawalsOracle` one that publishes its reports to the bus.
  *
  * @dev No `skip()`: the state entries touched here are already filled by earlier releases. The outgoing
  *      addresses are read from the live locator rather than from the state file, which this step overwrites.
@@ -144,29 +144,24 @@ export async function main() {
   });
 
   //
-  // ValidatorsExitBusOracle: the chain spec of the live oracle, the record cap in an immutable
+  // WithdrawalsOracle: the chain spec of the live oracle, the record cap in an immutable
   //
-  const liveValidatorsExitBusOracle = await loadContract<ValidatorsExitBusOracle>(
-    "ValidatorsExitBusOracle",
+  const liveWithdrawalsOracle = await loadContract<WithdrawalsOracle>(
+    "WithdrawalsOracle",
     await locator.validatorsExitBusOracle(),
   );
-  const validatorsExitBusOracleConstructorArgs: ConstructorArgs<ValidatorsExitBusOracle__factory> = [
-    await liveValidatorsExitBusOracle.SECONDS_PER_SLOT(),
-    await liveValidatorsExitBusOracle.GENESIS_TIME(),
+  const withdrawalsOracleConstructorArgs: ConstructorArgs<WithdrawalsOracle__factory> = [
+    await liveWithdrawalsOracle.SECONDS_PER_SLOT(),
+    await liveWithdrawalsOracle.GENESIS_TIME(),
     locatorAddress,
-    parameters.validatorsExitBusOracle.maxRequestsPerReport,
+    parameters.withdrawalsOracle.maxRequestsPerReport,
   ];
 
   logStartReview();
-  await logArgs("ValidatorsExitBusOracle", validatorsExitBusOracleConstructorArgs);
+  await logArgs("WithdrawalsOracle", withdrawalsOracleConstructorArgs);
   await logConfirmReview();
 
-  await deployImplementation(
-    Sk.validatorsExitBusOracle,
-    "ValidatorsExitBusOracle",
-    deployer,
-    validatorsExitBusOracleConstructorArgs,
-  );
+  await deployImplementation(Sk.withdrawalsOracle, "WithdrawalsOracle", deployer, withdrawalsOracleConstructorArgs);
 
   //
   // LidoLocator: the new gateway and the bus, no ValidatorExitDelayVerifier
@@ -181,7 +176,7 @@ export async function main() {
     burner: await locator.burner(),
     stakingRouter: await locator.stakingRouter(),
     treasury: treasuryAddress,
-    validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
+    withdrawalsOracle: await locator.validatorsExitBusOracle(),
     withdrawalQueue: await locator.withdrawalQueue(),
     withdrawalVault: await locator.withdrawalVault(),
     oracleDaemonConfig: await locator.oracleDaemonConfig(),

@@ -20,13 +20,13 @@ import {
     IEasyTrack,
     IOracleReportSanityChecker,
     ITriggerableWithdrawalsGateway,
-    IValidatorsExitBusOracle,
+    IWithdrawalsOracle,
     IWithdrawalsManagerProxy
 } from "./SRPhase2UpgradeTypes.sol";
 
 /// @title SRPhase2UpgradeVoteScript
 /// @notice Omnibus for the SR phase 2 (LIP-38) upgrade: replaces the TriggerableWithdrawalsGateway,
-///         plugs in the TriggerableWithdrawalsBus, moves the ValidatorsExitBusOracle onto it and removes
+///         plugs in the TriggerableWithdrawalsBus, moves the WithdrawalsOracle onto it and removes
 ///         the exit delay penalties.
 /// @dev The Dual Governance proposal has four calls. The first runs the upgrade through the Agent, starting
 ///      with `startUpgrade`. The next two replace the gateway among the tiebreaker sealable withdrawal blockers:
@@ -185,15 +185,15 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         // The v4 finalizer switches the report format, so it sets the new consensus version in the same call.
         // The new implementation publishes to the bus through the locator upgraded in 1.1.2.
         items[i++] = _item(
-            "1.1.5. Upgrade ValidatorsExitBusOracle implementation and finalize it to version 4",
-            config.VALIDATORS_EXIT_BUS_ORACLE(),
+            "1.1.5. Upgrade WithdrawalsOracle (former ValidatorsExitBusOracle) implementation and finalize it to version 4",
+            config.WITHDRAWALS_ORACLE(),
             abi.encodeCall(
                 IOssifiableProxy.proxy__upgradeToAndCall,
                 (
-                    config.NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL(),
+                    config.NEW_WITHDRAWALS_ORACLE_IMPL(),
                     abi.encodeCall(
-                        IValidatorsExitBusOracle.finalizeUpgrade_v4,
-                        (config.VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION())
+                        IWithdrawalsOracle.finalizeUpgrade_v4,
+                        (config.WITHDRAWALS_ORACLE_CONSENSUS_VERSION())
                     ),
                     false
                 )
@@ -289,20 +289,20 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
 
         // --- TriggerableWithdrawalsBus ---
         items[i++] = _item(
-            "1.1.18. Grant ADD_WITHDRAWAL_INTENTS_ROLE on the TriggerableWithdrawalsBus to the ValidatorsExitBusOracle",
+            "1.1.18. Grant ADD_WITHDRAWAL_INTENTS_ROLE on the TriggerableWithdrawalsBus to the WithdrawalsOracle",
             config.TRIGGERABLE_WITHDRAWALS_BUS(),
-            abi.encodeCall(IAccessControl.grantRole, (ADD_WITHDRAWAL_INTENTS_ROLE, config.VALIDATORS_EXIT_BUS_ORACLE()))
+            abi.encodeCall(IAccessControl.grantRole, (ADD_WITHDRAWAL_INTENTS_ROLE, config.WITHDRAWALS_ORACLE()))
         );
 
-        // --- ValidatorsExitBusOracle: the exit request hash delivery is removed ---
-        // The grant stays in the proxy storage, so the revoke does not depend on the VEBO implementation.
+        // --- WithdrawalsOracle: the exit request hash delivery is removed ---
+        // The grant stays in the proxy storage, so the revoke does not depend on the WithdrawalsOracle implementation.
         items[i++] = _item(
-            "1.1.19. Revoke SUBMIT_REPORT_HASH_ROLE on the ValidatorsExitBusOracle from the Easy Track EVMScriptExecutor",
-            config.VALIDATORS_EXIT_BUS_ORACLE(),
+            "1.1.19. Revoke SUBMIT_REPORT_HASH_ROLE on the WithdrawalsOracle from the Easy Track EVMScriptExecutor",
+            config.WITHDRAWALS_ORACLE(),
             abi.encodeCall(IAccessControl.revokeRole, (SUBMIT_REPORT_HASH_ROLE, config.EASY_TRACK_EVM_SCRIPT_EXECUTOR()))
         );
 
-        // --- OracleReportSanityChecker: one VEBO report must fit into the bus PWR quota ---
+        // --- OracleReportSanityChecker: one WithdrawalsOracle report must fit into the bus PWR quota ---
         // Nobody holds the setter role, so the Agent holds it only within this vote.
         address sanityChecker = config.ORACLE_REPORT_SANITY_CHECKER();
         items[i++] = _item(

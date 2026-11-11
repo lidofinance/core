@@ -3,17 +3,17 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
+import { HashConsensus__Harness, OracleReportSanityChecker, WithdrawalsOracle__Harness } from "typechain-types";
 
-import { VEBO_CONSENSUS_VERSION } from "lib";
+import { WITHDRAWALS_ORACLE_CONSENSUS_VERSION } from "lib";
 
 import {
-  calcVEBOReportDataHash,
-  deployVEBO,
+  calcWithdrawalsOracleReportDataHash,
+  deployWithdrawalsOracle,
   encodeWithdrawalRequests,
-  initVEBO,
-  VEBOReportFields,
+  initWithdrawalsOracle,
   WithdrawalRequest,
+  WithdrawalsOracleReportFields,
 } from "test/deploy";
 import { Snapshot } from "test/suite";
 
@@ -27,9 +27,9 @@ const MAXEB_MODULE_MAX_BALANCE_ETH = 2048n; // 2048 ETH
 
 const GWEI_PER_ETH = 10n ** 9n;
 
-describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
+describe("WithdrawalsOracle.sol:balanceIntegration", () => {
   let consensus: HashConsensus__Harness;
-  let oracle: ValidatorsExitBus__Harness;
+  let oracle: WithdrawalsOracle__Harness;
   let oracleReportSanityChecker: OracleReportSanityChecker;
   let admin: HardhatEthersSigner;
   let member1: HardhatEthersSigner;
@@ -48,22 +48,22 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
   // Builds a report from the requests and brings the committee to consensus on its hash
-  const prepareReportAndSubmitHash = async (requests: WithdrawalRequest[]): Promise<VEBOReportFields> => {
+  const prepareReportAndSubmitHash = async (requests: WithdrawalRequest[]): Promise<WithdrawalsOracleReportFields> => {
     const { refSlot } = await consensus.getCurrentFrame();
     const reportData = {
-      consensusVersion: VEBO_CONSENSUS_VERSION,
+      consensusVersion: WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
       refSlot,
       requestsCount: requests.length,
       data: encodeWithdrawalRequests(requests),
     };
 
-    await triggerConsensusOnHash(calcVEBOReportDataHash(reportData));
+    await triggerConsensusOnHash(calcWithdrawalsOracleReportDataHash(reportData));
 
     return reportData;
   };
@@ -75,7 +75,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   before(async () => {
     [admin, member1, member2, member3] = await ethers.getSigners();
 
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     consensus = deployed.consensus;
     oracle = deployed.oracle;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
@@ -84,7 +84,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     await deployed.stakingRouter.setStakingModulePartialWithdrawalsAllowed(MAXEB_MODULE_ID_1, true);
     await deployed.stakingRouter.setStakingModulePartialWithdrawalsAllowed(MAXEB_MODULE_ID_2, true);
 
-    await initVEBO({
+    await initWithdrawalsOracle({
       admin: admin.address,
       oracle,
       consensus,

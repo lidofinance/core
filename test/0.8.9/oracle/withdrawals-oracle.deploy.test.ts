@@ -4,51 +4,56 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness, ValidatorsExitBusOracle } from "typechain-types";
+import { HashConsensus__Harness, WithdrawalsOracle, WithdrawalsOracle__Harness } from "typechain-types";
 
-import { SECONDS_PER_SLOT, VEBO_CONSENSUS_VERSION } from "lib";
+import { SECONDS_PER_SLOT, WITHDRAWALS_ORACLE_CONSENSUS_VERSION } from "lib";
 
-import { deployVEBO, initVEBO, MAX_REQUESTS_PER_REPORT } from "test/deploy";
+import { deployWithdrawalsOracle, initWithdrawalsOracle, MAX_REQUESTS_PER_REPORT } from "test/deploy";
 
-describe("ValidatorsExitBusOracle.sol:deploy", () => {
+describe("WithdrawalsOracle.sol:deploy", () => {
   context("Deployment and initial configuration", () => {
     let admin: HardhatEthersSigner;
-    let defaultOracle: ValidatorsExitBusOracle;
+    let defaultOracle: WithdrawalsOracle;
 
     before(async () => {
       [admin] = await ethers.getSigners();
-      defaultOracle = (await deployVEBO(admin.address)).oracle;
+      defaultOracle = (await deployWithdrawalsOracle(admin.address)).oracle;
     });
 
     it("initialize reverts if admin address is zero", async () => {
-      const deployed = await deployVEBO(admin.address);
+      const deployed = await deployWithdrawalsOracle(admin.address);
 
       await expect(
-        deployed.oracle.initialize(ZeroAddress, await deployed.consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0),
+        deployed.oracle.initialize(
+          ZeroAddress,
+          await deployed.consensus.getAddress(),
+          WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
+          0,
+        ),
       ).to.be.revertedWithCustomError(defaultOracle, "AdminCannotBeZero");
     });
 
     it("reverts when slotsPerSecond is zero", async () => {
-      await expect(deployVEBO(admin.address, { secondsPerSlot: 0n })).to.be.revertedWithCustomError(
+      await expect(deployWithdrawalsOracle(admin.address, { secondsPerSlot: 0n })).to.be.revertedWithCustomError(
         defaultOracle,
         "SecondsPerSlotCannotBeZero",
       );
     });
 
     it("reverts when maxRequestsPerReport is zero", async () => {
-      await expect(deployVEBO(admin.address, { maxRequestsPerReport: 0 }))
+      await expect(deployWithdrawalsOracle(admin.address, { maxRequestsPerReport: 0 }))
         .to.be.revertedWithCustomError(defaultOracle, "ZeroArgument")
         .withArgs("maxRequestsPerReport");
     });
 
     context("deployment and init finishes successfully (default setup)", async () => {
       let consensus: HashConsensus__Harness;
-      let oracle: ValidatorsExitBus__Harness;
+      let oracle: WithdrawalsOracle__Harness;
 
       before(async () => {
-        const deployed = await deployVEBO(admin.address);
+        const deployed = await deployWithdrawalsOracle(admin.address);
 
-        await initVEBO({
+        await initWithdrawalsOracle({
           admin: admin.address,
           oracle: deployed.oracle,
           consensus: deployed.consensus,
@@ -71,7 +76,7 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
 
       it("initial configuration is correct", async () => {
         expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
-        expect(await oracle.getConsensusVersion()).to.equal(VEBO_CONSENSUS_VERSION);
+        expect(await oracle.getConsensusVersion()).to.equal(WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
         expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
         expect(await oracle.getContractVersion()).to.equal(4);
         expect(await oracle.MAX_REQUESTS_PER_REPORT()).to.equal(MAX_REQUESTS_PER_REPORT);

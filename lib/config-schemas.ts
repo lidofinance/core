@@ -312,7 +312,7 @@ const OracleSchema = z.object({
 });
 
 // LIP-38: the exit limits moved to the TriggerableWithdrawalsGateway; the record cap is a constructor immutable
-const ValidatorsExitBusOracleSchema = OracleSchema.extend({
+const WithdrawalsOracleSchema = OracleSchema.extend({
   maxRequestsPerReport: PositiveIntSchema,
 });
 
@@ -406,8 +406,8 @@ export const ScratchParametersSchema = z.object({
   }),
   lazyOracle: LazyOracleSchema,
   accountingOracle: OracleSchema,
-  hashConsensusForValidatorsExitBusOracle: HashConsensusSchema,
-  validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
+  hashConsensusForWithdrawalsOracle: HashConsensusSchema,
+  withdrawalsOracle: WithdrawalsOracleSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerSchema,
   oracleDaemonConfig: OracleDaemonConfigSchema,
@@ -439,7 +439,7 @@ export const UpgradeParametersSchema = z.object({
   withdrawalVault: WithdrawalVaultSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewayUpgradeSchema,
   accountingOracle: OracleSchema,
-  validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
+  withdrawalsOracle: WithdrawalsOracleSchema,
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   predepositGuarantee: PredepositGuaranteeSchema.extend({
     genesisForkVersion: HexStringSchema,

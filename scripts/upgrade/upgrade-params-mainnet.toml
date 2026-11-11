@@ -40,7 +40,7 @@ consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
 # Limits the SR phase 2 vote sets on the new triggerable withdrawals gateway (LIP-38 "Initial limits"):
 # `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators; all zero disables a limit.
-[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full VEBO report of either kind restores within 8 hours
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full WithdrawalsOracle report of either kind restores within 8 hours
 pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
 fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
 
@@ -68,8 +68,8 @@ fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 [accountingOracle]
 consensusVersion = 6
 
-# Validators exit bus oracle configuration
-[validatorsExitBusOracle]
+# Withdrawals oracle configuration
+[withdrawalsOracle]
 maxRequestsPerReport = 400   # Maximum records per report (LIP-38)
 consensusVersion = 6         # LIP-38 report format, set by finalizeUpgrade_v4 (live: 5)
 
@@ -175,7 +175,7 @@ expiryTimestamp = 1798761599 # December 31, 2026 at 23:59:59 UTC
 # Expiry timestamp after which the SR phase 2 (LIP-38) upgrade transaction will revert
 # TODO: placeholder, set the real deadline once the SR phase 2 vote is scheduled.
 expiryTimestamp = 1830297599 # December 31, 2027 at 23:59:59 UTC
-# Easy Track factories of the exit request hash delivery that LIP-38 removes from the VEBO
+# Easy Track factories of the exit request hash delivery that LIP-38 removes from the WithdrawalsOracle
 curatedSubmitExitRequestHashesFactory = "0x4F716AD3Cc7A3A5cdA2359e5B2c84335c171dCde"
 sdvtSubmitExitRequestHashesFactory = "0x58A59dDC6Aea9b1D5743D024E15DfA4badB56E37"
 # Sanity limit the vote sets on the OracleReportSanityChecker (live: 19,200); equals the bus PWR maxLimit (LIP-38)

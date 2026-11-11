@@ -17,7 +17,7 @@ import {
     IStakingRouter,
     ITriggerableWithdrawalsBus,
     ITriggerableWithdrawalsGateway,
-    IValidatorsExitBusOracle,
+    IWithdrawalsOracle,
     IWithdrawalsManagerProxy,
     IWithdrawalVault
 } from "./SRPhase2UpgradeTypes.sol";
@@ -54,6 +54,7 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         ILidoLocator candidate = ILidoLocator(config.NEW_LOCATOR_IMPLEMENTATION());
         _assertAddress("candidate-gateway", candidate.triggerableWithdrawalsGateway(), newGateway);
         _assertAddress("candidate-bus", candidate.triggerableWithdrawalsBus(), bus);
+        _assertAddress("candidate-withdrawals-oracle", candidate.withdrawalsOracle(), config.WITHDRAWALS_ORACLE());
         if (_locatorHashOfUnchangedMembers(locator) != _locatorHashOfUnchangedMembers(candidate)) {
             revert LocatorChangedBeyondUpgrade();
         }
@@ -87,20 +88,28 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
             locator.consolidationGateway()
         );
 
-        // The VEBO candidate keeps the chain spec of the live oracle and carries the configured record cap
-        IValidatorsExitBusOracle vebo = IValidatorsExitBusOracle(config.VALIDATORS_EXIT_BUS_ORACLE());
-        IValidatorsExitBusOracle candidateVebo = IValidatorsExitBusOracle(config.NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL());
+        // The WithdrawalsOracle candidate keeps the chain spec of the live oracle and carries the configured record cap
+        IWithdrawalsOracle withdrawalsOracle = IWithdrawalsOracle(config.WITHDRAWALS_ORACLE());
+        IWithdrawalsOracle candidateWithdrawalsOracle = IWithdrawalsOracle(config.NEW_WITHDRAWALS_ORACLE_IMPL());
         _assertNotYetUpgraded(
-            "vebo", IOssifiableProxy(address(vebo)).proxy__getImplementation(), address(candidateVebo)
+            "wo",
+            IOssifiableProxy(address(withdrawalsOracle)).proxy__getImplementation(),
+            address(candidateWithdrawalsOracle)
         );
-        _assertAddress("vebo-admin", IOssifiableProxy(address(vebo)).proxy__getAdmin(), agent);
-        _assertUint("vebo-version", vebo.getContractVersion(), VEBO_PREVIOUS_CONTRACT_VERSION);
-        _assertUint("vebo-candidate-seconds-per-slot", candidateVebo.SECONDS_PER_SLOT(), vebo.SECONDS_PER_SLOT());
-        _assertUint("vebo-candidate-genesis-time", candidateVebo.GENESIS_TIME(), vebo.GENESIS_TIME());
+        _assertAddress("wo-admin", IOssifiableProxy(address(withdrawalsOracle)).proxy__getAdmin(), agent);
+        _assertUint("wo-version", withdrawalsOracle.getContractVersion(), WITHDRAWALS_ORACLE_PREVIOUS_CONTRACT_VERSION);
         _assertUint(
-            "vebo-candidate-max-requests",
-            candidateVebo.MAX_REQUESTS_PER_REPORT(),
-            config.VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT()
+            "wo-candidate-seconds-per-slot",
+            candidateWithdrawalsOracle.SECONDS_PER_SLOT(),
+            withdrawalsOracle.SECONDS_PER_SLOT()
+        );
+        _assertUint(
+            "wo-candidate-genesis-time", candidateWithdrawalsOracle.GENESIS_TIME(), withdrawalsOracle.GENESIS_TIME()
+        );
+        _assertUint(
+            "wo-candidate-max-requests",
+            candidateWithdrawalsOracle.MAX_REQUESTS_PER_REPORT(),
+            config.WITHDRAWALS_ORACLE_MAX_REQUESTS_PER_REPORT()
         );
 
         // --- StakingRouter roles removed with the exit hooks ---

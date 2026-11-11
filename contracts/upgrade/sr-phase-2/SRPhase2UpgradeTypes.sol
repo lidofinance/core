@@ -20,10 +20,10 @@ struct SRPhase2UpgradeParameters {
     address oldLocatorImplementation;
     address newLocatorImplementation;
     // the oracle gets an implementation that publishes to the bus, finalized to v4 with a new consensus version
-    address validatorsExitBusOracle;
-    address newValidatorsExitBusOracleImpl;
-    uint256 validatorsExitBusOracleConsensusVersion;
-    uint256 validatorsExitBusOracleMaxRequestsPerReport;
+    address withdrawalsOracle;
+    address newWithdrawalsOracleImpl;
+    uint256 withdrawalsOracleConsensusVersion;
+    uint256 withdrawalsOracleMaxRequestsPerReport;
     // untouched contracts the vote reads or grants roles on
     address oracleReportSanityChecker;
     address circuitBreaker;
@@ -40,7 +40,8 @@ struct SRPhase2UpgradeParameters {
     address triggerableWithdrawalsBus;
     // removed from the protocol
     address validatorExitDelayVerifier;
-    // exit request hash delivery removed from the VEBO: the role holder and the Easy Track factories using it
+    // exit request hash delivery removed from the WithdrawalsOracle:
+    // the role holder and the Easy Track factories using it
     address easyTrack;
     address easyTrackEvmScriptExecutor;
     address curatedSubmitExitRequestHashesFactory;
@@ -127,7 +128,7 @@ interface IStakingRouter {
     function getContractVersion() external view returns (uint256);
 }
 
-interface IValidatorsExitBusOracle {
+interface IWithdrawalsOracle {
     function SECONDS_PER_SLOT() external view returns (uint256);
 
     function GENESIS_TIME() external view returns (uint256);
@@ -137,6 +138,8 @@ interface IValidatorsExitBusOracle {
     function getContractVersion() external view returns (uint256);
 
     function getConsensusVersion() external view returns (uint256);
+
+    function getTotalRequestsProcessed() external view returns (uint256);
 
     function finalizeUpgrade_v4(uint256 consensusVersion) external;
 }

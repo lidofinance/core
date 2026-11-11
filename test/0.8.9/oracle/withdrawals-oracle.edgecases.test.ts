@@ -4,32 +4,37 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  OracleReportSanityChecker__MockForExitBusWeights,
+  OracleReportSanityChecker__MockForWithdrawalsOracleWeights,
   StakingModule__MockBadKeys,
-  StakingRouter__MockForValidatorsExitBus,
-  ValidatorsExitBus__Harness,
+  StakingRouter__MockForWithdrawalsOracle,
+  WithdrawalsOracle__Harness,
 } from "typechain-types";
 
-import { deployVEBO, encodeWithdrawalRequests, initVEBO, updateLidoLocatorImplementation } from "test/deploy";
+import {
+  deployWithdrawalsOracle,
+  encodeWithdrawalRequests,
+  initWithdrawalsOracle,
+  updateLidoLocatorImplementation,
+} from "test/deploy";
 
 const PUBKEY_AA = "0x" + "aa".repeat(48);
 
 const fwr = (moduleId: number) => encodeWithdrawalRequests([{ moduleId, nodeOpId: 1, keyIndex: 1, amount: 0n }]);
 
-describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
-  let oracle: ValidatorsExitBus__Harness;
-  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
+describe("WithdrawalsOracle.sol:edge coverage", () => {
+  let oracle: WithdrawalsOracle__Harness;
+  let stakingRouter: StakingRouter__MockForWithdrawalsOracle;
   let admin: HardhatEthersSigner;
   let locatorAddr: string;
 
   beforeEach(async () => {
     [admin] = await ethers.getSigners();
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     oracle = deployed.oracle;
     stakingRouter = deployed.stakingRouter;
     locatorAddr = deployed.locatorAddr;
 
-    await initVEBO({
+    await initWithdrawalsOracle({
       admin: admin.address,
       oracle,
       consensus: deployed.consensus,
@@ -46,10 +51,10 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
 
   context("max effective balance weights", () => {
     const useSanityCheckerWeights = async (weightType1: bigint, weightType2: bigint) => {
-      const mockSanity = (await ethers.deployContract("OracleReportSanityChecker__MockForExitBusWeights", [
+      const mockSanity = (await ethers.deployContract("OracleReportSanityChecker__MockForWithdrawalsOracleWeights", [
         weightType1,
         weightType2,
-      ])) as OracleReportSanityChecker__MockForExitBusWeights;
+      ])) as OracleReportSanityChecker__MockForWithdrawalsOracleWeights;
 
       await updateLidoLocatorImplementation(locatorAddr, {
         oracleReportSanityChecker: await mockSanity.getAddress(),

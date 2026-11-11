@@ -149,7 +149,7 @@ describe("Integration: TriggerableWithdrawalsGateway module path", () => {
 
     expect(await currentLimits(busAddress)).to.deep.equal(busLimitsBefore);
 
-    const oracle = await impersonate(await ctx.contracts.validatorsExitBusOracle.getAddress(), ether("10"));
+    const oracle = await impersonate(await ctx.contracts.withdrawalsOracle.getAddress(), ether("10"));
     await bus.connect(oracle).addWithdrawalIntents([fullWithdrawal()]);
     const queued = await bus.unprocessedIntentsCount();
 
@@ -169,7 +169,7 @@ describe("Integration: TriggerableWithdrawalsGateway module path", () => {
       gateway.connect(requester).triggerWithdrawals([fullWithdrawal()], requester.address, { value: fee }),
     ).to.be.revertedWithCustomError(gateway, "ResumedExpected");
 
-    const oracle = await impersonate(await ctx.contracts.validatorsExitBusOracle.getAddress(), ether("10"));
+    const oracle = await impersonate(await ctx.contracts.withdrawalsOracle.getAddress(), ether("10"));
     await bus.connect(oracle).addWithdrawalIntents([fullWithdrawal()]);
 
     await expect(

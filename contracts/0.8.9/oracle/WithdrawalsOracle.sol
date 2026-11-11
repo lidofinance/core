@@ -59,11 +59,11 @@ interface IOracleReportSanityChecker {
 }
 
 /**
- * @title ValidatorsExitBusOracle
+ * @title WithdrawalsOracle
  * @notice Decodes oracle report records into withdrawal request intents (EIP-7002 partial and full
  * withdrawals) and appends them to the TriggerableWithdrawalsBus queue.
  */
-contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
+contract WithdrawalsOracle is BaseOracle, PausableUntil {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
 
@@ -151,6 +151,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
+        keccak256("lido.WithdrawalsOracle.totalRequestsProcessed");
+
+    /// @dev [DEPRECATED] Storage slot: uint256 totalRequestsProcessed
+    /// The counter before v4. Moved to `TOTAL_REQUESTS_PROCESSED_POSITION` and cleared in v4.
+    bytes32 internal constant DEPRECATED_TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
 
     /// @dev [DEPRECATED] Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
@@ -225,6 +230,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     function finalizeUpgrade_v4(uint256 consensusVersion) external {
         _updateContractVersion(4);
         _setConsensusVersion(consensusVersion);
+        _migrateTotalRequestsProcessed();
         _clearDeprecatedSlots();
     }
 
@@ -611,6 +617,14 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     ///
     /// Storage helpers
     ///
+
+    /// @dev Moves the counter to the new slot and clears the old one
+    function _migrateTotalRequestsProcessed() internal {
+        TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
+            DEPRECATED_TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256()
+        );
+        DEPRECATED_TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(0);
+    }
 
     /// @dev LimitData and DataProcessingState each pack into a single slot, so zeroing the slot clears the whole struct
     function _clearDeprecatedSlots() internal {

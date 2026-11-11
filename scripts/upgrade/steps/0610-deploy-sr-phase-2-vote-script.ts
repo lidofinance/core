@@ -80,8 +80,8 @@ export async function main() {
   ];
 
   // The Aragon Voting removes these factories before the template runs, so the template cannot vet them:
-  // check here that each one is live in Easy Track and submits hashes to this VEBO
-  const validatorsExitBusOracle = await locator.validatorsExitBusOracle();
+  // check here that each one is live in Easy Track and submits hashes to this WithdrawalsOracle
+  const withdrawalsOracle = await locator.validatorsExitBusOracle();
   const easyTrackAddress = nonZeroAddress(getAddress(Sk.easyTrack, state), "easyTrack");
   const easyTrack = new ethers.Contract(
     easyTrackAddress,
@@ -99,8 +99,8 @@ export async function main() {
       ["function validatorsExitBusOracle() view returns (address)"],
       ethers.provider,
     );
-    if ((await hashFactory.validatorsExitBusOracle()).toLowerCase() !== validatorsExitBusOracle.toLowerCase()) {
-      throw new Error(`Easy Track factory ${factory} does not submit exit request hashes to the VEBO`);
+    if ((await hashFactory.validatorsExitBusOracle()).toLowerCase() !== withdrawalsOracle.toLowerCase()) {
+      throw new Error(`Easy Track factory ${factory} does not submit exit request hashes to the WithdrawalsOracle`);
     }
   }
 
@@ -116,10 +116,10 @@ export async function main() {
     oldLocatorImplementation: await locatorProxy.proxy__getImplementation(),
     newLocatorImplementation: state[Sk.lidoLocator].implementation.address,
 
-    validatorsExitBusOracle,
-    newValidatorsExitBusOracleImpl: state[Sk.validatorsExitBusOracle].implementation.address,
-    validatorsExitBusOracleConsensusVersion: parameters.validatorsExitBusOracle.consensusVersion,
-    validatorsExitBusOracleMaxRequestsPerReport: parameters.validatorsExitBusOracle.maxRequestsPerReport,
+    withdrawalsOracle,
+    newWithdrawalsOracleImpl: state[Sk.withdrawalsOracle].implementation.address,
+    withdrawalsOracleConsensusVersion: parameters.withdrawalsOracle.consensusVersion,
+    withdrawalsOracleMaxRequestsPerReport: parameters.withdrawalsOracle.maxRequestsPerReport,
     oracleReportSanityChecker: await locator.oracleReportSanityChecker(),
     circuitBreaker: nonZeroAddress(getAddress(Sk.circuitBreaker, state), "circuitBreaker"),
     circuitBreakerCommittee: nonZeroAddress(state[Sk.gateSeal].sealingCommittee, "circuitBreakerCommittee"),

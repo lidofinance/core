@@ -85,13 +85,13 @@ maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per secon
 [accountingOracle]
 consensusVersion = 7                  # Consensus version
 
-# Hash consensus for validators exit bus oracle
-[hashConsensusForValidatorsExitBusOracle]
+# Hash consensus for withdrawals oracle
+[hashConsensusForWithdrawalsOracle]
 fastLaneLengthSlots = 10              # Fast lane length in slots
 epochsPerFrame = 4                    # Epochs per consensus frame
 
-# Validators exit bus oracle configuration
-[validatorsExitBusOracle]
+# Withdrawals oracle configuration
+[withdrawalsOracle]
 maxRequestsPerReport = 400            # Maximum records per report (LIP-38)
 consensusVersion = 6                  # Consensus version
 
@@ -154,7 +154,7 @@ symbol = "unstETH"                    # NFT collection symbol
 # Triggerable withdrawals gateway limits per consumer (LIP-38 "Initial limits"):
 # `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators.
 # All zero disables a limit; an enabled PWR limit holds at least 2016 ETH.
-[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full VEBO report of either kind restores within 8 hours
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full WithdrawalsOracle report of either kind restores within 8 hours
 pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
 fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
 

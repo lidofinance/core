@@ -91,13 +91,13 @@
       "consensusVersion": 7
     }
   },
-  "hashConsensusForValidatorsExitBusOracle": {
+  "hashConsensusForWithdrawalsOracle": {
     "deployParameters": {
       "fastLaneLengthSlots": 10,
       "epochsPerFrame": 4
     }
   },
-  "validatorsExitBusOracle": {
+  "withdrawalsOracle": {
     "deployParameters": {
       "maxRequestsPerReport": 400,
       "consensusVersion": 6

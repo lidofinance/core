@@ -24,7 +24,7 @@ export async function main() {
     burner: getAddress(Sk.burner, state),
     stakingRouter: getAddress(Sk.stakingRouter, state),
     treasury: getAddress(Sk.appAgent, state),
-    validatorsExitBusOracle: getAddress(Sk.validatorsExitBusOracle, state),
+    withdrawalsOracle: getAddress(Sk.withdrawalsOracle, state),
     withdrawalQueue: getAddress(Sk.withdrawalQueueERC721, state),
     withdrawalVault: getAddress(Sk.withdrawalVault, state),
     triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),

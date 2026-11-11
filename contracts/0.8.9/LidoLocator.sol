@@ -23,7 +23,7 @@ contract LidoLocator is ILidoLocator {
         address burner;
         address stakingRouter;
         address treasury;
-        address validatorsExitBusOracle;
+        address withdrawalsOracle;
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
@@ -52,7 +52,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable burner;
     address public immutable stakingRouter;
     address public immutable treasury;
-    address public immutable validatorsExitBusOracle;
+    address public immutable withdrawalsOracle;
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
@@ -84,7 +84,7 @@ contract LidoLocator is ILidoLocator {
         burner = _assertNonZero(_config.burner);
         stakingRouter = _assertNonZero(_config.stakingRouter);
         treasury = _assertNonZero(_config.treasury);
-        validatorsExitBusOracle = _assertNonZero(_config.validatorsExitBusOracle);
+        withdrawalsOracle = _assertNonZero(_config.withdrawalsOracle);
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
@@ -99,6 +99,14 @@ contract LidoLocator is ILidoLocator {
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
         topUpGateway = _assertNonZero(_config.topUpGateway);
+    }
+
+    /**
+     * @notice Deprecated alias of `withdrawalsOracle()`, kept for the existing consumers
+     * @return The WithdrawalsOracle address, the former ValidatorsExitBusOracle
+     */
+    function validatorsExitBusOracle() external view returns (address) {
+        return withdrawalsOracle;
     }
 
     function coreComponents() external view returns (

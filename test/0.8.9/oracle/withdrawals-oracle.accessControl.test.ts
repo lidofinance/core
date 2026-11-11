@@ -4,30 +4,30 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import { HashConsensus__Harness, WithdrawalsOracle__Harness } from "typechain-types";
 
-import { VEBO_CONSENSUS_VERSION } from "lib";
+import { WITHDRAWALS_ORACLE_CONSENSUS_VERSION } from "lib";
 
 import {
-  calcVEBOReportDataHash,
-  deployVEBO,
+  calcWithdrawalsOracleReportDataHash,
+  deployWithdrawalsOracle,
   encodeWithdrawalRequests,
-  initVEBO,
-  VEBOReportFields,
+  initWithdrawalsOracle,
   WithdrawalRequest,
+  WithdrawalsOracleReportFields,
 } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("ValidatorsExitBusOracle.sol:accessControl", () => {
+describe("WithdrawalsOracle.sol:accessControl", () => {
   let consensus: HashConsensus__Harness;
-  let oracle: ValidatorsExitBus__Harness;
+  let oracle: WithdrawalsOracle__Harness;
   let admin: HardhatEthersSigner;
   let originalState: string;
 
   let initTx: ContractTransactionResponse;
   let oracleVersion: bigint;
   let requests: WithdrawalRequest[];
-  let reportFields: VEBOReportFields;
+  let reportFields: WithdrawalsOracleReportFields;
   let reportHash: string;
 
   let member1: HardhatEthersSigner;
@@ -37,11 +37,11 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   let account1: HardhatEthersSigner;
 
   const deploy = async () => {
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
 
-    initTx = await initVEBO({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
+    initTx = await initWithdrawalsOracle({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
 
     oracleVersion = await oracle.getContractVersion();
 
@@ -57,15 +57,15 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     ];
 
     reportFields = {
-      consensusVersion: VEBO_CONSENSUS_VERSION,
+      consensusVersion: WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
       refSlot: refSlot,
       requestsCount: requests.length,
       data: encodeWithdrawalRequests(requests),
     };
 
-    reportHash = calcVEBOReportDataHash(reportFields);
-    await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+    reportHash = calcWithdrawalsOracleReportDataHash(reportFields);
+    await consensus.connect(member1).submitReport(refSlot, reportHash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, reportHash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
   };
 
   before(async () => {
@@ -79,7 +79,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("deploying", () => {
-    it("deploying validators exit bus oracle", async () => {
+    it("deploying withdrawals oracle", async () => {
       expect(oracle).to.be.not.null;
       expect(consensus).to.be.not.null;
       expect(initTx).to.be.not.null;
@@ -98,7 +98,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(ZeroAddress, await consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0),
+          oracle.initialize(ZeroAddress, await consensus.getAddress(), WITHDRAWALS_ORACLE_CONSENSUS_VERSION, 0),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

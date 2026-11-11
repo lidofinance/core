@@ -6,7 +6,7 @@ pragma solidity 0.8.9;
 /**
  * @notice Universal mock for staking modules that returns any requested signing key
  * @dev This mock implements both legacy (NOR, SDVT) and new (CSM, CuratedV2) interfaces
- *      and can be used for key verification testing in ValidatorsExitBus
+ *      and can be used for key verification testing in WithdrawalsOracle
  */
 contract StakingModule__MockForKeyVerification {
     // Storage: nodeOpId => keyIndex => pubkey (48 bytes)

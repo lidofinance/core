@@ -285,7 +285,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "burner",
     "stakingRouter",
     "treasury",
-    "validatorsExitBusOracle",
+    "withdrawalsOracle",
     "withdrawalQueue",
     "withdrawalVault",
     "oracleDaemonConfig",

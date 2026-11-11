@@ -6,36 +6,36 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   HashConsensus__Harness,
-  TriggerableWithdrawalsBus__MockForVEB,
-  ValidatorsExitBus__Harness,
+  TriggerableWithdrawalsBus__MockForWithdrawalsOracle,
+  WithdrawalsOracle__Harness,
 } from "typechain-types";
 
-import { VEBO_CONSENSUS_VERSION } from "lib";
+import { WITHDRAWALS_ORACLE_CONSENSUS_VERSION } from "lib";
 
 import {
-  calcVEBOReportDataHash,
+  calcWithdrawalsOracleReportDataHash,
   computeTimestampAtSlot,
-  deployVEBO,
+  deployWithdrawalsOracle,
   encodeWithdrawalRequests,
-  initVEBO,
+  initWithdrawalsOracle,
   makeMockPubkey,
   SECONDS_PER_FRAME,
   SLOTS_PER_FRAME,
-  VEBOReportFields,
   WithdrawalRequest,
+  WithdrawalsOracleReportFields,
 } from "test/deploy";
 
 const GWEI_PER_ETH = 10n ** 9n;
 
-describe("ValidatorsExitBusOracle.sol:happyPath", () => {
+describe("WithdrawalsOracle.sol:happyPath", () => {
   let consensus: HashConsensus__Harness;
-  let oracle: ValidatorsExitBus__Harness;
-  let triggerableWithdrawalsBus: TriggerableWithdrawalsBus__MockForVEB;
+  let oracle: WithdrawalsOracle__Harness;
+  let triggerableWithdrawalsBus: TriggerableWithdrawalsBus__MockForWithdrawalsOracle;
   let admin: HardhatEthersSigner;
 
   let oracleVersion: bigint;
   let requests: WithdrawalRequest[];
-  let reportFields: VEBOReportFields;
+  let reportFields: WithdrawalsOracleReportFields;
   let reportHash: string;
 
   let member1: HardhatEthersSigner;
@@ -48,7 +48,7 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   before(async () => {
     [admin, member1, member2, member3, stranger] = await ethers.getSigners();
 
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     triggerableWithdrawalsBus = deployed.triggerableWithdrawalsBus;
@@ -56,7 +56,7 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     // module 2 has 0x02 withdrawal credentials and accepts partial withdrawals
     await deployed.stakingRouter.setStakingModulePartialWithdrawalsAllowed(2, true);
 
-    await initVEBO({
+    await initWithdrawalsOracle({
       admin: admin.address,
       oracle,
       consensus,
@@ -73,8 +73,8 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -109,13 +109,13 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     ];
 
     reportFields = {
-      consensusVersion: VEBO_CONSENSUS_VERSION,
+      consensusVersion: WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
       refSlot: refSlot,
       requestsCount: requests.length,
       data: encodeWithdrawalRequests(requests),
     };
 
-    reportHash = calcVEBOReportDataHash(reportFields);
+    reportHash = calcWithdrawalsOracleReportDataHash(reportFields);
 
     await triggerConsensusOnHash(reportHash);
   });
@@ -155,10 +155,10 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   });
 
   it("the data cannot be submitted passing a different consensus version", async () => {
-    const invalidReport = { ...reportFields, consensusVersion: VEBO_CONSENSUS_VERSION + 1n };
+    const invalidReport = { ...reportFields, consensusVersion: WITHDRAWALS_ORACLE_CONSENSUS_VERSION + 1n };
     await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
       .to.be.revertedWithCustomError(oracle, "UnexpectedConsensusVersion")
-      .withArgs(VEBO_CONSENSUS_VERSION, VEBO_CONSENSUS_VERSION + 1n);
+      .withArgs(WITHDRAWALS_ORACLE_CONSENSUS_VERSION, WITHDRAWALS_ORACLE_CONSENSUS_VERSION + 1n);
   });
 
   it("a data not matching the consensus hash cannot be submitted", async () => {
@@ -166,7 +166,7 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
       ...reportFields,
       requestsCount: reportFields.requestsCount + 1,
     };
-    const invalidReportHash = calcVEBOReportDataHash(invalidReport);
+    const invalidReportHash = calcWithdrawalsOracleReportDataHash(invalidReport);
 
     await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
       .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")

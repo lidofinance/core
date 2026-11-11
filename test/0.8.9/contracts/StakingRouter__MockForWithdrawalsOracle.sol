@@ -3,9 +3,9 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingRouter} from "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol";
+import {IStakingRouter} from "contracts/0.8.9/oracle/WithdrawalsOracle.sol";
 
-contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
+contract StakingRouter__MockForWithdrawalsOracle is IStakingRouter {
     error StakingModuleUnregistered();
 
     struct StakingModuleData {
@@ -94,7 +94,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
         }
     }
 
-    // Stub implementations for other IStakingRouter methods (not used in ValidatorsExitBus)
+    // Stub implementations for other IStakingRouter methods (not used in WithdrawalsOracle)
     function updateExitedValidatorsCountByStakingModule(
         uint256[] calldata,
         uint256[] calldata
