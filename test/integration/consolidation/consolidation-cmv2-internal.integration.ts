@@ -9,7 +9,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationMigrator } from "typechain-types";
 
-import { certainAddress, ether, findEventsWithInterfaces, impersonate, loadContract } from "lib";
+import { ether, findEventsWithInterfaces, impersonate, loadContract } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   calcConsolidationBatchHash,
@@ -41,11 +41,10 @@ type IndexGroup = { sourceKeyIndices: bigint[]; targetKeyIndex: bigint };
  * Curated Module v2. A CMv2 operator moves stake between its own validators with a pair (N, N).
  *
  * The suite gets the instance from the deploy step `0920-cmv2-consolidation-migrator-deploy`, or uses
- * the instance recorded in the state file. When the ConsolidationBus does not list the instance as a
- * publisher yet, the suite checks the deploy state and then applies the DAO vote actions as the Agent:
- * - ConsolidationBus.grantRole(PUBLISH_ROLE, migrator)
- * - migrator.grantRole(ALLOW_PAIR_ROLE, committee)
- * - migrator.grantRole(DISALLOW_PAIR_ROLE, committee)
+ * the instance recorded in the state file. The deploy step grants the pair roles to the committee and
+ * leaves the Agent as the only admin. When the ConsolidationBus does not list the instance as a
+ * publisher yet, the suite checks the deploy state and then applies the DAO vote action as the Agent:
+ * ConsolidationBus.grantRole(PUBLISH_ROLE, migrator).
  */
 describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () => {
   let ctx: ProtocolContext;
@@ -100,17 +99,14 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
 
     const { chainId } = await ethers.provider.getNetwork();
     knownCommittee = CURATED_MODULE_COMMITTEE[chainId.toString()];
-    const committeeAddress = knownCommittee ?? certainAddress("cmv2-internal-consolidation-committee");
+    const [committeeAddress] = await migrator.getRoleMembers(await migrator.ALLOW_PAIR_ROLE());
     committee = await impersonate(committeeAddress, ether("10"));
 
     const PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
     voteSimulated = !(await consolidationBus.hasRole(PUBLISH_ROLE, migratorAddress));
     if (voteSimulated) {
       await assertCMv2ConsolidationMigratorDeployState(readNetworkState());
-
       await consolidationBus.connect(agent).grantRole(PUBLISH_ROLE, migratorAddress);
-      await migrator.connect(agent).grantRole(await migrator.ALLOW_PAIR_ROLE(), committeeAddress);
-      await migrator.connect(agent).grantRole(await migrator.DISALLOW_PAIR_ROLE(), committeeAddress);
     }
 
     // REMOVE_ROLE lets the suite clear an identical batch left pending on a live fork block
@@ -204,11 +200,12 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
       expect(await legacyMigrator.targetModuleId()).to.equal(cmv2ModuleId);
     });
 
-    it("uses the network's committee: the DISALLOW_PAIR_ROLE holder on the CMv1 -> CMv2 migrator", async function () {
+    it("gives the pair roles to the network's committee", async function () {
       if (!knownCommittee) return this.skip();
       expect(await legacyMigrator.getRoleMembers(await legacyMigrator.DISALLOW_PAIR_ROLE())).to.deep.equal([
         knownCommittee,
       ]);
+      expect(committee.address).to.equal(knownCommittee);
     });
   });
 
