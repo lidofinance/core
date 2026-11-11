@@ -1,15 +1,17 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import {
-  assertCMv2ConsolidationMigratorDeployState,
-  main as deployCMv2ConsolidationMigrator,
-} from "scripts/upgrade/steps/0920-cmv2-consolidation-migrator-deploy";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ConsolidationBus, ConsolidationMigrator } from "typechain-types";
+import {
+  ConsolidationBus,
+  ConsolidationMigrator,
+  ConsolidationMigrator__factory,
+  OssifiableProxy,
+  OssifiableProxy__factory,
+} from "typechain-types";
 
-import { ether, findEventsWithInterfaces, impersonate, loadContract } from "lib";
+import { certainAddress, ether, findEventsWithInterfaces, impersonate, loadContract } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   calcConsolidationBatchHash,
@@ -40,11 +42,11 @@ type IndexGroup = { sourceKeyIndices: bigint[]; targetKeyIndex: bigint };
  * Integration test for the ConsolidationMigrator instance whose source and target module are both
  * Curated Module v2. A CMv2 operator moves stake between its own validators with a pair (N, N).
  *
- * The suite gets the instance from the deploy step `0920-cmv2-consolidation-migrator-deploy`, or uses
- * the instance recorded in the state file. The deploy step grants the pair roles to the committee and
- * leaves the Agent as the only admin. When the ConsolidationBus does not list the instance as a
- * publisher yet, the suite checks the deploy state and then applies the DAO vote action as the Agent:
- * ConsolidationBus.grantRole(PUBLISH_ROLE, migrator).
+ * On a fork the suite uses the instance recorded in the state file (`consolidationMigratorCMv2`):
+ * the Agent is its only admin and the Curated Module Committee holds both pair roles. A scratch
+ * deployment has no such instance, so the suite deploys one with the same setup and a stand-in
+ * committee. When the ConsolidationBus does not list the instance as a publisher yet, the suite
+ * applies the DAO vote action as the Agent: ConsolidationBus.grantRole(PUBLISH_ROLE, migrator).
  */
 describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () => {
   let ctx: ProtocolContext;
@@ -52,7 +54,11 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
   let legacyMigrator: LoadedContract<ConsolidationMigrator>;
   let migrator: ConsolidationMigrator;
   let migratorAddress: string;
+  let proxy: OssifiableProxy;
+  let implementation: ConsolidationMigrator;
+  let recordedImplementation: string | undefined;
 
+  let deployer: HardhatEthersSigner;
   let agent: HardhatEthersSigner;
   let committee: HardhatEthersSigner;
   let executor: HardhatEthersSigner;
@@ -66,7 +72,6 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
   let targetWitnesses: ConsolidationTargetWitness[];
 
   let knownCommittee: string | undefined;
-  let voteSimulated: boolean;
   let globalSnapshot: string;
   let testSnapshot: string;
 
@@ -84,28 +89,35 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
       return this.skip();
     }
 
-    [, executor, submitter, stranger] = await ethers.getSigners();
+    [deployer, executor, submitter, stranger] = await ethers.getSigners();
     consolidationBus = ctx.contracts.consolidationBus;
     legacyMigrator = ctx.contracts.consolidationMigrator;
     cmv2ModuleId = ctx.modules.cmv2!.id;
     agent = await ctx.getSigner("agent");
 
-    const deployedAddress = getAddressValidated(Sk.consolidationMigratorCMv2, readNetworkState());
-    if (!deployedAddress || (await ethers.provider.getCode(deployedAddress)) === "0x") {
-      await deployCMv2ConsolidationMigrator();
+    const state = readNetworkState();
+    const deployedAddress = getAddressValidated(Sk.consolidationMigratorCMv2, state);
+    if (deployedAddress && (await ethers.provider.getCode(deployedAddress)) !== "0x") {
+      migratorAddress = deployedAddress;
+      recordedImplementation = state[Sk.consolidationMigratorCMv2].implementation.address;
+    } else {
+      migratorAddress = await deployScratchInstance();
     }
-    migratorAddress = getAddressValidated(Sk.consolidationMigratorCMv2, readNetworkState())!;
     migrator = await loadContract<ConsolidationMigrator>("ConsolidationMigrator", migratorAddress);
+    proxy = await loadContract<OssifiableProxy>("OssifiableProxy", migratorAddress);
+    implementation = await loadContract<ConsolidationMigrator>(
+      "ConsolidationMigrator",
+      await proxy.proxy__getImplementation(),
+    );
 
     const { chainId } = await ethers.provider.getNetwork();
     knownCommittee = CURATED_MODULE_COMMITTEE[chainId.toString()];
     const [committeeAddress] = await migrator.getRoleMembers(await migrator.ALLOW_PAIR_ROLE());
     committee = await impersonate(committeeAddress, ether("10"));
 
+    // The DAO vote action, until the vote is enacted on the forked network
     const PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
-    voteSimulated = !(await consolidationBus.hasRole(PUBLISH_ROLE, migratorAddress));
-    if (voteSimulated) {
-      await assertCMv2ConsolidationMigratorDeployState(readNetworkState());
+    if (!(await consolidationBus.hasRole(PUBLISH_ROLE, migratorAddress))) {
       await consolidationBus.connect(agent).grantRole(PUBLISH_ROLE, migratorAddress);
     }
 
@@ -128,6 +140,28 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
   beforeEach(async () => (testSnapshot = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(testSnapshot));
+
+  // Scratch only: the setup the live deploy left, with a stand-in for the Curated Module Committee
+  const deployScratchInstance = async () => {
+    const impl = await new ConsolidationMigrator__factory(deployer).deploy(
+      await ctx.contracts.stakingRouter.getAddress(),
+      await consolidationBus.getAddress(),
+      cmv2ModuleId,
+      cmv2ModuleId,
+    );
+    const initData = impl.interface.encodeFunctionData("initialize", [agent.address]);
+    const instanceProxy = await new OssifiableProxy__factory(deployer).deploy(
+      await impl.getAddress(),
+      agent.address,
+      initData,
+    );
+    const instance = ConsolidationMigrator__factory.connect(await instanceProxy.getAddress(), agent);
+
+    const standInCommittee = certainAddress("cmv2-internal-consolidation:committee");
+    await instance.grantRole(await instance.ALLOW_PAIR_ROLE(), standInCommittee);
+    await instance.grantRole(await instance.DISALLOW_PAIR_ROLE(), standInCommittee);
+    return instance.getAddress();
+  };
 
   const indexGroup = (sources: number[], target: number): IndexGroup => ({
     sourceKeyIndices: sources.map((p) => operator.keyIndices[p]),
@@ -176,10 +210,27 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
 
   context("Deployment and vote", () => {
     it("binds the new migrator to CMv2 as both source and target module", async () => {
-      expect(await migrator.sourceModuleId()).to.equal(cmv2ModuleId);
-      expect(await migrator.targetModuleId()).to.equal(cmv2ModuleId);
-      expect(await migrator.getStakingRouter()).to.equal(await ctx.contracts.stakingRouter.getAddress());
-      expect(await migrator.getConsolidationBus()).to.equal(await consolidationBus.getAddress());
+      for (const contract of [migrator, implementation]) {
+        expect(await contract.sourceModuleId()).to.equal(cmv2ModuleId);
+        expect(await contract.targetModuleId()).to.equal(cmv2ModuleId);
+        expect(await contract.getStakingRouter()).to.equal(await ctx.contracts.stakingRouter.getAddress());
+        expect(await contract.getConsolidationBus()).to.equal(await consolidationBus.getAddress());
+      }
+    });
+
+    it("sits behind an OssifiableProxy of the Agent, and neither proxy nor implementation can be initialized again", async () => {
+      expect(await proxy.proxy__getAdmin()).to.equal(agent.address);
+      expect(await proxy.proxy__getIsOssified()).to.be.false;
+      if (recordedImplementation) {
+        expect(await proxy.proxy__getImplementation()).to.equal(recordedImplementation);
+      }
+
+      for (const contract of [migrator, implementation]) {
+        await expect(contract.initialize(stranger.address)).to.be.revertedWithCustomError(
+          contract,
+          "InvalidInitialization",
+        );
+      }
     });
 
     it("leaves the Agent as the only admin and the committee as the only pair manager", async () => {
