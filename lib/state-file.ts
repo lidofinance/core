@@ -103,6 +103,7 @@ export enum Sk {
   consolidationGateway = "consolidationGateway",
   consolidationBus = "consolidationBus",
   consolidationMigrator = "consolidationMigrator",
+  consolidationMigratorCMv2 = "consolidationMigratorCMv2",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
@@ -173,6 +174,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.dgEmergencyProtectedTimelock:
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
+    case Sk.consolidationMigratorCMv2:
     case Sk.topUpGateway:
     case Sk.sm_CSM:
     case Sk.sm_CSM0x02:
