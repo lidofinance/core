@@ -404,6 +404,27 @@
       ]
     }
   },
+  "consolidationMigratorCMv2": {
+    "proxy": {
+      "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
+      "address": "0xc8a7F4917cA03FDCD24a5E11A48Ab448318976e7",
+      "constructorArgs": [
+        "0x5D2DDD6817180c2135b4652503bD555c2d3Bb392",
+        "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
+        "0xc4d66de80000000000000000000000008db3077406432d73fbe6c5eebd1435c6846d40d7"
+      ]
+    },
+    "implementation": {
+      "contract": "contracts/0.8.25/consolidation/ConsolidationMigrator.sol",
+      "address": "0x5D2DDD6817180c2135b4652503bD555c2d3Bb392",
+      "constructorArgs": [
+        "0xCc820558B39ee15C7C45B59390B503b83fb499A8",
+        "0xe09fBcE63826468867eE66Eda491E444829E022A",
+        5,
+        5
+      ]
+    }
+  },
   "createAppReposTx": "0xda42173c8a2bd75956437d03e275d32d583650cf4673693716d20c72ac94c137",
   "daoAragonId": "lido-dao",
   "daoFactory": {
@@ -917,7 +938,7 @@
   "resealManager": {
     "address": "0x05172CbCDb7307228F781436b327679e4DAE166B"
   },
-  "scratchDeployGasUsed": "166261142",
+  "scratchDeployGasUsed": "168999246",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleTypeId": "curated-onchain-v1",
