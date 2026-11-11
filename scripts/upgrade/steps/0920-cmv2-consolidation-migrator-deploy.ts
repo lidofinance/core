@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade";
 
 import {
@@ -21,8 +21,12 @@ import {
   logStartReview,
   readNetworkState,
   Sk,
+  toBool,
 } from "lib";
 import { DeploymentState } from "lib/state-file";
+
+// Networks where the operator must confirm the review prompt by hand
+const LIVE_NETWORKS = ["mainnet", "hoodi", "sepolia"];
 
 /**
  * Inputs of the ConsolidationMigrator instance that consolidates keys inside Curated Module v2.
@@ -31,9 +35,13 @@ import { DeploymentState } from "lib/state-file";
  */
 interface CMv2ConsolidationMigratorConfig {
   agent: string;
+  locator: string;
   stakingRouter: string;
   consolidationBus: string;
+  existingMigrator: string;
   cmv2ModuleId: bigint;
+  cmv2Module: string;
+  cmv2ModuleName: string;
 }
 
 export async function skip(): Promise<boolean> {
@@ -51,6 +59,10 @@ export async function main() {
 
   await logScriptHeader("CMv2 internal consolidation — Deploy ConsolidationMigrator (CMv2 -> CMv2)", deployer);
 
+  if (LIVE_NETWORKS.includes(network.name) && toBool(process.env.AUTO_CONFIRM)) {
+    throw new Error(`AUTO_CONFIRM must be off on ${network.name}: the operator confirms the review by hand`);
+  }
+
   const config = await resolveConfig(readNetworkState());
   // Module ids are numbers because the state file stores constructor arguments as JSON
   const moduleId = Number(config.cmv2ModuleId);
@@ -58,12 +70,37 @@ export async function main() {
   // The proxy constructor runs `initialize(agent)`, so the Agent is the only admin from the first block
   const initData = ConsolidationMigrator__factory.createInterface().encodeFunctionData("initialize", [config.agent]);
 
+  // The step sends two transactions in a row: the implementation, then the proxy
+  const { chainId } = await ethers.provider.getNetwork();
+  const nonce = await ethers.provider.getTransactionCount(deployer, "pending");
+  const expectedImplementation = ethers.getCreateAddress({ from: deployer, nonce });
+  const expectedProxy = ethers.getCreateAddress({ from: deployer, nonce: nonce + 1 });
+
   logStartReview();
-  await logArgs("ConsolidationMigrator", constructorArgs);
-  log.info("OssifiableProxy for ConsolidationMigrator", {
-    "admin (Agent)": config.agent,
-    "initialize admin (Agent)": config.agent,
-    "initialization data": initData,
+  log.info("Deployment", {
+    "network": network.name,
+    "chain ID": chainId,
+    "deployer": deployer,
+    "deployer nonce": nonce,
+  });
+  log.info("Inputs and their sources", {
+    "Agent": `${config.agent} (state file ${Sk.appAgent})`,
+    "StakingRouter": `${config.stakingRouter} (LidoLocator ${config.locator} stakingRouter())`,
+    "ConsolidationBus": `${config.consolidationBus} (state file ${Sk.consolidationBus})`,
+    "CMv2 module id": `${config.cmv2ModuleId} (targetModuleId() of the CMv1 -> CMv2 migrator ${config.existingMigrator})`,
+    "CMv2 module": `${config.cmv2Module} "${config.cmv2ModuleName}" (StakingRouter module ${config.cmv2ModuleId} = state file ${Sk.sm_CM})`,
+  });
+  await logArgs("ConsolidationMigrator", constructorArgs, "constructor", `implementation, tx 1 of 2, nonce ${nonce}`);
+  await logArgs(
+    "OssifiableProxy",
+    [expectedImplementation, config.agent, initData],
+    "constructor",
+    `proxy, tx 2 of 2, nonce ${nonce + 1}`,
+  );
+  log.info("Proxy initialization data", { decoded: `initialize(${config.agent}) — the Agent` });
+  log.info("Expected addresses", {
+    "ConsolidationMigrator implementation": expectedImplementation,
+    "OssifiableProxy (the new ConsolidationMigrator)": expectedProxy,
   });
   await logConfirmReview();
 
@@ -78,6 +115,17 @@ export async function main() {
     undefined, // factoryOptions
     initData,
   );
+
+  const entry = readNetworkState()[Sk.consolidationMigratorCMv2];
+  if (
+    !sameAddress(entry.implementation.address, expectedImplementation) ||
+    !sameAddress(entry.proxy.address, expectedProxy)
+  ) {
+    throw new Error(
+      `Deployed addresses differ from the reviewed ones: implementation ${entry.implementation.address}, ` +
+        `proxy ${entry.proxy.address}`,
+    );
+  }
 
   await assertCMv2ConsolidationMigratorDeployState(readNetworkState());
 }
@@ -139,14 +187,13 @@ async function resolveConfig(state: DeploymentState): Promise<CMv2ConsolidationM
   const agent = getAddress(Sk.appAgent, state);
   const consolidationBus = getAddress(Sk.consolidationBus, state);
   const cmv2Address = getAddress(Sk.sm_CM, state);
+  const locatorAddress = getAddress(Sk.lidoLocator, state);
+  const existingMigratorAddress = getAddress(Sk.consolidationMigrator, state);
 
-  const locator = await loadContract<LidoLocator>("LidoLocator", getAddress(Sk.lidoLocator, state));
+  const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
   const stakingRouter = await locator.stakingRouter();
 
-  const existingMigrator = await loadContract<ConsolidationMigrator>(
-    "ConsolidationMigrator",
-    getAddress(Sk.consolidationMigrator, state),
-  );
+  const existingMigrator = await loadContract<ConsolidationMigrator>("ConsolidationMigrator", existingMigratorAddress);
   const cmv2ModuleId = await existingMigrator.targetModuleId();
 
   if (!sameAddress(await existingMigrator.getStakingRouter(), stakingRouter)) {
@@ -164,7 +211,16 @@ async function resolveConfig(state: DeploymentState): Promise<CMv2ConsolidationM
     );
   }
 
-  return { agent, stakingRouter, consolidationBus, cmv2ModuleId };
+  return {
+    agent,
+    locator: locatorAddress,
+    stakingRouter,
+    consolidationBus,
+    existingMigrator: existingMigratorAddress,
+    cmv2ModuleId,
+    cmv2Module: module.stakingModuleAddress,
+    cmv2ModuleName: module.name,
+  };
 }
 
 function sameAddress(a: string, b: string) {
