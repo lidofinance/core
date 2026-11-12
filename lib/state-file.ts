@@ -84,6 +84,7 @@ export enum Sk {
   hashConsensusForValidatorsExitBusOracle = "hashConsensusForValidatorsExitBusOracle",
   oracleDaemonConfig = "oracleDaemonConfig",
   oracleReportSanityChecker = "oracleReportSanityChecker",
+  secondOpinionOracle = "secondOpinionOracle",
   validatorsExitBusOracle = "validatorsExitBusOracle",
   withdrawalQueueERC721 = "withdrawalQueueERC721",
   depositContract = "depositContract",
@@ -207,6 +208,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.miniMeTokenFactory:
     case Sk.oracleDaemonConfig:
     case Sk.oracleReportSanityChecker:
+    case Sk.secondOpinionOracle:
     case Sk.wstETH:
     case Sk.depositContract:
     case Sk.tokenRebaseNotifier:

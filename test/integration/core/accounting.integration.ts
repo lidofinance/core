@@ -11,25 +11,31 @@ import { ethers } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
-import { LIMITER_PRECISION_BASE } from "lib/constants";
 import {
-  ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
   getReportTimeElapsed,
-  normalizeWithdrawalVaultBaseline,
   ProtocolContext,
+  queueBadDebtInternalization,
   removeStakingLimit,
   report,
   reportWithoutClActivation,
   seedProtocolPendingBaseline,
+  setupLidoForVaults,
+  setupVaultWithBadDebt,
+  setWithdrawalVaultBalance,
+  submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
+  upDefaultTierShareLimit,
   waitNextAvailableReportTime,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
+
+const FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE = 750_000n;
+const FORMER_REBASE_PRECISION_BASE = 1_000_000_000n;
 
 describe("Integration: Accounting", () => {
   let ctx: ProtocolContext;
@@ -42,7 +48,7 @@ describe("Integration: Accounting", () => {
     snapshot = await Snapshot.take();
 
     await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
-    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    await setWithdrawalVaultBalance(ctx, 0n);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -68,15 +74,23 @@ describe("Integration: Accounting", () => {
     return (value / ONE_GWEI) * ONE_GWEI;
   };
 
-  const rebaseLimitWei = async () => {
-    const { oracleReportSanityChecker, lido } = ctx.contracts;
-
-    const maxPositiveTokeRebase = await oracleReportSanityChecker.getMaxPositiveTokenRebase();
+  const formerPositiveRebaseLimitWei = async () => {
+    const { lido } = ctx.contracts;
     const internalEther = (await lido.getTotalPooledEther()) - (await lido.getExternalEther());
 
-    expect(maxPositiveTokeRebase).to.be.greaterThanOrEqual(0);
+    return (FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE * internalEther) / FORMER_REBASE_PRECISION_BASE;
+  };
 
-    return (maxPositiveTokeRebase * internalEther) / LIMITER_PRECISION_BASE;
+  const sharesToReachFormerPositiveRebaseLimit = async () => {
+    const { lido } = ctx.contracts;
+    const internalShares = (await lido.getTotalShares()) - (await lido.getExternalShares());
+
+    // Derived from:
+    // rebaseLimit = (postShareRate - preShareRate) / preShareRate
+    return (
+      (internalShares * FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE) /
+      (FORMER_REBASE_PRECISION_BASE + FORMER_PRODUCTION_MAX_POSITIVE_TOKEN_REBASE)
+    );
   };
 
   function getWithdrawalParamsFromEvent(tx: ContractTransactionReceipt): {
@@ -103,20 +117,6 @@ describe("Integration: Accounting", () => {
       (tokenRebasedEvent.args.postTotalEther * SHARE_RATE_PRECISION) / tokenRebasedEvent.args.postTotalShares,
     ];
   };
-
-  // Get shares burn limit from oracle report sanity checker contract when NO changes in pooled Ether are expected
-  async function sharesToBurnToReachRebaseLimit() {
-    const { lido, oracleReportSanityChecker } = ctx.contracts;
-
-    const rebaseLimit = await oracleReportSanityChecker.getMaxPositiveTokenRebase();
-    const rebaseLimitPlus1 = rebaseLimit + LIMITER_PRECISION_BASE;
-
-    const internalShares = (await lido.getTotalShares()) - (await lido.getExternalShares());
-
-    // Derived from:
-    // rebaseLimit = (postShareRate - preShareRate) / preShareRate
-    return (internalShares * rebaseLimit) / rebaseLimitPlus1;
-  }
 
   async function readState() {
     const { lido, accountingOracle, elRewardsVault, withdrawalVault, burner, withdrawalQueue } = ctx.contracts;
@@ -273,36 +273,24 @@ describe("Integration: Accounting", () => {
     return mintedSharesSum;
   }
 
-  // Ensure the whale account has enough shares, e.g. on scratch deployments
-  async function ensureWhaleHasFunds(amount: bigint) {
+  // Ensure the whale can request a burn above the former production smoother limit,
+  // including on scratch deployments where it starts without enough shares.
+  async function ensureWhaleCanCoverFormerLimit() {
     const { lido, wstETH } = ctx.contracts;
-    const wstEthBalance = await lido.sharesOf(wstETH);
-    if (wstEthBalance < amount) {
+    const requiredShares = (await sharesToReachFormerPositiveRebaseLimit()) + ether("10");
+    const currentShares = await lido.sharesOf(wstETH);
+    if (currentShares < requiredShares) {
       await removeStakingLimit(ctx);
-      const wstEthSigner = await impersonate(wstETH.address, ether("10001"));
-      await lido.connect(wstEthSigner).submit(ZeroAddress, { value: ether("10000") });
+      const internalShares = (await lido.getTotalShares()) - (await lido.getExternalShares());
+      const sharesToMint = requiredShares - currentShares + internalShares / 100n;
+      const etherToSubmit = (await lido.getPooledEthByShares(sharesToMint)) + ether("1");
+      const wstEthSigner = await impersonate(wstETH.address, etherToSubmit + ether("1"));
+      await lido.connect(wstEthSigner).submit(ZeroAddress, { value: etherToSubmit });
     }
   }
 
-  it("Should revert report on sanity checks if CL rebase is too large", async () => {
-    const { oracleReportSanityChecker } = ctx.contracts;
-
-    const maxCLRebaseViaLimiter = (await rebaseLimitWei()) + 1n;
-
-    await expect(
-      reportWithoutClActivation(ctx, {
-        effectiveClDiff: maxCLRebaseViaLimiter,
-        reportElVault: false,
-        reportBurner: false,
-        skipWithdrawals: true,
-      }),
-    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
-  });
-
   it("Should revert with IncorrectTotalPendingBalance when reported pending exceeds funded pending + external cap", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
-
-    await ensureFirstPostMigrationReport(ctx);
 
     // Zero the external cap so pendingBalanceCap == fundedPendingBalance exactly.
     await updateOracleReportLimits(ctx, { externalPendingBalanceCapEth: 0n });
@@ -334,64 +322,26 @@ describe("Integration: Accounting", () => {
     ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalPendingBalance");
   });
 
-  it("Should revert with IncorrectCLBalanceIncrease when total CL balance annual APR exceeds the limit", async () => {
-    const { lido, hashConsensus, oracleReportSanityChecker } = ctx.contracts;
+  it("Should revert when the annualized CL rebase exceeds the hard limit", async () => {
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
 
-    await ensureFirstPostMigrationReport(ctx);
-
-    // With `annualBalanceIncreaseBPLimit == 0` any positive rebase must revert. The same limit
-    // also drives IncorrectTotalCLBalanceIncrease in `_checkCLPendingAndValidatorsBalanceIncrease`,
-    // which runs earlier and fires whenever the validators balance grows. To reach
-    // `_checkAnnualBalancesIncrease` (the annual APR check), the report below keeps
-    // postCLValidators == preCLValidators and grows the pending balance instead, while the
-    // remaining limits are raised out of the way.
+    // With both annual limits at zero, any positive accounting CL rebase is a hard failure.
+    // Keep validators flat and put a one-gwei increase into pending so no module growth
+    // check can shadow the aggregate classification.
     await updateOracleReportLimits(ctx, {
-      annualBalanceIncreaseBPLimit: 0n,
-      // Max the external pending cap so postPending can carry the whole delta without
-      // tripping IncorrectTotalPendingBalance. `externalPendingBalanceCapEth` is uint16,
-      // so 65535 is the max on-chain value (65535 ETH headroom above fundedPending).
+      annualCLRebaseIncreaseSoftBPLimit: 0n,
+      annualCLRebaseIncreaseHardBPLimit: 0n,
       externalPendingBalanceCapEth: 65535n,
-      // Give the exit/consolidation per-day check plenty of headroom.
       consolidationEthAmountPerDayLimit: 100_000n,
       exitedEthAmountPerDayLimit: 100_000n,
-      // Relax the CL balance decrease check so it cannot fire before the annual APR check.
-      maxCLBalanceDecreaseBP: BigInt(MAX_BASIS_POINTS),
     });
-
-    // Read the exact frame length AccountingOracle will pass to the sanity checker as
-    // `timeElapsed` (refSlot delta * secondsPerSlot). `getReportTimeElapsed` returns
-    // time-to-next-frame, not the frame length itself — use the raw consensus config.
-    const { slotsPerEpoch, secondsPerSlot } = await hashConsensus.getChainConfig();
-    const { epochsPerFrame } = await hashConsensus.getFrameConfig();
-    const frameTimeElapsed = BigInt(epochsPerFrame) * BigInt(slotsPerEpoch) * BigInt(secondsPerSlot);
 
     await waitNextAvailableReportTime(ctx);
 
-    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedForCurrentReport } =
-      await lido.getBalanceStats();
-    const preCLBalanceWei = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedForCurrentReport;
+    const { clPendingBalanceAtLastReport, depositedForCurrentReport } = await lido.getBalanceStats();
     const fundedPendingWei = clPendingBalanceAtLastReport + depositedForCurrentReport;
-
-    // Minimum delta that survives integer truncation in
-    //   annualBalanceIncrease = (365 days * 10_000 * delta) / preCL / timeElapsed
-    // is `preCL * timeElapsed / (365 days * 10_000)`. +1 ETH is safety margin against
-    // any rounding on the current frame boundary.
-    const ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365n * 24n * 60n * 60n * BigInt(MAX_BASIS_POINTS);
-    const minDeltaWei = (preCLBalanceWei * frameTimeElapsed) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
-    const deltaWei = minDeltaWei + ether("1");
-
-    // Must fit under the maxed external pending cap so IncorrectTotalPendingBalance is not
-    // shadowing this test on any environment.
-    const externalPendingCapWei = 65535n * ether("1");
-    expect(deltaWei).to.be.lessThan(
-      externalPendingCapWei,
-      "delta must fit under maxed externalPendingBalanceCapEth to avoid shadowing this check",
-    );
-
-    // Same arithmetic as the IncorrectTotalPendingBalance test above: the reported pending
-    // absorbs the whole delta, so the validators balance stays flat.
-    const clDiffWei = depositedForCurrentReport + deltaWei;
-    const postCLPendingGwei = (fundedPendingWei + deltaWei) / ONE_GWEI;
+    const clDiffWei = depositedForCurrentReport + ONE_GWEI;
+    const postCLPendingGwei = (fundedPendingWei + ONE_GWEI) / ONE_GWEI;
 
     await expect(
       report(ctx, {
@@ -401,13 +351,11 @@ describe("Integration: Accounting", () => {
         skipWithdrawals: true,
         waitNextReportTime: false,
       }),
-    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "AnnualCLRebaseIncreaseAboveHardLimit");
   });
 
   it("Should revert with ExitedEthAmountPerDayLimitExceeded when newly exited validators exceed the exit + consolidation per-day limit", async () => {
     const { oracleReportSanityChecker, stakingRouter } = ctx.contracts;
-
-    await ensureFirstPostMigrationReport(ctx);
 
     // The combined limit is `(exitedEthAmountPerDayLimit + consolidationEthAmountPerDayLimit) * 2 * 1e18`.
     // Setting both to zero makes the limit == 0, so any newly exited validator with a positive
@@ -506,8 +454,7 @@ describe("Integration: Accounting", () => {
       .requestTimestampMargin;
     await advanceChainTime(requestTimestampMargin + 1n);
 
-    await ensureFirstPostMigrationReport(ctx);
-    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    await setWithdrawalVaultBalance(ctx, 0n);
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
 
     const dryRunParams = {
@@ -551,10 +498,16 @@ describe("Integration: Accounting", () => {
 
   it("Should account correctly with negative CL rebase", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
-    const { maxCLBalanceDecreaseBP } = await oracleReportSanityChecker.getOracleReportLimits();
+    await updateOracleReportLimits(ctx, {
+      clRebaseDecreaseSoftBPLimit: 100n,
+      dailyCLRebaseDecreaseHardBPLimit: 500n,
+      clRebaseDecreaseHardBPLimit: 500n,
+    });
+    const { clRebaseDecreaseSoftBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
     const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
     const maxDecrease =
-      ((clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) * maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
+      ((clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) * clRebaseDecreaseSoftBPLimit) /
+      MAX_BASIS_POINTS;
     const CL_REBASE_AMOUNT = -roundToGwei(maxDecrease / 2n);
 
     const beforeState = await readState();
@@ -591,7 +544,7 @@ describe("Integration: Accounting", () => {
     const { clPendingBalanceAtLastReport: carriedPendingBeforeSeed } = await lido.getBalanceStats();
     await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
-    const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
+    const { annualCLRebaseIncreaseSoftBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
     const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
@@ -602,7 +555,7 @@ describe("Integration: Accounting", () => {
     // pending remains pending. The raw boundary is the safety-cap component
     // computed from the post-activation validators base.
     let rebaseAmount =
-      ((clValidatorsBalanceAtLastReport + activatedPendingBalance) * annualBalanceIncreaseBPLimit * timeElapsed) /
+      ((clValidatorsBalanceAtLastReport + activatedPendingBalance) * annualCLRebaseIncreaseSoftBPLimit * timeElapsed) /
       (365n * ONE_DAY) /
       MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);
@@ -695,23 +648,22 @@ describe("Integration: Accounting", () => {
     expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
   });
 
-  it("Should account correctly EL rewards at limits", async () => {
+  it("Should collect EL rewards above the former positive-rebase limit in full", async () => {
     const { elRewardsVault } = ctx.contracts;
 
-    const elRewards = await rebaseLimitWei();
-    await impersonate(elRewardsVault.address, elRewards);
+    // The outgoing production configuration allowed a 7.5 BP positive token rebase.
+    // Use a larger balance to prove that the removed smoother no longer clips settlement.
+    const formerLimit = await formerPositiveRebaseLimitWei();
+    const elRewards = formerLimit + ether("10");
+    await setBalance(elRewardsVault.address, elRewards);
 
     const beforeState = await readState();
-
-    // Report
-    const params = { reportElVault: true };
-    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
+    const { reportTx } = (await reportWithoutClActivation(ctx, { reportElVault: true })) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
-
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
     await expectStateChanges(beforeState, {
       totalELRewardsCollected: elRewards,
@@ -719,44 +671,10 @@ describe("Integration: Accounting", () => {
       internalShares: sharesBurntAmount * -1n,
       lidoBalance: amountOfETHLocked * -1n + elRewards,
       elRewardsVaultBalance: elRewards * -1n,
-      burnerShares: sharesToBurn - sharesBurntAmount,
     });
 
-    const elRewardsReceivedEvent = ctx.getEvents(reportTxReceipt, "ELRewardsReceived")[0];
-    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
-  });
-
-  it("Should account correctly EL rewards above limits", async () => {
-    const { elRewardsVault } = ctx.contracts;
-
-    const rewardsExcess = ether("10");
-    const expectedRewards = await rebaseLimitWei();
-    const elRewards = expectedRewards + rewardsExcess;
-
-    await impersonate(elRewardsVault.address, elRewards);
-
-    const beforeState = await readState();
-
-    const params = { reportElVault: true };
-    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
-      reportTx: TransactionResponse;
-      extraDataTx: TransactionResponse;
-    };
-
-    const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
-
-    await expectStateChanges(beforeState, {
-      totalELRewardsCollected: expectedRewards,
-      internalEther: expectedRewards - amountOfETHLocked,
-      internalShares: 0n - sharesBurntAmount,
-      lidoBalance: expectedRewards - amountOfETHLocked,
-      elRewardsVaultBalance: 0n - expectedRewards,
-      burnerShares: sharesToBurn - sharesBurntAmount,
-    });
-
-    const elRewardsReceivedEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-    expect(elRewardsReceivedEvent.args.amount).to.equal(expectedRewards);
+    expect(await ethers.provider.getBalance(elRewardsVault)).to.equal(0n);
+    expect(getFirstEvent(reportTxReceipt, "ELRewardsReceived").args.amount).to.equal(elRewards);
   });
 
   it("Should account correctly with no elRewards and no withdrawals accounted for", async () => {
@@ -782,96 +700,50 @@ describe("Integration: Accounting", () => {
     expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
   });
 
-  it("Should account correctly with withdrawals at limits", async () => {
-    await ensureFirstPostMigrationReport(ctx);
-
-    const withdrawals = await rebaseLimitWei();
-    // Seed WVB as already known to ORSC, not as fresh CL withdrawals. The
-    // target report still passes full WVB, so only Accounting's smoothing cap
-    // decides how much can be collected.
-    await normalizeWithdrawalVaultBaseline(ctx, withdrawals);
+  it("Should settle the full reported Withdrawal Vault balance", async () => {
+    // CL balances are reported in gwei. Keep the vault balance gwei-aligned so
+    // subtracting it from CL and adding it back in the aggregate check is exactly neutral.
+    const withdrawals = roundToGwei((await formerPositiveRebaseLimitWei()) + ether("10"));
+    await setWithdrawalVaultBalance(ctx, withdrawals);
 
     const beforeState = await readState();
 
-    // Report
-    const params = { reportElVault: false, reportWithdrawalsVault: true };
+    const params = {
+      reportElVault: false,
+      reportWithdrawalsVault: true,
+      reportBurner: false,
+      skipWithdrawals: true,
+    };
     const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
-
-    const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
 
     await expectStateChanges(beforeState, {
-      internalEther: withdrawals - amountOfETHLocked,
-      internalShares: mintedSharesSum - sharesBurntAmount,
-      lidoBalance: withdrawals - amountOfETHLocked,
-      withdrawalVaultBalance: 0n - withdrawals,
-      burnerShares: sharesToBurn - sharesBurntAmount,
+      lidoBalance: withdrawals,
+      withdrawalVaultBalance: -withdrawals,
     });
 
-    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore);
-
-    const withdrawalsReceivedEvent = ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")[0];
+    const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
     expect(withdrawalsReceivedEvent.args.amount).to.equal(withdrawals);
   });
 
-  it("Should account correctly with withdrawals above limits", async () => {
-    await ensureFirstPostMigrationReport(ctx);
-
-    const expectedWithdrawals = await rebaseLimitWei();
-    const withdrawalsExcess = ether("10");
-    const withdrawals = expectedWithdrawals + withdrawalsExcess;
-
-    // Seed WVB as already known to ORSC, not as fresh CL withdrawals. The
-    // target report still passes full WVB, so only Accounting's smoothing cap
-    // decides how much can be collected.
-    await normalizeWithdrawalVaultBaseline(ctx, withdrawals);
-
-    const beforeState = await readState();
-
-    const params = { reportElVault: false, reportWithdrawalsVault: true };
-    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
-      reportTx: TransactionResponse;
-      extraDataTx: TransactionResponse;
-    };
-
-    const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
-
-    const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
-
-    await expectStateChanges(beforeState, {
-      internalEther: expectedWithdrawals - amountOfETHLocked,
-      internalShares: mintedSharesSum - sharesBurntAmount,
-      lidoBalance: expectedWithdrawals - amountOfETHLocked,
-      withdrawalVaultBalance: 0n - expectedWithdrawals,
-      burnerShares: sharesToBurn - sharesBurntAmount,
-    });
-
-    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore);
-
-    const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
-    expect(withdrawalsReceivedEvent.args.amount).to.equal(expectedWithdrawals);
-  });
-
-  it("Should account correctly shares burn at limits", async () => {
+  it("Should burn all shares requested above the former positive-rebase limit", async () => {
     const { lido, burner, wstETH: whale, accounting } = ctx.contracts;
-    await ensureWhaleHasFunds(ether("10000"));
+    await ensureWhaleCanCoverFormerLimit();
 
-    const sharesLimit = await sharesToBurnToReachRebaseLimit();
+    const formerLimit = await sharesToReachFormerPositiveRebaseLimit();
+    const sharesToRequest = formerLimit + ether("10");
+    expect(await lido.sharesOf(whale)).to.be.greaterThanOrEqual(sharesToRequest);
     const initialBurnerBalance = await lido.sharesOf(burner);
 
     const whaleSigner = await impersonate(whale, ether("1"));
-    await lido.connect(whaleSigner).approve(burner, await lido.getPooledEthByShares(sharesLimit));
+    await lido.connect(whaleSigner).approve(burner, await lido.getPooledEthByShares(sharesToRequest));
 
-    const coverShares = sharesLimit / 3n;
-    const noCoverShares = sharesLimit - sharesLimit / 3n;
+    const coverShares = sharesToRequest / 3n;
+    const noCoverShares = sharesToRequest - coverShares;
 
     const accountingSigner = await impersonate(accounting.address, ether("1"));
     await expect(burner.connect(accountingSigner).requestBurnShares(whale, noCoverShares))
@@ -882,7 +754,7 @@ describe("Integration: Accounting", () => {
       .to.emit(burner, "StETHBurnRequested")
       .withArgs(true, accountingSigner, await lido.getPooledEthByShares(coverShares), coverShares);
 
-    expect(await lido.sharesOf(burner)).to.equal(sharesLimit + initialBurnerBalance, "Burner shares mismatch");
+    expect(await lido.sharesOf(burner)).to.equal(sharesToRequest + initialBurnerBalance, "Burner shares mismatch");
 
     const stateBefore = await readState();
 
@@ -894,9 +766,6 @@ describe("Integration: Accounting", () => {
 
     await expectStateChanges(stateBefore, {
       internalShares: -1n * sharesBurntAmount,
-      // On Hoodi, this report can finalize withdrawal requests at the same time.
-      // WQ shares first arrive in Burner, and smoothing may leave part of them for
-      // the next report; sharesLimit itself is checked separately from withdrawal burn below.
       burnerShares: sharesToBurn - sharesBurntAmount,
       internalEther: -1n * amountOfETHLocked,
       lidoBalance: -1n * amountOfETHLocked,
@@ -904,141 +773,193 @@ describe("Integration: Accounting", () => {
 
     const burntDueToWithdrawals = sharesToBurn - (await lido.sharesOf(burner)) + initialBurnerBalance;
     expect(burntDueToWithdrawals).to.be.greaterThanOrEqual(0);
-    expect(sharesBurntAmount - burntDueToWithdrawals).to.equal(sharesLimit, "SharesBurnt: sharesAmount mismatch");
+    expect(sharesBurntAmount - burntDueToWithdrawals).to.equal(sharesToRequest, "SharesBurnt: sharesAmount mismatch");
 
     const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
     expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
   });
 
-  it("Should account correctly shares burn above limits (no withdrawals)", async () => {
-    const { lido, burner, wstETH: whale, accounting } = ctx.contracts;
-
-    await ensureWhaleHasFunds(ether("10000"));
-
-    const limit = await sharesToBurnToReachRebaseLimit();
-    const excess = 42n;
-    const limitWithExcess = limit + excess;
-
-    expect(await lido.sharesOf(burner)).to.equal(0, "Burner balance mismatch");
-
-    // request to burn limit+ shares
-    const whaleSigner = await impersonate(whale, ether("1"));
-    await lido.connect(whaleSigner).approve(burner, await lido.getPooledEthByShares(limitWithExcess));
-    const accountingSigner = await impersonate(accounting, ether("1"));
-    await expect(burner.connect(accountingSigner).requestBurnShares(whale, limitWithExcess))
-      .to.emit(burner, "StETHBurnRequested")
-      .withArgs(false, accountingSigner, await lido.getPooledEthByShares(limitWithExcess), limitWithExcess);
-
-    const stateBefore = await readState();
-
-    const limit2 = await sharesToBurnToReachRebaseLimit();
-    expect(limit2).to.equal(limit);
-
-    // Report
-    await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
-
-    await expectStateChanges(stateBefore, {
-      internalShares: -1n * limit,
-      burnerShares: -1n * limit,
+  describe("Combined settlement", () => {
+    // Finalization is FIFO. Forks can start with live requests, so finalize them first.
+    beforeEach(async () => {
+      const { withdrawalQueue } = ctx.contracts;
+      if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
+        await finalizeWQViaElVault(ctx);
+      }
     });
-  });
 
-  it("Should account correctly overfill both vaults", async () => {
-    const { withdrawalVault, elRewardsVault } = ctx.contracts;
+    // The next reference slot can fall up to one slot before the current time, so wait one slot past the margin.
+    const waitRequestTimestampMargin = async () => {
+      const { requestTimestampMargin } = await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits();
+      const { secondsPerSlot } = await ctx.contracts.hashConsensus.getChainConfig();
+      await advanceChainTime(requestTimestampMargin + secondsPerSlot + 1n);
+    };
 
-    await ensureFirstPostMigrationReport(ctx);
+    // A stranger stakes and files withdrawal requests. Accounting's burn role moves the stranger's shares to the Burner.
+    const requestWithdrawalsAndBurns = async ({
+      requests,
+      coverShares,
+      nonCoverShares,
+    }: {
+      requests: bigint[];
+      coverShares: bigint;
+      nonCoverShares: bigint;
+    }) => {
+      const { lido, burner, withdrawalQueue, accounting } = ctx.contracts;
+      const [, , , , , stranger] = await ethers.getSigners();
+      const requested = requests.reduce((sum, amount) => sum + amount, 0n);
+      const burnEther = await lido.getPooledEthByShares(coverShares + nonCoverShares);
 
-    const limit = await rebaseLimitWei();
-    const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size
-    const limitWithExcess = limit + excess;
+      await removeStakingLimit(ctx);
+      await setBalance(stranger.address, requested + burnEther + ether("2"));
+      await lido.connect(stranger).submit(ZeroAddress, { value: requested + burnEther + ether("1") });
+      await lido.connect(stranger).approve(withdrawalQueue, requested);
+      await withdrawalQueue.connect(stranger).requestWithdrawals(requests, stranger);
+      await lido.connect(stranger).approve(burner, burnEther);
 
-    // Seed WVB as already known to ORSC, not as fresh CL withdrawals. The
-    // target report still passes full WVB, so only Accounting's smoothing cap
-    // decides how much can be collected.
-    await normalizeWithdrawalVaultBaseline(ctx, limitWithExcess);
-    await setBalance(elRewardsVault.address, limitWithExcess);
+      const accountingSigner = await impersonate(accounting.address, ether("1"));
+      if (nonCoverShares > 0n) await burner.connect(accountingSigner).requestBurnShares(stranger, nonCoverShares);
+      if (coverShares > 0n) await burner.connect(accountingSigner).requestBurnSharesForCover(stranger, coverShares);
+    };
 
-    const beforeState = await readState();
+    const WITHDRAWAL_VAULT_BALANCE = ether("7");
+    const EL_REWARDS = ether("3");
+    const WITHDRAWAL_REQUEST = ether("1.5");
+    const COVER_SHARES = ether("0.4");
+    const NON_COVER_SHARES = ether("0.6");
 
-    let elVaultExcess = 0n;
-    let amountOfETHLocked = 0n;
-    let updatedLimit = 0n;
-    let mintedSharesSum = 0n;
-    {
-      const params = { reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
-        reportTx: TransactionResponse;
-        extraDataTx: TransactionResponse;
-      };
-      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+    for (const [clRebase, effectiveClDiff] of [
+      ["negative", -ether("0.001")],
+      ["zero", 0n],
+      ["positive", ether("0.001")],
+    ] as const) {
+      it(`Should settle both vaults, cover and non-cover burns and a withdrawal in one report with a ${clRebase} CL rebase`, async () => {
+        const { elRewardsVault } = ctx.contracts;
+        if (effectiveClDiff < 0n) {
+          await updateOracleReportLimits(ctx, {
+            clRebaseDecreaseSoftBPLimit: 100n,
+            dailyCLRebaseDecreaseHardBPLimit: 500n,
+            clRebaseDecreaseHardBPLimit: 500n,
+          });
+        }
+        await requestWithdrawalsAndBurns({
+          requests: [WITHDRAWAL_REQUEST],
+          coverShares: COVER_SHARES,
+          nonCoverShares: NON_COVER_SHARES,
+        });
+        await setWithdrawalVaultBalance(ctx, WITHDRAWAL_VAULT_BALANCE);
+        await setBalance(elRewardsVault.address, EL_REWARDS);
+        await waitRequestTimestampMargin();
+        const beforeState = await readState();
 
-      updatedLimit = await rebaseLimitWei();
-      elVaultExcess = limitWithExcess - (updatedLimit - excess);
+        const { reportTx } = await reportWithoutClActivation(ctx, { effectiveClDiff });
+        const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
+        const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
+        // EL rewards pay no fee on a zero or negative CL rebase.
+        const mintedShares = await expectTransferFeesEvents(reportTxReceipt, effectiveClDiff <= 0n);
 
-      amountOfETHLocked = getWithdrawalParamsFromEvent(reportTxReceipt).amountOfETHLocked;
+        await expectStateChanges(beforeState, {
+          totalELRewardsCollected: EL_REWARDS,
+          internalEther: effectiveClDiff + EL_REWARDS - amountOfETHLocked,
+          internalShares: mintedShares - sharesBurntAmount,
+          lidoBalance: WITHDRAWAL_VAULT_BALANCE + EL_REWARDS - amountOfETHLocked,
+          elRewardsVaultBalance: -EL_REWARDS,
+          withdrawalVaultBalance: -WITHDRAWAL_VAULT_BALANCE,
+          burnerShares: sharesToBurn - sharesBurntAmount,
+        });
+        expect(amountOfETHLocked).to.equal(WITHDRAWAL_REQUEST);
+        expect(
+          ctx.getEvents(reportTxReceipt, "StETHBurnt").map(({ args }) => [args.isCover, args.amountOfShares]),
+        ).to.deep.equal([
+          [true, COVER_SHARES],
+          [false, NON_COVER_SHARES + sharesToBurn],
+        ]);
+      });
+    }
 
-      expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
-        excess,
-        "Expected withdrawals vault to be filled with excess rewards",
+    it("Should mint fees on the internal shares before it internalizes queued bad debt", async () => {
+      const { stakingRouter, vaultHub } = ctx.contracts;
+      const [, owner, nodeOperator] = await ethers.getSigners();
+      await setupLidoForVaults(ctx);
+      await upDefaultTierShareLimit(ctx, ether("1000"));
+      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
+      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+      const queuedBadDebt = await vaultHub.badDebtToInternalize();
+      const clRewards = ether("0.001");
+      const beforeState = await readState();
+
+      const { reportTx } = await reportWithoutClActivation(ctx, { effectiveClDiff: clRewards, reportElVault: false });
+      const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
+      const mintedShares = await expectTransferFeesEvents(reportTxReceipt);
+
+      await expectStateChanges(beforeState, {
+        internalEther: clRewards,
+        internalShares: mintedShares + queuedBadDebt,
+      });
+      // AccountingOracle stores the module balances before Accounting mints the fees, so read the fee at the report block.
+      const { totalFee, precisionPoints } = await stakingRouter.getStakingRewardsDistribution({
+        blockTag: reportTxReceipt.blockNumber,
+      });
+      const feeEther = (clRewards * totalFee) / precisionPoints;
+      expect(mintedShares).to.equal(
+        (feeEther * beforeState.internalShares) / (beforeState.internalEther + clRewards - feeEther),
       );
+    });
 
-      const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
-      expect(withdrawalsReceivedEvent.args.amount).to.equal(limit, "WithdrawalsReceived: amount mismatch");
+    it("Should carry vault inflows, Burner requests and withdrawal requests that arrive after the reference slot to the next report", async () => {
+      const { burner, elRewardsVault, withdrawalQueue } = ctx.contracts;
+      const withdrawals = ether("10");
+      const lateWithdrawals = ether("3");
+      const elRewards = ether("4");
+      const lateElRewards = ether("2");
+      const nonCoverShares = ether("0.5");
+      const lateCoverShares = ether("0.3");
 
-      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
-      expect(elRewardsVaultBalance).to.equal(limitWithExcess, "Expected EL vault to be kept unchanged");
-      expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
+      await requestWithdrawalsAndBurns({ requests: [ether("1")], coverShares: 0n, nonCoverShares });
+      await setWithdrawalVaultBalance(ctx, withdrawals);
+      await setBalance(elRewardsVault.address, elRewards);
+      await waitRequestTimestampMargin();
+      const { data } = await reportWithoutClActivation(ctx, { dryRun: true });
 
-      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
-    }
-    {
-      const params = { reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
-        reportTx: TransactionResponse;
-        extraDataTx: TransactionResponse;
-      };
-      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+      // Ether, a cover burn and a withdrawal request arrive after the reference slot.
+      await requestWithdrawalsAndBurns({ requests: [ether("2")], coverShares: lateCoverShares, nonCoverShares: 0n });
+      await setWithdrawalVaultBalance(ctx, withdrawals + lateWithdrawals);
+      await setBalance(elRewardsVault.address, elRewards + lateElRewards);
+      const lateRequestId = await withdrawalQueue.getLastRequestId();
 
-      const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
-      expect(withdrawalVaultBalance).to.equal(0, "Expected withdrawals vault to be emptied");
+      const beforeState = await readState();
+      const { reportTx } = await submitReportDataWithConsensusAndEmptyExtraData(ctx, data);
+      const reported = getWithdrawalParamsFromEvent((await reportTx.wait()) as ContractTransactionReceipt);
 
-      const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
-      expect(withdrawalsReceivedEvent.args.amount).to.equal(excess, "WithdrawalsReceived: amount mismatch");
+      await expectStateChanges(beforeState, {
+        totalELRewardsCollected: elRewards,
+        internalEther: elRewards - reported.amountOfETHLocked,
+        internalShares: -reported.sharesBurntAmount,
+        lidoBalance: withdrawals + elRewards - reported.amountOfETHLocked,
+        elRewardsVaultBalance: -elRewards,
+        withdrawalVaultBalance: -withdrawals,
+        burnerShares: reported.sharesToBurn - reported.sharesBurntAmount,
+      });
+      expect(reported.sharesBurntAmount).to.equal(nonCoverShares + reported.sharesToBurn);
+      // Cover requests burn first, so the late cover burn takes the place of a reported non-cover share.
+      expect(await burner.getSharesRequestedToBurn()).to.deep.equal([0n, lateCoverShares]);
+      expect(await withdrawalQueue.getLastFinalizedRequestId()).to.equal(lateRequestId - 1n);
 
-      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
-      expect(elRewardsVaultBalance).to.equal(elVaultExcess, "Expected EL vault to be filled with excess rewards");
+      const nextState = await readState();
+      const { reportTx: nextReportTx } = await reportWithoutClActivation(ctx);
+      const next = getWithdrawalParamsFromEvent((await nextReportTx!.wait()) as ContractTransactionReceipt);
 
-      const elRewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-      expect(elRewardsEvent.args.amount).to.equal(updatedLimit - excess, "ELRewardsReceived: amount mismatch");
-
-      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
-    }
-    {
-      const params = { reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
-        reportTx: TransactionResponse;
-        extraDataTx: TransactionResponse;
-      };
-      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-
-      expect(ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
-
-      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
-      expect(elRewardsVaultBalance).to.equal(0, "Expected EL vault to be emptied");
-
-      const rewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-      expect(rewardsEvent.args.amount).to.equal(elVaultExcess, "ELRewardsReceived: amount mismatch");
-
-      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt, true);
-    }
-
-    await expectStateChanges(beforeState, {
-      totalELRewardsCollected: limitWithExcess,
-      internalEther: limitWithExcess * 2n - amountOfETHLocked,
-      lidoBalance: limitWithExcess * 2n - amountOfETHLocked,
-      elRewardsVaultBalance: 0n - limitWithExcess,
-      withdrawalVaultBalance: 0n - limitWithExcess,
-      internalShares: mintedSharesSum,
+      await expectStateChanges(nextState, {
+        totalELRewardsCollected: lateElRewards,
+        internalEther: lateElRewards - next.amountOfETHLocked,
+        internalShares: -next.sharesBurntAmount,
+        lidoBalance: lateWithdrawals + lateElRewards - next.amountOfETHLocked,
+        elRewardsVaultBalance: -lateElRewards,
+        withdrawalVaultBalance: -lateWithdrawals,
+        burnerShares: next.sharesToBurn - next.sharesBurntAmount,
+      });
+      expect(next.sharesBurntAmount).to.equal(lateCoverShares + next.sharesToBurn);
+      expect(await withdrawalQueue.getLastFinalizedRequestId()).to.equal(lateRequestId);
     });
   });
 });

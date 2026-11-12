@@ -1,0 +1,308 @@
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+
+import { expect } from "chai";
+import { ethers, network } from "hardhat";
+import { HttpNetworkConfig } from "hardhat/types";
+
+import { ChronixClient } from "@lidofinance/chronix-client";
+
+import { bailOnFailure } from "test/suite";
+
+import { deployScratch } from "./helpers/deploy";
+import {
+  advanceUntilConsolidationRequest,
+  advanceUntilFinalized,
+  advanceUntilValidator,
+  AnchoredState,
+  anchorHead,
+  buildDeposit,
+  buildTopUpInput,
+  ChronixProtocolContext,
+  damaged,
+  DepositFixture,
+  depositValidator,
+  getChronixProtocolContext,
+  importValidator,
+  readFinalizedCheckpoint,
+  readValidator,
+  recordTransaction,
+} from "./helpers/protocol";
+import { initializeSSZ } from "./helpers/ssz";
+
+// SSZ errors are emitted in assembly and are absent from the consuming contracts' ABIs.
+const sszErrors = {
+  interface: new ethers.Interface([
+    "error InvalidProof()",
+    "error BranchHasMissingItem()",
+    "error BranchHasExtraItem()",
+  ]),
+};
+
+const describeChronix = network.name === "chronix" ? describe : describe.skip;
+
+describeChronix("Core verifiers on Chronix / Gloas", function () {
+  this.timeout(20 * 60_000);
+
+  let chronix: ChronixClient;
+  let ctx: ChronixProtocolContext;
+  let initial: AnchoredState;
+  let active: AnchoredState;
+  let validDeposit: DepositFixture;
+  let invalidDeposit: DepositFixture;
+  let validatorIndex: number;
+
+  before("connect to the Chronix service and scratch-deploy once for the whole suite", async () => {
+    await initializeSSZ();
+    chronix = new ChronixClient((network.config as HttpNetworkConfig).url, { timeoutMs: 120_000 });
+    const deployment = await deployScratch(chronix);
+    console.log(`    Scratch: ${deployment.steps} steps in ${deployment.elapsedSeconds.toFixed(2)}s`);
+    ctx = await getChronixProtocolContext(chronix, deployment, await ethers.getSigner(deployment.state.deployer));
+    initial = await anchorHead(ctx, "initial");
+  });
+
+  after("save evidence", async () => {
+    if (!ctx) return;
+    await writeFile(
+      path.join(ctx.deployment.directory, "verifiers.json"),
+      JSON.stringify(
+        {
+          bake: await chronix.status(),
+          endpoint: chronix.url,
+          deploymentSeconds: ctx.deployment.elapsedSeconds,
+          captures: ctx.evidence.captures,
+          transactions: ctx.evidence.receipts,
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+  // The groups share one real CL/EL lifecycle; run the complete suite with --bail.
+  beforeEach(bailOnFailure);
+
+  describe("PredepositGuarantee: real CL proofs and BLS deposit signatures", () => {
+    before("prepare signed deposit fixtures", () => {
+      validDeposit = buildDeposit(ctx);
+      invalidDeposit = buildDeposit(ctx, { amount: ethers.parseEther("1"), wrongDomain: true });
+    });
+
+    it("accepts validators across the Gloas progressive-list subtree boundaries", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+      for (const index of [0, 1, 4, 5, 20, 21, 63]) {
+        const witness = initial.witness(index).pubkey;
+        const credentials = initial.state.validators[index].withdrawal_credentials;
+        await expect(predepositGuarantee.validatePubKeyWCProof(witness, credentials)).not.to.be.reverted;
+      }
+    });
+
+    it("rejects a changed pubkey, credentials, index, slot, proposer and Merkle branch", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+      const witness = initial.witness(21).pubkey;
+      const credentials = initial.state.validators[21].withdrawal_credentials;
+      for (const changed of [
+        { ...witness, pubkey: initial.state.validators[1].pubkey },
+        { ...witness, validatorIndex: 22 },
+        { ...witness, proof: [damaged(witness.proof[0]), ...witness.proof.slice(1)] },
+      ]) {
+        await expect(predepositGuarantee.validatePubKeyWCProof(changed, credentials)).to.be.revertedWithCustomError(
+          sszErrors,
+          "InvalidProof",
+        );
+      }
+      await expect(
+        predepositGuarantee.validatePubKeyWCProof(witness, damaged(credentials)),
+      ).to.be.revertedWithCustomError(sszErrors, "InvalidProof");
+      await expect(
+        predepositGuarantee.validatePubKeyWCProof({ ...witness, proof: witness.proof.slice(1) }, credentials),
+      ).to.be.revertedWithCustomError(sszErrors, "BranchHasMissingItem");
+      await expect(
+        predepositGuarantee.validatePubKeyWCProof(
+          { ...witness, proof: [witness.proof[0], ...witness.proof] },
+          credentials,
+        ),
+      ).to.be.revertedWithCustomError(sszErrors, "BranchHasExtraItem");
+      for (const field of ["slot", "proposerIndex"] as const) {
+        await expect(
+          predepositGuarantee.validatePubKeyWCProof({ ...witness, [field]: BigInt(witness[field]) + 1n }, credentials),
+        ).to.be.revertedWithCustomError(predepositGuarantee, "InvalidSlot");
+      }
+    });
+
+    it("reads the real EIP-4788 timestamp, rejecting an absent or unrelated anchor", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+      const witness = initial.witness(0).pubkey;
+      const credentials = initial.state.validators[0].withdrawal_credentials;
+      await expect(
+        predepositGuarantee.validatePubKeyWCProof(
+          { ...witness, childBlockTimestamp: initial.timestamp + 1 },
+          credentials,
+        ),
+      ).to.be.revertedWithCustomError(predepositGuarantee, "RootNotFound");
+      await expect(
+        predepositGuarantee.validatePubKeyWCProof(
+          { ...witness, childBlockTimestamp: initial.timestamp - 12 },
+          credentials,
+        ),
+      ).to.be.revertedWithCustomError(sszErrors, "InvalidProof");
+    });
+
+    it("uses Geth's BLS precompiles to accept the correct deposit domain and reject a wrong one", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+      await expect(
+        predepositGuarantee.verifyDepositMessage(
+          validDeposit.deposit,
+          validDeposit.y,
+          validDeposit.withdrawalCredentials,
+        ),
+      ).not.to.be.reverted;
+      await expect(
+        predepositGuarantee.verifyDepositMessage(
+          invalidDeposit.deposit,
+          invalidDeposit.y,
+          invalidDeposit.withdrawalCredentials,
+        ),
+      ).to.be.revertedWithCustomError(predepositGuarantee, "InvalidSignature");
+    });
+
+    it("observes that EL accepts both deposit transactions but CL registers only the valid signature", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+      await importValidator(ctx, validDeposit);
+      await depositValidator(ctx, validDeposit);
+      const invalidReceipt = await depositValidator(ctx, invalidDeposit);
+      const validator = await advanceUntilValidator(ctx, validDeposit.pubkey);
+      validatorIndex = Number(validator.index);
+      await advanceUntilFinalized(ctx, invalidReceipt.blockNumber);
+      const deposited = await anchorHead(ctx, "deposited");
+      expect(deposited.state.validators.some((v) => v.pubkey === invalidDeposit.pubkey)).to.equal(false);
+      expect(deposited.state.pending_deposits.some((v) => v.pubkey === invalidDeposit.pubkey)).to.equal(false);
+      await expect(
+        predepositGuarantee.validatePubKeyWCProof(
+          deposited.witness(validatorIndex).pubkey,
+          validDeposit.withdrawalCredentials,
+        ),
+      ).not.to.be.reverted;
+    });
+  });
+
+  describe("TopUpGateway: full validator witness from CL", () => {
+    before("wait for real activation and capture the active validator", async () => {
+      await advanceUntilValidator(ctx, validDeposit.pubkey, { active: true });
+      active = await anchorHead(ctx, "active-validator");
+    });
+
+    it("rejects forged balance, lifecycle epochs and slashing status", async () => {
+      const { topUpGateway } = ctx.contracts;
+      const input = buildTopUpInput(active, validatorIndex, ctx.modules.compounding);
+      for (const field of [
+        "effectiveBalance",
+        "activationEligibilityEpoch",
+        "exitEpoch",
+        "withdrawableEpoch",
+      ] as const) {
+        const validator = { ...input.validatorWitness[0], [field]: BigInt(input.validatorWitness[0][field]) ^ 1n };
+        await expect(topUpGateway.topUp({ ...input, validatorWitness: [validator] })).to.be.revertedWithCustomError(
+          sszErrors,
+          "InvalidProof",
+        );
+      }
+      const validator = { ...input.validatorWitness[0], slashed: true };
+      await expect(topUpGateway.topUp({ ...input, validatorWitness: [validator] })).to.be.revertedWithCustomError(
+        sszErrors,
+        "InvalidProof",
+      );
+      const earlierActivation = {
+        ...input.validatorWitness[0],
+        activationEpoch: BigInt(input.validatorWitness[0].activationEpoch) - 1n,
+      };
+      await expect(
+        topUpGateway.topUp({ ...input, validatorWitness: [earlierActivation] }),
+      ).to.be.revertedWithCustomError(sszErrors, "InvalidProof");
+    });
+
+    it("accepts the genuine proof through StakingRouter with zero available allocation", async () => {
+      const { topUpGateway, lido, depositContract, stakingRouter } = ctx.contracts;
+      // This covers verification and routing; it does not claim a funded top-up was performed.
+      // Scratch seeds Lido with 10 wei; the router rounds deposit allocation down to whole gwei.
+      expect(await lido.getDepositableEther()).to.be.lessThan(ethers.parseUnits("1", "gwei"));
+      const depositCount = await depositContract.get_deposit_count();
+      const receipt = await recordTransaction(
+        ctx,
+        topUpGateway.topUp(buildTopUpInput(active, validatorIndex, ctx.modules.compounding)),
+      );
+      const event = receipt.logs
+        .filter((log) => log.address.toLowerCase() === String(stakingRouter.target).toLowerCase())
+        .map((log) => stakingRouter.interface.parseLog(log))
+        .find((log) => log?.name === "StakingRouterETHTopUp");
+      expect(event, "real StakingRouter top-up event").not.to.equal(undefined);
+      expect(event!.args.amount).to.equal(0n);
+      expect(await depositContract.get_deposit_count()).to.equal(depositCount);
+    });
+
+    it("enforces the block interval and rejects the old root once that interval passes", async () => {
+      const { topUpGateway } = ctx.contracts;
+      await expect(
+        topUpGateway.topUp(buildTopUpInput(active, validatorIndex, ctx.modules.compounding)),
+      ).to.be.revertedWithCustomError(topUpGateway, "MinBlockDistanceNotMet");
+      // With scratch defaults, 75 real 12-second blocks outlive the 300-second root window.
+      await chronix.advanceSlots(Number(await topUpGateway.getMinBlockDistance()));
+      expect(await topUpGateway.isBlockDistancePassed()).to.equal(true);
+      await expect(
+        topUpGateway.topUp(buildTopUpInput(active, validatorIndex, ctx.modules.compounding)),
+      ).to.be.revertedWithCustomError(topUpGateway, "RootIsTooOld");
+    });
+  });
+
+  describe("ConsolidationGateway: target proof and the EL-to-CL request", () => {
+    let targetState: AnchoredState;
+    before(async () => {
+      targetState = await anchorHead(ctx, "consolidation-target");
+    });
+
+    it("rejects a target whose CL withdrawal credentials do not belong to the Lido vault", async () => {
+      const { withdrawalVault, consolidationGateway } = ctx.contracts;
+      const foreignTarget = targetState.witness(0).pubkey;
+      const groups = [{ targetWitness: foreignTarget, sourcePubkeys: [validDeposit.pubkey] }];
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+      await expect(
+        consolidationGateway.addConsolidationRequests(groups, ctx.signer.address, { value: fee }),
+      ).to.be.revertedWithCustomError(sszErrors, "InvalidProof");
+    });
+
+    it("accepts a valid target proof and delivers the request to CL without scheduling a foreign source exit", async () => {
+      const { withdrawalVault, consolidationGateway } = ctx.contracts;
+      const source = targetState.state.validators[0].pubkey;
+      const groups = [{ targetWitness: targetState.witness(validatorIndex).pubkey, sourcePubkeys: [source] }];
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+      await recordTransaction(
+        ctx,
+        consolidationGateway.addConsolidationRequests(groups, ctx.signer.address, {
+          value: fee,
+        }),
+      );
+      await advanceUntilConsolidationRequest(ctx, source, validDeposit.pubkey);
+      const validator = await readValidator(ctx, 0);
+      expect(validator.validator.exit_epoch).to.equal((2n ** 64n - 1n).toString());
+    });
+  });
+
+  describe("Finality: CL and EL keep finalizing", () => {
+    it("advances real finality and accepts a fresh proof", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+      const before = await readFinalizedCheckpoint(ctx);
+      await chronix.advanceSlots(96);
+      const after = await readFinalizedCheckpoint(ctx);
+      expect(BigInt(after.epoch)).to.be.greaterThan(BigInt(before.epoch));
+      expect(BigInt(after.executionNumber)).to.be.greaterThan(BigInt(before.executionNumber));
+      const resumed = await anchorHead(ctx, "resumed-finality");
+      expect(resumed.state.validators.every((validator) => !validator.slashed)).to.equal(true);
+      await expect(
+        predepositGuarantee.validatePubKeyWCProof(
+          resumed.witness(validatorIndex).pubkey,
+          validDeposit.withdrawalCredentials,
+        ),
+      ).not.to.be.reverted;
+    });
+  });
+});

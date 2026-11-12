@@ -251,18 +251,22 @@ export async function getSlotTimestamp(slot: bigint, consensus: HashConsensus) {
 
 // Might be useful for tests on scratch where even reporting a single exited validator
 // is too much for the default limit
-export async function setAnnualBalanceIncreaseLimit(sanityChecker: OracleReportSanityChecker, limitBP: bigint) {
+export async function setAnnualCLRebaseIncreaseLimits(
+  sanityChecker: OracleReportSanityChecker,
+  softLimitBP: bigint,
+  hardLimitBP: bigint = softLimitBP,
+) {
   const adminRole = await sanityChecker.DEFAULT_ADMIN_ROLE();
 
   const admin = await sanityChecker.getRoleMember(adminRole, 0);
   const adminSigner = await impersonate(admin, ether("1"));
 
-  const setLimitRole = await sanityChecker.ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE();
+  const setLimitRole = await sanityChecker.ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE();
 
   // Grant the role to the current signer
   await sanityChecker.connect(adminSigner).grantRole(setLimitRole, adminSigner.address);
 
-  await sanityChecker.connect(adminSigner).setAnnualBalanceIncreaseBPLimit(limitBP);
+  await sanityChecker.connect(adminSigner).setAnnualCLRebaseIncreaseBPLimits(softLimitBP, hardLimitBP);
 
   // Revoke the role after setting the limit
   await sanityChecker.connect(adminSigner).revokeRole(setLimitRole, adminSigner.address);
