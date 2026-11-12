@@ -12,7 +12,7 @@ pragma solidity 0.8.25;
  * @param prevTimestamp Start of the frame of the last update
  * @param frameDurationInSec Frame duration in seconds
  */
-struct WithdrawalLimitData {
+struct LimitData64 {
     uint64 maxLimit;
     uint64 prevLimit;
     uint64 limitPerFrame;
@@ -21,14 +21,14 @@ struct WithdrawalLimitData {
 }
 
 /**
- * @title WithdrawalLimit
+ * @title RateLimit64
  * @author Lido
  * @notice A replenishing quota per time frame, as in `RateLimit`, with 64-bit amounts to count balances in gwei.
  *         Unlike `RateLimit`, changing the limits keeps the quota restored so far, and a quota can be disabled.
  */
-library WithdrawalLimit {
+library RateLimit64 {
     function calculateCurrentLimit(
-        WithdrawalLimitData memory data,
+        LimitData64 memory data,
         uint256 timestamp
     ) internal pure returns (uint256 currentLimit) {
         uint256 secondsPassed = timestamp - data.prevTimestamp;
@@ -44,10 +44,10 @@ library WithdrawalLimit {
 
     /// @dev Must be called only for an enabled quota: a disabled one has no frame to align the timestamp to
     function updatePrevLimit(
-        WithdrawalLimitData memory data,
+        LimitData64 memory data,
         uint256 newLimit,
         uint256 timestamp
-    ) internal pure returns (WithdrawalLimitData memory) {
+    ) internal pure returns (LimitData64 memory) {
         if (newLimit > data.maxLimit) revert LimitExceeded();
 
         uint256 framesPassed = (timestamp - data.prevTimestamp) / data.frameDurationInSec;
@@ -66,15 +66,15 @@ library WithdrawalLimit {
      *      a quota that was disabled starts full.
      */
     function setLimits(
-        WithdrawalLimitData memory data,
+        LimitData64 memory data,
         uint256 maxLimit,
         uint256 limitPerFrame,
         uint256 frameDurationInSec,
         uint256 timestamp
-    ) internal pure returns (WithdrawalLimitData memory) {
+    ) internal pure returns (LimitData64 memory) {
         if (maxLimit == 0) {
             if (limitPerFrame != 0 || frameDurationInSec != 0) revert InvalidDisabledLimit();
-            return WithdrawalLimitData(0, 0, 0, 0, 0);
+            return LimitData64(0, 0, 0, 0, 0);
         }
 
         if (maxLimit > type(uint64).max) revert TooLargeMaxLimit();
@@ -97,7 +97,7 @@ library WithdrawalLimit {
         return data;
     }
 
-    function isLimitSet(WithdrawalLimitData memory data) internal pure returns (bool) {
+    function isLimitSet(LimitData64 memory data) internal pure returns (bool) {
         return data.maxLimit != 0;
     }
 
