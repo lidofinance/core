@@ -9,7 +9,7 @@ export const MAX_DEPOSIT_AMOUNT = MAX_DEPOSIT * MAX_EFFECTIVE_BALANCE_WC_TYPE_01
 export const CURATED_MODULE_ID = 1n;
 export const SIMPLE_DVT_MODULE_ID = 2n;
 
-export const SHARE_RATE_PRECISION = BigInt(10 ** 27);
+export const SHARE_RATE_PRECISION = 10n ** 27n;
 
 export const ZERO_HASH = new Uint8Array(32).fill(0);
 export const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");

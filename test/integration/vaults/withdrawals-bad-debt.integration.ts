@@ -7,6 +7,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether } from "lib";
 import {
+  finalizeWQViaElVault,
   getProtocolContext,
   ProtocolContext,
   queueBadDebtInternalization,
@@ -31,15 +32,11 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
 
   const captureState = async () => {
     const { lido, vaultHub, elRewardsVault, withdrawalVault, withdrawalQueue } = ctx.contracts;
-    const totalPooledEther = await lido.getTotalPooledEther();
-    const totalShares = await lido.getTotalShares();
-
     return {
       badDebtToInternalize: await vaultHub.badDebtToInternalize(),
       unfinalizedSTETH: await withdrawalQueue.unfinalizedStETH(),
       unfinalizedRequestNumber: await withdrawalQueue.unfinalizedRequestNumber(),
       lastFinalizedRequestId: await withdrawalQueue.getLastFinalizedRequestId(),
-      withdrawalQueueBalance: await ethers.provider.getBalance(withdrawalQueue),
       withdrawalVaultBalance: await ethers.provider.getBalance(withdrawalVault),
       elRewardsVaultBalance: await ethers.provider.getBalance(elRewardsVault),
       depositsReserveTarget: await lido.getDepositsReserveTarget(),
@@ -47,7 +44,6 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
       withdrawalsReserve: await lido.getWithdrawalsReserve(),
       bufferedEther: await lido.getBufferedEther(),
       depositableEther: await lido.getDepositableEther(),
-      shareRate: totalShares > 0n ? (totalPooledEther * SHARE_RATE_PRECISION) / totalShares : 0n,
     };
   };
 
@@ -69,7 +65,9 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     const stateBefore = await captureState();
 
     const limits = await oracleReportSanityChecker.getOracleReportLimits();
-    await advanceChainTime(limits.requestTimestampMargin + 1n);
+    // The next reference slot can fall up to one slot before the current time, so wait one slot past the margin.
+    const { secondsPerSlot } = await ctx.contracts.hashConsensus.getChainConfig();
+    await advanceChainTime(limits.requestTimestampMargin + secondsPerSlot + 1n);
 
     const { reportTx } = await reportWithoutClActivation(ctx, {
       reportElVault: false,
@@ -130,46 +128,38 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     expect(stateAfter.badDebtToInternalize).to.equal(0n);
   });
 
-  // TODO: https://github.com/lidofinance/core/issues/1621
-  it.skip("bad debt internalization should affect the finalization share rate", async () => {
-    const beforeReportSnapshot = await Snapshot.take();
-
-    await requestWithdrawals();
-    const withoutBadDebt = await finalizeWithdrawals();
-
-    await Snapshot.restore(beforeReportSnapshot);
-
-    const setup = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-    await queueBadDebtInternalization(ctx, setup.stakingVault, setup.badDebtShares);
-    await requestWithdrawals();
-    const withBadDebt = await finalizeWithdrawals();
-
-    expect(withoutBadDebt.stateAfter.shareRate).to.be.gt(withBadDebt.stateAfter.shareRate);
-    const [, , amountOfETHLockedWithoutDebt, sharesToBurnWithoutDebt] = withoutBadDebt.finalizedEvent.args;
-    const [, , amountOfETHLockedWithDebt, sharesToBurnWithDebt] = withBadDebt.finalizedEvent.args;
-    expect(amountOfETHLockedWithoutDebt).to.be.gt(amountOfETHLockedWithDebt);
-    expect(sharesToBurnWithoutDebt).to.equal(sharesToBurnWithDebt);
-  });
-
-  it("keeps newly finalized requests claimable when bad debt is internalized", async () => {
+  it("finalizes requests at the share rate after the queued bad debt is internalized", async () => {
+    const { lido, withdrawalQueue, vaultHub } = ctx.contracts;
+    // Finalization is FIFO, and the report that finalizes live requests would also internalize the debt queued below.
+    if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
+      await finalizeWQViaElVault(ctx);
+    }
     const setup = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
     await queueBadDebtInternalization(ctx, setup.stakingVault, setup.badDebtShares);
     await requestWithdrawals();
 
-    const { stateBefore, stateAfter } = await finalizeWithdrawals();
-    const { withdrawalQueue } = ctx.contracts;
+    // Nothing else changes in the report: internal ether stays, and the bad debt shares become internal.
+    const totalShares = await lido.getTotalShares();
+    const externalShares = (await lido.getExternalShares()) - (await vaultHub.badDebtToInternalize());
+    const internalEther = (await lido.getTotalPooledEther()) - (await lido.getExternalEther());
+    const totalEther = internalEther + (externalShares * internalEther) / (totalShares - externalShares);
+    const shareRate = (totalEther * SHARE_RATE_PRECISION) / totalShares;
+
+    const { finalizedEvent, stateBefore, stateAfter } = await finalizeWithdrawals();
+    const [, , amountOfETHLocked] = finalizedEvent.args;
     const from = stateBefore.lastFinalizedRequestId + 1n;
-    const to = stateAfter.lastFinalizedRequestId;
-    expect(from).to.be.lte(to, "No new requests finalized");
+    const requestIds = Array.from(
+      { length: Number(stateAfter.lastFinalizedRequestId - from + 1n) },
+      (_, index) => from + BigInt(index),
+    );
+    const requests = await withdrawalQueue.getWithdrawalStatus(requestIds);
+    const hints = Array(requestIds.length).fill(await withdrawalQueue.getLastCheckpointIndex());
 
-    const checkpoint = await withdrawalQueue.getLastCheckpointIndex();
-    const requestIds = Array.from({ length: Number(to - from + 1n) }, (_, index) => from + BigInt(index));
-    const hints = Array(requestIds.length).fill(checkpoint);
-    const claimable = await withdrawalQueue.getClaimableEther(requestIds, hints);
-    const totalClaimable = claimable.reduce((sum, amount) => sum + amount, 0n);
-    const ethForWithdrawals = stateAfter.withdrawalQueueBalance - stateBefore.withdrawalQueueBalance;
-
-    expect(totalClaimable).to.be.gt(0n);
-    expect(totalClaimable).to.be.lte(ethForWithdrawals);
+    // The requests were filed at the higher pre-report rate, so each is discounted to the new rate.
+    const requestedShares = requests.reduce((acc, { amountOfShares }) => acc + amountOfShares, 0n);
+    expect(amountOfETHLocked).to.equal((requestedShares * shareRate) / SHARE_RATE_PRECISION);
+    expect([...(await withdrawalQueue.getClaimableEther(requestIds, hints))]).to.deep.equal(
+      requests.map(({ amountOfShares }) => (amountOfShares * shareRate) / SHARE_RATE_PRECISION),
+    );
   });
 });
