@@ -26,9 +26,7 @@ import {
 contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
     error InvalidConsumerLimits(address consumer);
 
-    /// @param totalRequestsProcessedBefore `getTotalRequestsProcessed()` of the WithdrawalsOracle read by the
-    ///        template before the vote actions: `finalizeUpgrade_v4` moves the counter to a new storage slot
-    function validate(SRPhase2UpgradeConfig config, uint256 totalRequestsProcessedBefore) external view {
+    function validate(SRPhase2UpgradeConfig config) external view {
         address agent = config.AGENT();
         address locatorAddr = config.LOCATOR();
         address oldGateway = config.OLD_TRIGGERABLE_WITHDRAWALS_GATEWAY();
@@ -86,11 +84,6 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
             "wo-consensus-version",
             IWithdrawalsOracle(withdrawalsOracle).getConsensusVersion(),
             config.WITHDRAWALS_ORACLE_CONSENSUS_VERSION()
-        );
-        _assertUint(
-            "wo-total-requests",
-            IWithdrawalsOracle(withdrawalsOracle).getTotalRequestsProcessed(),
-            totalRequestsProcessedBefore
         );
 
         // --- StakingRouter roles removed with the exit hooks ---

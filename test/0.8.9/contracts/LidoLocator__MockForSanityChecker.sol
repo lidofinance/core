@@ -41,6 +41,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable oracleReportSanityChecker;
     address public immutable burner;
     address public immutable withdrawalsOracle;
+    address public immutable validatorsExitBusOracle;
     address public immutable stakingRouter;
     address public immutable treasury;
     address public immutable withdrawalQueue;
@@ -67,6 +68,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         oracleReportSanityChecker = addresses.oracleReportSanityChecker;
         burner = addresses.burner;
         withdrawalsOracle = addresses.withdrawalsOracle;
+        validatorsExitBusOracle = addresses.withdrawalsOracle;
         stakingRouter = addresses.stakingRouter;
         treasury = addresses.treasury;
         withdrawalQueue = addresses.withdrawalQueue;
@@ -84,10 +86,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         lazyOracle = addresses.lazyOracle;
         operatorGrid = addresses.operatorGrid;
         topUpGateway = addresses.topUpGateway;
-    }
-
-    function validatorsExitBusOracle() external view returns (address) {
-        return withdrawalsOracle;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

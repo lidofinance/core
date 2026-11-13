@@ -53,6 +53,8 @@ contract LidoLocator is ILidoLocator {
     address public immutable stakingRouter;
     address public immutable treasury;
     address public immutable withdrawalsOracle;
+    /// @notice Deprecated: same address as `withdrawalsOracle`, the former ValidatorsExitBusOracle
+    address public immutable validatorsExitBusOracle;
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
@@ -85,6 +87,7 @@ contract LidoLocator is ILidoLocator {
         stakingRouter = _assertNonZero(_config.stakingRouter);
         treasury = _assertNonZero(_config.treasury);
         withdrawalsOracle = _assertNonZero(_config.withdrawalsOracle);
+        validatorsExitBusOracle = withdrawalsOracle;
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
@@ -99,14 +102,6 @@ contract LidoLocator is ILidoLocator {
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
         topUpGateway = _assertNonZero(_config.topUpGateway);
-    }
-
-    /**
-     * @notice Deprecated alias of `withdrawalsOracle()`, kept for the existing consumers
-     * @return The WithdrawalsOracle address, the former ValidatorsExitBusOracle
-     */
-    function validatorsExitBusOracle() external view returns (address) {
-        return withdrawalsOracle;
     }
 
     function coreComponents() external view returns (

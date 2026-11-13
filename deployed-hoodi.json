@@ -1322,6 +1322,25 @@
       98304
     ]
   },
+  "withdrawalsOracle": {
+    "deployParameters": {
+      "consensusVersion": 2
+    },
+    "proxy": {
+      "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
+      "address": "0x8664d394C2B3278F26A1B44B967aEf99707eeAB2",
+      "constructorArgs": [
+        "0x0e71BeD56B76E8ED96af5Bd5CDceE6F7f72201B1",
+        "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102",
+        "0x"
+      ]
+    },
+    "implementation": {
+      "contract": "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol",
+      "address": "0xA881F320E17Aa97d6Ce0bE76B0e2620bd2FC555A",
+      "constructorArgs": [12, 1742213400, "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
+    }
+  },
   "vaultHub": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
@@ -1397,25 +1416,6 @@
       "constructorArgs": ["0x49B3512c44891bef83F8967d075121Bd1b07a01B", "0x0f262D9A5Ada76C31cE638bA7AcAA8BA55827483"]
     },
     "address": "0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2"
-  },
-  "withdrawalsOracle": {
-    "deployParameters": {
-      "consensusVersion": 2
-    },
-    "proxy": {
-      "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
-      "address": "0x8664d394C2B3278F26A1B44B967aEf99707eeAB2",
-      "constructorArgs": [
-        "0x0e71BeD56B76E8ED96af5Bd5CDceE6F7f72201B1",
-        "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102",
-        "0x"
-      ]
-    },
-    "implementation": {
-      "contract": "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol",
-      "address": "0xA881F320E17Aa97d6Ce0bE76B0e2620bd2FC555A",
-      "constructorArgs": [12, 1742213400, "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
-    }
   },
   "wstETH": {
     "contract": "contracts/0.6.12/WstETH.sol",

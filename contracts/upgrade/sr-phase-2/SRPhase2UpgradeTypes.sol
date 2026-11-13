@@ -139,8 +139,6 @@ interface IWithdrawalsOracle {
 
     function getConsensusVersion() external view returns (uint256);
 
-    function getTotalRequestsProcessed() external view returns (uint256);
-
     function finalizeUpgrade_v4(uint256 consensusVersion) external;
 }
 

@@ -530,6 +530,25 @@
       "constructorArgs": ["0x80b5DC88C98E528bF9cb4B7F0f076aC41da24651"]
     }
   },
+  "withdrawalsOracle": {
+    "deployParameters": {
+      "consensusVersion": 1
+    },
+    "proxy": {
+      "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
+      "address": "0x7637d44c9f2e9cA584a8B5D2EA493012A5cdaEB6",
+      "constructorArgs": [
+        "0xC40801b88C835a58e54eEE6679D301ba31a4C72b",
+        "0x6885E36BFcb68CB383DfE90023a462C03BCB2AE5",
+        "0x"
+      ]
+    },
+    "implementation": {
+      "contract": "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol",
+      "address": "0xC40801b88C835a58e54eEE6679D301ba31a4C72b",
+      "constructorArgs": [12, 1655733600, "0x8f6254332f69557A72b0DA2D5F0Bc07d4CA991E7"]
+    }
+  },
   "vestingParams": {
     "unvestedTokensAmount": "0",
     "holders": {
@@ -576,25 +595,6 @@
       "constructorArgs": ["0x39A0EbdEE54cB319f4F42141daaBDb6ba25D341A", "0xee386d787Db24AbEe4dcc591F35405E323b70Dad"]
     },
     "address": "0xDe7318Afa67eaD6d6bbC8224dfCe5ed6e4b86d76"
-  },
-  "withdrawalsOracle": {
-    "deployParameters": {
-      "consensusVersion": 1
-    },
-    "proxy": {
-      "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
-      "address": "0x7637d44c9f2e9cA584a8B5D2EA493012A5cdaEB6",
-      "constructorArgs": [
-        "0xC40801b88C835a58e54eEE6679D301ba31a4C72b",
-        "0x6885E36BFcb68CB383DfE90023a462C03BCB2AE5",
-        "0x"
-      ]
-    },
-    "implementation": {
-      "contract": "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol",
-      "address": "0xC40801b88C835a58e54eEE6679D301ba31a4C72b",
-      "constructorArgs": [12, 1655733600, "0x8f6254332f69557A72b0DA2D5F0Bc07d4CA991E7"]
-    }
   },
   "wstETH": {
     "contract": "contracts/0.6.12/WstETH.sol",

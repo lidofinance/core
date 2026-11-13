@@ -7,7 +7,7 @@ import {IUpgradeTemplate} from "../interfaces/IUpgradeTemplate.sol";
 import {SRPhase2PostUpgradeChecks} from "./SRPhase2PostUpgradeChecks.sol";
 import {SRPhase2PreUpgradeChecks} from "./SRPhase2PreUpgradeChecks.sol";
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
-import {IWithdrawalsOracle, SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
+import {SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
 
 /// @title SRPhase2UpgradeTemplate
 /// @notice Pre/post checks wrapping the SR phase 2 (LIP-38) upgrade vote.
@@ -32,9 +32,6 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
     // keccak256("SRPhase2UpgradeTemplate.upgradeStartedFlag")
     bytes32 internal constant UPGRADE_STARTED_SLOT = 0x684cb8f14a7fe2a7e8907f7b820c3cc114907b56da53c8cbe2aa6b3695fbf581;
-    // keccak256("SRPhase2UpgradeTemplate.withdrawalsOracleTotalRequestsProcessed")
-    bytes32 internal constant TOTAL_REQUESTS_PROCESSED_SLOT =
-        0x124a32a23ede207821a6856af44f4ab2b3c0e745c0fae03a295ea6e081f480ea;
 
     address public immutable override CONFIG;
     address public immutable PRE_UPGRADE_CHECKS;
@@ -69,12 +66,6 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         upgradeBlockNumber = block.number;
 
         SRPhase2PreUpgradeChecks(PRE_UPGRADE_CHECKS).validate(config);
-
-        // `finalizeUpgrade_v4` moves the counter to a new storage slot, the post-checks compare it with this value
-        uint256 totalRequestsProcessed = IWithdrawalsOracle(config.WITHDRAWALS_ORACLE()).getTotalRequestsProcessed();
-        assembly {
-            tstore(TOTAL_REQUESTS_PROCESSED_SLOT, totalRequestsProcessed)
-        }
         emit UpgradeStarted();
     }
 
@@ -85,11 +76,7 @@ contract SRPhase2UpgradeTemplate is IUpgradeTemplate {
         if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
 
         isUpgradeFinished = true;
-        uint256 totalRequestsProcessedBefore;
-        assembly {
-            totalRequestsProcessedBefore := tload(TOTAL_REQUESTS_PROCESSED_SLOT)
-        }
-        SRPhase2PostUpgradeChecks(POST_UPGRADE_CHECKS).validate(config, totalRequestsProcessedBefore);
+        SRPhase2PostUpgradeChecks(POST_UPGRADE_CHECKS).validate(config);
         emit UpgradeFinished();
     }
 
