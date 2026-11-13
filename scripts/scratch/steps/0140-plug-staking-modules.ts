@@ -355,6 +355,9 @@ export async function main() {
           `Update [consolidationMigrator].targetModuleId in the scratch deploy params.`,
       );
     }
+
+    // LIP-38: CMv2 is the only module with partial withdrawals allowed
+    await makeTx(stakingRouter, "setStakingModulePartialWithdrawalsAllowed", [cmv2ModuleId, true], { from: deployer });
   }
 
   // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.

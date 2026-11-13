@@ -11,7 +11,7 @@ import {ITriggerableWithdrawalsGateway} from "contracts/common/interfaces/ITrigg
 import {WithdrawalIntent, MAX_PWR_AMOUNT_GWEI} from "contracts/common/interfaces/WithdrawalIntent.sol";
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 
-import {WithdrawalLimit, WithdrawalLimitData} from "contracts/0.8.25/lib/WithdrawalLimit.sol";
+import {LimitData64, RateLimit64} from "contracts/0.8.25/lib/RateLimit64.sol";
 
 interface IWithdrawalVault {
     function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
@@ -28,12 +28,12 @@ interface IWithdrawalVault {
  *         A consumer without limits cannot submit requests, so the limits are also the list of allowed callers.
  */
 contract TriggerableWithdrawalsGateway is ITriggerableWithdrawalsGateway, AccessControlEnumerable, PausableUntil {
-    using WithdrawalLimit for WithdrawalLimitData;
+    using RateLimit64 for LimitData64;
 
     /// @dev Quotas of one consumer, one storage slot each
     struct ConsumerLimits {
-        WithdrawalLimitData pwr; // in gwei
-        WithdrawalLimitData fwr; // in validators
+        LimitData64 pwr; // in gwei
+        LimitData64 fwr; // in validators
     }
 
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
@@ -213,7 +213,7 @@ contract TriggerableWithdrawalsGateway is ITriggerableWithdrawalsGateway, Access
         uint256 timestamp = _getTimestamp();
 
         if (pwrAmountGwei > 0) {
-            WithdrawalLimitData memory pwrLimit = limits.pwr;
+            LimitData64 memory pwrLimit = limits.pwr;
             uint256 currentPwrLimitGwei = pwrLimit.calculateCurrentLimit(timestamp);
             if (pwrAmountGwei > currentPwrLimitGwei) revert PwrLimitExceeded(pwrAmountGwei, currentPwrLimitGwei);
 
@@ -221,7 +221,7 @@ contract TriggerableWithdrawalsGateway is ITriggerableWithdrawalsGateway, Access
         }
 
         if (fwrCount > 0) {
-            WithdrawalLimitData memory fwrLimit = limits.fwr;
+            LimitData64 memory fwrLimit = limits.fwr;
             uint256 currentFwrLimit = fwrLimit.calculateCurrentLimit(timestamp);
             if (fwrCount > currentFwrLimit) revert FwrLimitExceeded(fwrCount, currentFwrLimit);
 
@@ -230,7 +230,7 @@ contract TriggerableWithdrawalsGateway is ITriggerableWithdrawalsGateway, Access
     }
 
     function _getLimitInfo(
-        WithdrawalLimitData memory data,
+        LimitData64 memory data,
         uint256 timestamp
     ) internal pure returns (LimitInfo memory) {
         return

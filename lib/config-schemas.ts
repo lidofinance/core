@@ -251,11 +251,23 @@ const UpgradeVoteScriptSchema = z.object({
   enabledDaySpanEnd: NonNegativeIntSchema.optional(),
 });
 
+// Keys LIP-38 adds to the OracleDaemonConfig; ACTIVE_REBALANCING_ENABLED is 0 or 1
+const LIP38OracleDaemonConfigSchema = z.object({
+  EXIT_ITERATION_CHUNK: PositiveIntSchema,
+  ACTIVE_REBALANCING_ENABLED: z.number().int().min(0).max(1),
+  ACTIVE_REBALANCING_RATE_LIMIT: NonNegativeIntSchema,
+  ACTIVE_REBALANCING_OPERATOR_EXCESS_BP: NonNegativeIntSchema,
+  ACTIVE_REBALANCING_MODULE_EXCESS_BP: NonNegativeIntSchema,
+  ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS: NonNegativeIntSchema,
+});
+
 // SR phase 2 (LIP-38) vote script params: also removes the Easy Track factories of the exit request hash delivery
 const SRPhase2UpgradeVoteScriptSchema = UpgradeVoteScriptSchema.extend({
   curatedSubmitExitRequestHashesFactory: EthereumAddressSchema,
   sdvtSubmitExitRequestHashesFactory: EthereumAddressSchema,
   maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
+  cmv2StakingModuleId: PositiveIntSchema,
+  oracleDaemonConfig: LIP38OracleDaemonConfigSchema,
 });
 
 // CircuitBreaker schema (for scratch deployment)
@@ -363,6 +375,7 @@ const OracleDaemonConfigSchema = z.object({
   PREDICTION_DURATION_IN_SLOTS: PositiveIntSchema,
   FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT: PositiveIntSchema,
   EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS: PositiveIntSchema,
+  ...LIP38OracleDaemonConfigSchema.shape,
 });
 
 // Staking module schema

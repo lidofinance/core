@@ -16,11 +16,14 @@ import { ether, impersonate, readWithdrawalRequests } from "lib";
 import { randomValidatorPubkey } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
+  cmv2CreateOperatorWithKeys,
+  cmv2SuiteEnabled,
   drainWithdrawalRequestsQueue,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   ensureRoleFromAgent,
   fixedTriggerableWithdrawalsLimit,
+  getCMv2ModuleId,
   norSdvtAddOperatorKeys,
   reachConsensus,
   setTriggerableWithdrawalsConsumerLimits,
@@ -319,6 +322,29 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
       await expect(submitReport([request]))
         .to.be.revertedWithCustomError(withdrawalsOracle, "PartialWithdrawalsNotAllowed")
         .withArgs(NOR_MODULE_ID);
+    });
+
+    it("carries a partial withdrawal of a CMv2 validator to EIP-7002", async function () {
+      if (!cmv2SuiteEnabled(ctx, "the CMv2 partial withdrawal report")) this.skip();
+      await processQueued();
+
+      const moduleId = getCMv2ModuleId(ctx);
+      const { operatorId, keyIndices, pubkeys } = await cmv2CreateOperatorWithKeys(ctx, {
+        name: "bus-flow-pwr",
+        keysCount: 1n,
+      });
+      const amount = GWEI_PER_ETH;
+
+      await expect(
+        submitReport([{ moduleId: Number(moduleId), nodeOpId: operatorId, keyIndex: keyIndices[0], amount }]),
+      )
+        .to.emit(withdrawalsOracle, "WithdrawalRequested")
+        .withArgs(moduleId, operatorId, pubkeys[0], amount);
+
+      const fee = await withdrawalVault.getWithdrawalRequestFee();
+      await expect(bus.connect(executor).processWithdrawalIntents(1, executor.address, { value: fee }))
+        .to.emit(withdrawalVault, "WithdrawalRequestAdded")
+        .withArgs(encodeEIP7002Payload(pubkeys[0], amount));
     });
 
     it("takes a report of MAX_REQUESTS_PER_REPORT full withdrawals of distinct keys", async () => {
