@@ -95,6 +95,9 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     oracleReportSanityChecker: {
       deployParameters: params.oracleReportSanityChecker,
     },
+    secondOpinionOracle: {
+      address: null,
+    },
     oracleDaemonConfig: {
       deployParameters: params.oracleDaemonConfig,
     },

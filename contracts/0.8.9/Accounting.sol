@@ -60,16 +60,10 @@ contract Accounting {
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
     struct CalculatedValues {
-        /// @notice amount of ether to collect from WithdrawalsVault to the buffer
-        uint256 withdrawalsVaultTransfer;
-        /// @notice amount of ether to collect from ELRewardsVault to the buffer
-        uint256 elRewardsVaultTransfer;
         /// @notice amount of ether to transfer to WithdrawalQueue to finalize requests
         uint256 etherToFinalizeWQ;
         /// @notice number of stETH shares to transfer to Burner because of WQ finalization
         uint256 sharesToFinalizeWQ;
-        /// @notice number of stETH shares transferred from WQ that will be burned this (to be removed)
-        uint256 sharesToBurnForWithdrawals;
         /// @notice number of stETH shares that will be burned from Burner this report
         uint256 totalSharesToBurn;
         /// @notice number of stETH shares to mint as a protocol fee
@@ -139,7 +133,11 @@ contract Accounting {
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
         PreReportState memory pre = _snapshotPreReportState(contracts, false);
+        _checkOracleReportData(contracts, _report, pre);
+
         CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
+        _checkSimulatedOracleReport(contracts, _report, update);
+
         _applyOracleReportContext(contracts, _report, pre, update);
     }
 
@@ -193,25 +191,7 @@ contract Accounting {
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
-        // Limit the rebase to avoid oracle frontrunning
-        // by leaving some ether to sit in EL rewards vault or withdrawals vault
-        // and/or leaving some shares unburnt on Burner to be processed on future reports
-        (
-            update.withdrawalsVaultTransfer,
-            update.elRewardsVaultTransfer,
-            update.sharesToBurnForWithdrawals,
-            update.totalSharesToBurn // shares to burn from Burner balance
-        ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther - _pre.externalEther, // we need to change the base as shareRate is now calculated on
-            _pre.totalShares - _pre.externalShares,     // internal ether and shares, but inside it's still total
-            update.principalClBalance,
-            _report.clValidatorsBalance + _report.clPendingBalance,
-            _report.withdrawalVaultBalance,
-            _report.elRewardsVaultBalance,
-            _report.sharesRequestedToBurn,
-            update.etherToFinalizeWQ,
-            update.sharesToFinalizeWQ
-        );
+        update.totalSharesToBurn = _report.sharesRequestedToBurn + update.sharesToFinalizeWQ;
 
         uint256 postInternalSharesBeforeFees = _pre.totalShares -
             _pre.externalShares - // internal shares before
@@ -219,8 +199,8 @@ contract Accounting {
 
         update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther // internal ether before
-            + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
-            + update.elRewardsVaultTransfer
+            + _report.clValidatorsBalance + _report.clPendingBalance + _report.withdrawalVaultBalance - update.principalClBalance
+            + _report.elRewardsVaultBalance
             - update.etherToFinalizeWQ;
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
@@ -314,13 +294,13 @@ contract Accounting {
         // but with fees taken as ether deduction instead of minting shares
         // to learn the amount of shares we need to mint to compensate for this fee
 
-        uint256 unifiedClBalance = _report.clValidatorsBalance + _report.clPendingBalance + _update.withdrawalsVaultTransfer;
+        uint256 unifiedClBalance = _report.clValidatorsBalance + _report.clPendingBalance + _report.withdrawalVaultBalance;
         // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
         if (unifiedClBalance > _update.principalClBalance) {
-            uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _update.elRewardsVaultTransfer;
+            uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _report.elRewardsVaultBalance;
             // amount of fees in ether
             uint256 feeEther = (totalRewards * _totalFee) / _feePrecisionPoints;
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
@@ -363,8 +343,6 @@ contract Accounting {
         PreReportState memory _pre,
         CalculatedValues memory _update
     ) internal {
-        _sanityChecks(_contracts, _report, _pre, _update);
-
         uint256 lastWithdrawalRequestToFinalize;
         if (_update.sharesToFinalizeWQ > 0) {
             _contracts.burner.requestBurnShares(address(_contracts.withdrawalQueue), _update.sharesToFinalizeWQ);
@@ -393,8 +371,8 @@ contract Accounting {
             _report.timestamp,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _update.principalClBalance,
-            _update.withdrawalsVaultTransfer,
-            _update.elRewardsVaultTransfer,
+            _report.withdrawalVaultBalance,
+            _report.elRewardsVaultBalance,
             lastWithdrawalRequestToFinalize,
             _report.simulatedShareRate,
             _update.etherToFinalizeWQ
@@ -427,17 +405,14 @@ contract Accounting {
         );
     }
 
-    /// @dev checks the provided oracle data internally and against the sanity checker contract
-    /// reverts if a check fails
-    function _sanityChecks(
+    /// @dev checks report values that do not depend on the report calculation
+    function _checkOracleReportData(
         Contracts memory _contracts,
         ReportValues calldata _report,
-        PreReportState memory _pre,
-        CalculatedValues memory _update
-    ) internal {
+        PreReportState memory _pre
+    ) internal view {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
         // Validator count validation removed for MaxEB support - now using balance-based accounting
-
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
@@ -448,16 +423,22 @@ contract Accounting {
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            _pre.depositedBalance,
-            _update.withdrawalsVaultTransfer
+            _pre.depositedBalance
         );
+    }
 
+    /// @dev checks report values derived during the report calculation
+    function _checkSimulatedOracleReport(
+        Contracts memory _contracts,
+        ReportValues calldata _report,
+        CalculatedValues memory _update
+    ) internal view {
         if (_report.withdrawalFinalizationBatches.length > 0) {
             _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
                 _update.postInternalEther,
                 _update.postInternalShares,
                 _update.etherToFinalizeWQ,
-                _update.sharesToBurnForWithdrawals,
+                _update.sharesToFinalizeWQ,
                 _report.simulatedShareRate
             );
             _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
