@@ -81,10 +81,10 @@ export enum Sk {
   dummyEmptyContract = "dummyEmptyContract",
   eip712StETH = "eip712StETH",
   hashConsensusForAccountingOracle = "hashConsensusForAccountingOracle",
-  hashConsensusForValidatorsExitBusOracle = "hashConsensusForValidatorsExitBusOracle",
+  hashConsensusForWithdrawalsOracle = "hashConsensusForWithdrawalsOracle",
   oracleDaemonConfig = "oracleDaemonConfig",
   oracleReportSanityChecker = "oracleReportSanityChecker",
-  validatorsExitBusOracle = "validatorsExitBusOracle",
+  withdrawalsOracle = "withdrawalsOracle",
   withdrawalQueueERC721 = "withdrawalQueueERC721",
   depositContract = "depositContract",
   wstETH = "wstETH",
@@ -100,6 +100,7 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  triggerableWithdrawalsBus = "triggerableWithdrawalsBus",
   consolidationGateway = "consolidationGateway",
   consolidationBus = "consolidationBus",
   consolidationMigrator = "consolidationMigrator",
@@ -135,6 +136,11 @@ export enum Sk {
   upgradeTemplate = "upgradeTemplate",
   upgradeVoteScript = "upgradeVoteScript",
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
+  srPhase2UpgradeConfig = "srPhase2UpgradeConfig",
+  srPhase2PreUpgradeChecks = "srPhase2PreUpgradeChecks",
+  srPhase2PostUpgradeChecks = "srPhase2PostUpgradeChecks",
+  srPhase2UpgradeTemplate = "srPhase2UpgradeTemplate",
+  srPhase2UpgradeVoteScript = "srPhase2UpgradeVoteScript",
   // Staking modules
   sm_CSM = "sm:CSM",
   sm_CM = "sm:CM",
@@ -158,7 +164,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.aragonSimpleDvtAppRepo:
     case Sk.lidoLocator:
     case Sk.stakingRouter:
-    case Sk.validatorsExitBusOracle:
+    case Sk.withdrawalsOracle:
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
     case Sk.lazyOracle:
@@ -173,6 +179,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.triggerableWithdrawalsBus:
     case Sk.sm_CSM:
     case Sk.sm_CM:
       return state[contractKey].proxy.address;
@@ -193,7 +200,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.gateSealTW:
     case Sk.resealManager:
     case Sk.hashConsensusForAccountingOracle:
-    case Sk.hashConsensusForValidatorsExitBusOracle:
+    case Sk.hashConsensusForWithdrawalsOracle:
     case Sk.ldo:
     case Sk.lidoApm:
     case Sk.lidoTemplate:
@@ -219,6 +226,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.upgradeTemporaryAdmin:
     case Sk.upgradeTemplate:
     case Sk.upgradeVoteScript:
+    case Sk.srPhase2UpgradeTemplate:
+    case Sk.srPhase2UpgradeVoteScript:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:

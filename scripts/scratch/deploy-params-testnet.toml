@@ -5,6 +5,7 @@
 # Ethereum consensus layer specifications - session specific values set via env vars
 slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum consensus
 secondsPerSlot = 12                   # Duration of each slot in seconds
+capellaSlot = 0                       # Capella fork slot for external staking modules (devnet: active from genesis)
 # genesisTime and depositContract are set via environment variables or deployment scripts
 
 # CircuitBreaker configuration for testnet deployment
@@ -84,17 +85,14 @@ maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per secon
 [accountingOracle]
 consensusVersion = 7                  # Consensus version
 
-# Hash consensus for validators exit bus oracle
-[hashConsensusForValidatorsExitBusOracle]
+# Hash consensus for withdrawals oracle
+[hashConsensusForWithdrawalsOracle]
 fastLaneLengthSlots = 10              # Fast lane length in slots
 epochsPerFrame = 4                    # Epochs per consensus frame
 
-# Validators exit bus oracle configuration
-[validatorsExitBusOracle]
-maxValidatorsPerReport = 600         # Maximum validators per request
-maxExitBalanceEth = 358400
-balancePerFrameEth = 32
-frameDurationInSec = 48               # Frame duration in seconds
+# Withdrawals oracle configuration
+[withdrawalsOracle]
+maxRequestsPerReport = 400            # Maximum records per report (LIP-38)
 consensusVersion = 6                  # Consensus version
 
 # Deposit security module configuration
@@ -134,6 +132,12 @@ NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP = 100  # Node operator network pe
 PREDICTION_DURATION_IN_SLOTS = 50400                  # Prediction duration in slots
 FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT = 1350   # Finalization max negative rebase epoch shift
 EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS = 7200           # Lookback window for exit events in slots (1 day)
+EXIT_ITERATION_CHUNK = 32                             # Oracle iterator step in ETH (LIP-38)
+ACTIVE_REBALANCING_ENABLED = 0                        # Phase 3 of the oracle iterator on/off (LIP-38)
+ACTIVE_REBALANCING_RATE_LIMIT = 0                     # Max stake to rebalance per report in ETH (LIP-38)
+ACTIVE_REBALANCING_OPERATOR_EXCESS_BP = 0             # Operator-level rebalancing trigger (BP) (LIP-38)
+ACTIVE_REBALANCING_MODULE_EXCESS_BP = 0               # Module-level rebalancing trigger (BP) (LIP-38)
+ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS = 0            # New operator grace period in epochs (LIP-38)
 
 # Node operators registry configuration
 [nodeOperatorsRegistry]
@@ -153,19 +157,20 @@ name = "Lido: stETH Withdrawal NFT"   # NFT collection name
 symbol = "unstETH"                    # NFT collection symbol
 # baseUri is set to null for testnet deployment
 
-# Validator exit delay verifier configuration for managing validator exits
-[validatorExitDelayVerifier]
-firstSupportedSlot = 0                     # Devnet: full history supported from genesis
-gloasSlot = 36000                           # Devnet Gloas fork: epoch 1125 x 32 slots (glamsterdam-devnet-11)
-capellaSlot = 0                            # Devnet: Capella active from genesis
-slotsPerHistoricalRoot = 8192              # Number of slots per historical root
-shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (2^8 * 32 * 12)
+# Triggerable withdrawals gateway limits per consumer (LIP-38 "Initial limits"):
+# `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators.
+# All zero disables a limit; an enabled PWR limit holds at least 2016 ETH.
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full WithdrawalsOracle report of either kind restores within 8 hours
+pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
 
-# Triggerable withdrawals gateway for managing validator exit requests
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250          # Maximum number of exit requests that can be processed
-exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 240               # Duration of each processing frame in seconds
+[triggerableWithdrawalsGateway.ejectorLimitsWC0x01]   # Ejector of a 0x01 staking module: full withdrawals only
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 400, limitPerFrame = 1, frameDurationInSec = 192 }
+
+[triggerableWithdrawalsGateway.ejectorLimitsWC0x02]   # Ejector of a 0x02 staking module: full withdrawals only
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed

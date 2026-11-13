@@ -14,6 +14,8 @@ interface ILidoLocator {
     function burner() external view returns(address);
     function stakingRouter() external view returns(address);
     function treasury() external view returns(address);
+    function withdrawalsOracle() external view returns(address);
+    /// @notice Deprecated alias of `withdrawalsOracle()`, returns the same address
     function validatorsExitBusOracle() external view returns(address);
     function withdrawalQueue() external view returns(address);
     function withdrawalVault() external view returns(address);
@@ -27,8 +29,8 @@ interface ILidoLocator {
     function lazyOracle() external view returns (address);
     function operatorGrid() external view returns (address);
     function topUpGateway() external view returns (address);
-    function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
+    function triggerableWithdrawalsBus() external view returns (address);
     function consolidationGateway() external view returns (address);
 
     /// @notice Returns core Lido protocol component addresses in a single call
