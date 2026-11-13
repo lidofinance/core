@@ -6,12 +6,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   OracleReportSanityChecker,
   StakingModule__MockForKeyVerification,
-  StakingRouter__MockForValidatorsExitBus,
-  ValidatorsExitBus__Harness,
+  StakingRouter__MockForWithdrawalsOracle,
+  WithdrawalsOracle__Harness,
 } from "typechain-types";
 
 import {
-  deployVEBO,
+  deployWithdrawalsOracle,
   encodeWithdrawalRequests,
   makeMockPubkey,
   seedMockModuleSigningKeys,
@@ -31,13 +31,13 @@ const MAXEB_MODULE_MAX_BALANCE_ETH = 2048n; // 2048 ETH
 
 const GWEI_PER_ETH = 10n ** 9n;
 
-describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
-  let oracle: ValidatorsExitBus__Harness;
+describe("WithdrawalsOracle.sol:balanceCalculation", () => {
+  let oracle: WithdrawalsOracle__Harness;
   let admin: HardhatEthersSigner;
   let sanityChecker: OracleReportSanityChecker;
-  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
+  let stakingRouter: StakingRouter__MockForWithdrawalsOracle;
   let mockModule: StakingModule__MockForKeyVerification;
-  let mockModules: Awaited<ReturnType<typeof deployVEBO>>["mockModules"];
+  let mockModules: Awaited<ReturnType<typeof deployWithdrawalsOracle>>["mockModules"];
 
   let originalState: string;
 
@@ -60,7 +60,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
   before(async () => {
     [admin] = await ethers.getSigners();
 
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     oracle = deployed.oracle;
     sanityChecker = deployed.oracleReportSanityChecker;
     stakingRouter = deployed.stakingRouter;

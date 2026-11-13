@@ -145,7 +145,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         accountingOracle: await accountingOracle.getAddress(),
         oracleReportSanityChecker: sanityCheckerAddress,
         burner: await burner.getAddress(),
-        validatorsExitBusOracle: deployer.address,
+        withdrawalsOracle: deployer.address,
         stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: deployer.address,

@@ -4,14 +4,14 @@
 pragma solidity 0.8.9;
 
 import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
-import {ValidatorsExitBusOracle} from "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol";
+import {WithdrawalsOracle} from "contracts/0.8.9/oracle/WithdrawalsOracle.sol";
 import {WithdrawalIntent} from "contracts/common/interfaces/WithdrawalIntent.sol";
 
 interface ITimeProvider {
     function getTime() external view returns (uint256);
 }
 
-contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
+contract WithdrawalsOracle__Harness is WithdrawalsOracle, ITimeProvider {
     using UnstructuredStorage for bytes32;
 
     constructor(
@@ -19,7 +19,7 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         uint256 genesisTime,
         address lidoLocator,
         uint256 maxRequestsPerReport
-    ) ValidatorsExitBusOracle(secondsPerSlot, genesisTime, lidoLocator, maxRequestsPerReport) {
+    ) WithdrawalsOracle(secondsPerSlot, genesisTime, lidoLocator, maxRequestsPerReport) {
         // allow usage without a proxy for tests
         CONTRACT_VERSION_POSITION.setStorageUint256(0);
     }

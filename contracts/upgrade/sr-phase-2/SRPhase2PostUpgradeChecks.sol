@@ -23,7 +23,7 @@ import {
     IOracleReportSanityChecker,
     IStakingRouter,
     ITriggerableWithdrawalsGateway,
-    IValidatorsExitBusOracle,
+    IWithdrawalsOracle,
     IWithdrawalsManagerProxy,
     IWithdrawalVault,
     OracleDaemonConfigValues
@@ -44,7 +44,7 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
         address bus = config.TRIGGERABLE_WITHDRAWALS_BUS();
         address circuitBreaker = config.CIRCUIT_BREAKER();
         address resealManager = config.RESEAL_MANAGER();
-        address vebo = config.VALIDATORS_EXIT_BUS_ORACLE();
+        address withdrawalsOracle = config.WITHDRAWALS_ORACLE();
 
         // --- Locator ---
         IOssifiableProxy locatorProxy = IOssifiableProxy(locatorAddr);
@@ -56,6 +56,7 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
         ILidoLocator locator = ILidoLocator(locatorAddr);
         _assertAddress("locator-gateway", locator.triggerableWithdrawalsGateway(), newGateway);
         _assertAddress("locator-bus", locator.triggerableWithdrawalsBus(), bus);
+        _assertAddress("locator-withdrawals-oracle", locator.withdrawalsOracle(), withdrawalsOracle);
         _assertUnchangedLocatorMembers(config, locator);
 
         // --- Proxies that got a new implementation ---
@@ -80,15 +81,19 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
             newGateway
         );
         _assertAddress(
-            "vebo-implementation",
-            IOssifiableProxy(vebo).proxy__getImplementation(),
-            config.NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL()
+            "wo-implementation",
+            IOssifiableProxy(withdrawalsOracle).proxy__getImplementation(),
+            config.NEW_WITHDRAWALS_ORACLE_IMPL()
         );
-        _assertUint("vebo-version", IValidatorsExitBusOracle(vebo).getContractVersion(), VEBO_CONTRACT_VERSION);
         _assertUint(
-            "vebo-consensus-version",
-            IValidatorsExitBusOracle(vebo).getConsensusVersion(),
-            config.VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION()
+            "wo-version",
+            IWithdrawalsOracle(withdrawalsOracle).getContractVersion(),
+            WITHDRAWALS_ORACLE_CONTRACT_VERSION
+        );
+        _assertUint(
+            "wo-consensus-version",
+            IWithdrawalsOracle(withdrawalsOracle).getConsensusVersion(),
+            config.WITHDRAWALS_ORACLE_CONSENSUS_VERSION()
         );
 
         // --- StakingRouter: partial withdrawals are allowed for CMv2 and for no other module ---
@@ -109,17 +114,17 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
             "sr-exiting-status-members", stakingRouter.getRoleMemberCount(REPORT_VALIDATOR_EXITING_STATUS_ROLE), 0
         );
 
-        // --- VEBO: the exit request hash delivery role is revoked ---
+        // --- WithdrawalsOracle: the exit request hash delivery role is revoked ---
         // No pre-check: a wrong or second holder leaves a member here. The Easy Track factories need no check:
         // removing an unknown factory reverts, and the Aragon Voting removes them in the transaction that
         // submits this proposal.
         _assertUint(
-            "vebo-report-hash-members",
-            IAccessControlEnumerable(vebo).getRoleMemberCount(SUBMIT_REPORT_HASH_ROLE),
+            "wo-report-hash-members",
+            IAccessControlEnumerable(withdrawalsOracle).getRoleMemberCount(SUBMIT_REPORT_HASH_ROLE),
             0
         );
 
-        // --- OracleReportSanityChecker: one VEBO report fits into the bus PWR quota ---
+        // --- OracleReportSanityChecker: one WithdrawalsOracle report fits into the bus PWR quota ---
         // No pre-check of the role: a second holder leaves a member here.
         address sanityChecker = config.ORACLE_REPORT_SANITY_CHECKER();
         _assertUint(
@@ -187,7 +192,7 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
 
         // --- Bus ---
         IAccessControlEnumerable busAcl = IAccessControlEnumerable(bus);
-        _assertSingleRoleHolder("bus-publisher", busAcl, ADD_WITHDRAWAL_INTENTS_ROLE, vebo);
+        _assertSingleRoleHolder("bus-publisher", busAcl, ADD_WITHDRAWAL_INTENTS_ROLE, withdrawalsOracle);
         // Only a DAO vote that clears the queue may hold this role, and only within that vote
         _assertUint("bus-clear-members", busAcl.getRoleMemberCount(CLEAR_WITHDRAWAL_INTENTS_ROLE), 0);
     }

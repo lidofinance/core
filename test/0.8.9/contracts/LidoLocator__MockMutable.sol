@@ -16,7 +16,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address burner;
         address stakingRouter;
         address treasury;
-        address validatorsExitBusOracle;
+        address withdrawalsOracle;
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
@@ -44,6 +44,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable burner;
     address public immutable stakingRouter;
     address public immutable treasury;
+    address public immutable withdrawalsOracle;
     address public immutable validatorsExitBusOracle;
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
@@ -70,7 +71,8 @@ contract LidoLocator__MockMutable is ILidoLocator {
         burner = _assertNonZero(_config.burner);
         stakingRouter = _assertNonZero(_config.stakingRouter);
         treasury = _assertNonZero(_config.treasury);
-        validatorsExitBusOracle = _assertNonZero(_config.validatorsExitBusOracle);
+        withdrawalsOracle = _assertNonZero(_config.withdrawalsOracle);
+        validatorsExitBusOracle = withdrawalsOracle;
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);

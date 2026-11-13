@@ -36,12 +36,12 @@ contract SRPhase2UpgradeConfig {
     address public immutable OLD_LOCATOR_IMPLEMENTATION;
     address public immutable NEW_LOCATOR_IMPLEMENTATION;
 
-    address public immutable VALIDATORS_EXIT_BUS_ORACLE;
-    address public immutable NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
+    address public immutable WITHDRAWALS_ORACLE;
+    address public immutable NEW_WITHDRAWALS_ORACLE_IMPL;
     /// @notice The consensus version of the new report format, set by `finalizeUpgrade_v4`
-    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION;
+    uint256 public immutable WITHDRAWALS_ORACLE_CONSENSUS_VERSION;
     /// @notice The record cap the new implementation must carry in its immutable
-    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT;
+    uint256 public immutable WITHDRAWALS_ORACLE_MAX_REQUESTS_PER_REPORT;
     address public immutable ORACLE_DAEMON_CONFIG;
     address public immutable ORACLE_REPORT_SANITY_CHECKER;
     address public immutable CIRCUIT_BREAKER;
@@ -86,14 +86,14 @@ contract SRPhase2UpgradeConfig {
         OLD_LOCATOR_IMPLEMENTATION = _nonZero(params.oldLocatorImplementation, "oldLocatorImplementation");
         NEW_LOCATOR_IMPLEMENTATION = _nonZero(params.newLocatorImplementation, "newLocatorImplementation");
 
-        VALIDATORS_EXIT_BUS_ORACLE = _nonZero(params.validatorsExitBusOracle, "validatorsExitBusOracle");
-        NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL =
-            _nonZero(params.newValidatorsExitBusOracleImpl, "newValidatorsExitBusOracleImpl");
-        VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION =
-            _nonZeroUint(params.validatorsExitBusOracleConsensusVersion, "validatorsExitBusOracleConsensusVersion");
-        VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT = _nonZeroUint(
-            params.validatorsExitBusOracleMaxRequestsPerReport,
-            "validatorsExitBusOracleMaxRequestsPerReport"
+        WITHDRAWALS_ORACLE = _nonZero(params.withdrawalsOracle, "withdrawalsOracle");
+        NEW_WITHDRAWALS_ORACLE_IMPL =
+            _nonZero(params.newWithdrawalsOracleImpl, "newWithdrawalsOracleImpl");
+        WITHDRAWALS_ORACLE_CONSENSUS_VERSION =
+            _nonZeroUint(params.withdrawalsOracleConsensusVersion, "withdrawalsOracleConsensusVersion");
+        WITHDRAWALS_ORACLE_MAX_REQUESTS_PER_REPORT = _nonZeroUint(
+            params.withdrawalsOracleMaxRequestsPerReport,
+            "withdrawalsOracleMaxRequestsPerReport"
         );
         ORACLE_DAEMON_CONFIG = _nonZero(params.oracleDaemonConfig, "oracleDaemonConfig");
         ORACLE_REPORT_SANITY_CHECKER = _nonZero(params.oracleReportSanityChecker, "oracleReportSanityChecker");
@@ -166,9 +166,9 @@ contract SRPhase2UpgradeConfig {
         }
     }
 
-    /// @dev LIP-38 sizes the bus PWR quota (in gwei) as the most one VEBO report can carry, so it equals the sanity
-    ///      limit. The checker keeps the limit in whole ETH in a uint16. Zero would reject every report with exit
-    ///      requests.
+    /// @dev LIP-38 sizes the bus PWR quota (in gwei) as the most one WithdrawalsOracle report can carry, so it equals
+    ///      the sanity limit. The checker keeps the limit in whole ETH in a uint16. Zero would reject every report
+    ///      with exit requests.
     function _checkSanityLimit(uint256 limitInEth, uint256 busPwrMaxLimit) private pure {
         if (limitInEth == 0 || limitInEth > type(uint16).max || limitInEth * GWEI_PER_ETH != busPwrMaxLimit) {
             revert SanityLimitMismatch(limitInEth, busPwrMaxLimit);

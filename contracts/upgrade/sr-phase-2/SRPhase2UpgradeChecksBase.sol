@@ -40,15 +40,17 @@ abstract contract SRPhase2UpgradeChecksBase {
     /// @dev The StakingRouter implementation is swapped without a reinitializer.
     uint256 internal constant STAKING_ROUTER_CONTRACT_VERSION = 4;
 
-    /// @dev `finalizeUpgrade_v4` moves the ValidatorsExitBusOracle from v3 to v4.
-    uint256 internal constant VEBO_PREVIOUS_CONTRACT_VERSION = 3;
-    uint256 internal constant VEBO_CONTRACT_VERSION = 4;
+    /// @dev `finalizeUpgrade_v4` moves the WithdrawalsOracle from v3 to v4.
+    uint256 internal constant WITHDRAWALS_ORACLE_PREVIOUS_CONTRACT_VERSION = 3;
+    uint256 internal constant WITHDRAWALS_ORACLE_CONTRACT_VERSION = 4;
 
     /// @dev Addresses the vote must leave untouched; checked identically before and after.
+    ///      The WithdrawalsOracle is read through the deprecated `validatorsExitBusOracle()` alias: the live
+    ///      locator before the vote has no `withdrawalsOracle()` getter.
     function _assertUnchangedLocatorMembers(SRPhase2UpgradeConfig config, ILidoLocator locator) internal view {
         _assertAddress("locator-staking-router", locator.stakingRouter(), config.STAKING_ROUTER());
         _assertAddress("locator-withdrawal-vault", locator.withdrawalVault(), config.WITHDRAWAL_VAULT());
-        _assertAddress("locator-vebo", locator.validatorsExitBusOracle(), config.VALIDATORS_EXIT_BUS_ORACLE());
+        _assertAddress("locator-wo", locator.validatorsExitBusOracle(), config.WITHDRAWALS_ORACLE());
         _assertAddress(
             "locator-sanity-checker", locator.oracleReportSanityChecker(), config.ORACLE_REPORT_SANITY_CHECKER()
         );

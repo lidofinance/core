@@ -356,7 +356,7 @@
       "0xd497Be005638efCf09F6BFC8DAFBBB0BB72cD991"
     ]
   },
-  "hashConsensusForValidatorsExitBusOracle": {
+  "hashConsensusForWithdrawalsOracle": {
     "deployParameters": {
       "fastLaneLengthSlots": 10,
       "epochsPerFrame": 4
@@ -530,7 +530,7 @@
       "constructorArgs": ["0x80b5DC88C98E528bF9cb4B7F0f076aC41da24651"]
     }
   },
-  "validatorsExitBusOracle": {
+  "withdrawalsOracle": {
     "deployParameters": {
       "consensusVersion": 1
     },

@@ -8,7 +8,7 @@ import {
   HashConsensus,
   TriggerableWithdrawalsBus,
   TriggerableWithdrawalsGateway,
-  ValidatorsExitBusOracle,
+  WithdrawalsOracle,
   WithdrawalVault,
 } from "typechain-types";
 
@@ -34,18 +34,18 @@ import { NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-modu
 import { LoadedContract } from "lib/protocol/types";
 
 import { encodeEIP7002Payload } from "test/0.8.9/withdrawalVault/eip7002Mock";
-import { calcVEBOReportDataHash, encodeWithdrawalRequests, WithdrawalRequest } from "test/deploy";
+import { calcWithdrawalsOracleReportDataHash, encodeWithdrawalRequests, WithdrawalRequest } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const GWEI_PER_ETH = 10n ** 9n;
 const MAX_PWR_AMOUNT_GWEI = 2016n * GWEI_PER_ETH;
 
-/** The VEBO version that publishes its reports to the bus (LIP-38) */
-const VEBO_BUS_CONTRACT_VERSION = 4n;
+/** The WithdrawalsOracle version that publishes its reports to the bus (LIP-38) */
+const WITHDRAWALS_ORACLE_BUS_CONTRACT_VERSION = 4n;
 
 /**
  * Oracle withdrawals flow of LIP-38 on the deployed protocol:
- * ValidatorsExitBusOracle -> TriggerableWithdrawalsBus -> TriggerableWithdrawalsGateway -> WithdrawalVault -> EIP-7002.
+ * WithdrawalsOracle -> TriggerableWithdrawalsBus -> TriggerableWithdrawalsGateway -> WithdrawalVault -> EIP-7002.
  * The bus tests publish as the impersonated oracle; the report tests go through the oracle's consensus.
  */
 describe("Integration: TriggerableWithdrawalsBus flow", () => {
@@ -71,7 +71,7 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
     withdrawalVault = ctx.contracts.withdrawalVault;
 
     [, executor, stranger] = await ethers.getSigners();
-    oracle = await impersonate(await ctx.contracts.validatorsExitBusOracle.getAddress(), ether("10"));
+    oracle = await impersonate(await ctx.contracts.withdrawalsOracle.getAddress(), ether("10"));
   });
 
   beforeEach(async () => {
@@ -229,24 +229,27 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
       .withArgs(encodeEIP7002Payload(intent.pubkey, intent.amount));
   });
 
-  describe("ValidatorsExitBusOracle reports", () => {
-    let vebo: LoadedContract<ValidatorsExitBusOracle>;
-    let veboConsensus: HashConsensus;
+  describe("WithdrawalsOracle reports", () => {
+    let withdrawalsOracle: LoadedContract<WithdrawalsOracle>;
+    let withdrawalsOracleConsensus: HashConsensus;
 
     before(async function () {
-      vebo = ctx.contracts.validatorsExitBusOracle;
-      // On a fork the live VEBO does not publish to the bus until the vote upgrades it
-      if ((await vebo.getContractVersion()) < VEBO_BUS_CONTRACT_VERSION) this.skip();
+      withdrawalsOracle = ctx.contracts.withdrawalsOracle;
+      // On a fork the live WithdrawalsOracle does not publish to the bus until the vote upgrades it
+      if ((await withdrawalsOracle.getContractVersion()) < WITHDRAWALS_ORACLE_BUS_CONTRACT_VERSION) this.skip();
 
-      veboConsensus = await ethers.getContractAt("HashConsensus", await vebo.getConsensusContract());
-      await ensureHashConsensusInitialEpoch(ctx, veboConsensus);
-      await ensureOracleCommitteeMembers(ctx, 5n, 4n, veboConsensus);
+      withdrawalsOracleConsensus = await ethers.getContractAt(
+        "HashConsensus",
+        await withdrawalsOracle.getConsensusContract(),
+      );
+      await ensureHashConsensusInitialEpoch(ctx, withdrawalsOracleConsensus);
+      await ensureOracleCommitteeMembers(ctx, 5n, 4n, withdrawalsOracleConsensus);
 
-      // The scratch deploy leaves the VEBO paused
-      if (await vebo.isPaused()) {
+      // The scratch deploy leaves the WithdrawalsOracle paused
+      if (await withdrawalsOracle.isPaused()) {
         const agent = await ctx.getSigner("agent");
-        await ensureRoleFromAgent(ctx, vebo, await vebo.RESUME_ROLE(), agent);
-        await vebo.connect(agent).resume();
+        await ensureRoleFromAgent(ctx, withdrawalsOracle, await withdrawalsOracle.RESUME_ROLE(), agent);
+        await withdrawalsOracle.connect(agent).resume();
       }
     });
 
@@ -260,21 +263,23 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
     const submitReport = async (requests: WithdrawalRequest[]) => {
       // A new frame is not processed yet and leaves the whole frame before the processing deadline:
       // on a fork a large report reads its keys from the remote node and takes minutes
-      const { reportRefSlot: refSlot } = await waitNextAvailableReportTime(ctx, veboConsensus);
+      const { reportRefSlot: refSlot } = await waitNextAvailableReportTime(ctx, withdrawalsOracleConsensus);
 
       const report = {
-        consensusVersion: await vebo.getConsensusVersion(),
+        consensusVersion: await withdrawalsOracle.getConsensusVersion(),
         refSlot,
         requestsCount: requests.length,
         data: encodeWithdrawalRequests(requests),
       };
       const submitter = await reachConsensus(
         ctx,
-        { refSlot, reportHash: calcVEBOReportDataHash(report), consensusVersion: report.consensusVersion },
-        veboConsensus,
+        { refSlot, reportHash: calcWithdrawalsOracleReportDataHash(report), consensusVersion: report.consensusVersion },
+        withdrawalsOracleConsensus,
       );
 
-      return vebo.connect(submitter).submitReportData(report, await vebo.getContractVersion());
+      return withdrawalsOracle
+        .connect(submitter)
+        .submitReportData(report, await withdrawalsOracle.getContractVersion());
     };
 
     it("queues a consensus report in its order, and the bus executes it as EIP-7002 requests", async () => {
@@ -289,11 +294,11 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
 
       const tx = submitReport(requests);
       for (const [i, { moduleId, nodeOpId }] of requests.entries()) {
-        await expect(tx).to.emit(vebo, "WithdrawalRequested").withArgs(moduleId, nodeOpId, pubkeys[i], 0);
+        await expect(tx).to.emit(withdrawalsOracle, "WithdrawalRequested").withArgs(moduleId, nodeOpId, pubkeys[i], 0);
       }
       await expect(tx).to.emit(bus, "WithdrawalIntentsAdded").withArgs(anyValue, requests.length);
 
-      // The VEBO reads every pubkey from its module and keeps the report order
+      // The WithdrawalsOracle reads every pubkey from its module and keeps the report order
       const queued = await bus.getWithdrawalIntents(0, requests.length);
       expect(queued.map(({ amount, pubkey }) => ({ amount, pubkey }))).to.deep.equal(
         pubkeys.map((pubkey) => ({ amount: 0n, pubkey })),
@@ -315,7 +320,7 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
       const request = { moduleId: Number(NOR_MODULE_ID), nodeOpId: 0, keyIndex: 0, amount: GWEI_PER_ETH };
 
       await expect(submitReport([request]))
-        .to.be.revertedWithCustomError(vebo, "PartialWithdrawalsNotAllowed")
+        .to.be.revertedWithCustomError(withdrawalsOracle, "PartialWithdrawalsNotAllowed")
         .withArgs(NOR_MODULE_ID);
     });
 
@@ -333,7 +338,7 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
       await expect(
         submitReport([{ moduleId: Number(moduleId), nodeOpId: operatorId, keyIndex: keyIndices[0], amount }]),
       )
-        .to.emit(vebo, "WithdrawalRequested")
+        .to.emit(withdrawalsOracle, "WithdrawalRequested")
         .withArgs(moduleId, operatorId, pubkeys[0], amount);
 
       const fee = await withdrawalVault.getWithdrawalRequestFee();
@@ -345,7 +350,7 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
     it("takes a report of MAX_REQUESTS_PER_REPORT full withdrawals of distinct keys", async () => {
       await processQueued();
       const { nor, oracleReportSanityChecker } = ctx.contracts;
-      const maxRequests = await vebo.MAX_REQUESTS_PER_REPORT();
+      const maxRequests = await withdrawalsOracle.MAX_REQUESTS_PER_REPORT();
 
       // With the LIP-38 sanity limit a report of WC 0x01 full withdrawals holds fewer records than the cap,
       // which only PWRs reach. Raise the limit to load the cap with NOR keys: NOR returns the signature
@@ -356,7 +361,7 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
         await updateOracleReportLimits(ctx, { maxBalanceExitRequestedPerReportInEth: exitBalanceEth });
       }
 
-      // Distinct keys, so the VEBO reads every key cold, as in a real report
+      // Distinct keys, so the WithdrawalsOracle reads every key cold, as in a real report
       const operatorIds: bigint[] = [];
       for (let operatorId = 0n; operatorId < (await nor.getNodeOperatorsCount()); ++operatorId) {
         if (await nor.getNodeOperatorIsActive(operatorId)) operatorIds.push(operatorId);
@@ -383,7 +388,7 @@ describe("Integration: TriggerableWithdrawalsBus flow", () => {
 
       // The node runs Prague gas rules: every intent writes new bus slots at 22,100 gas each, and the
       // EIP-7825 cap of 16,777,216 does not apply. The numbers are for comparison with other gas rules.
-      console.log(`\n  VEBO submitReportData with ${maxRequests} NOR full withdrawals:`);
+      console.log(`\n  WithdrawalsOracle submitReportData with ${maxRequests} NOR full withdrawals:`);
       console.log(`    Total gas:  ${Number(receipt!.gasUsed).toLocaleString()}`);
       console.log(`    Per record: ${Number(receipt!.gasUsed / maxRequests).toLocaleString()}`);
     });

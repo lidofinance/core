@@ -4,7 +4,7 @@ import {
   HashConsensus__Harness,
   ReportProcessor__Mock,
   StakingModule__MockForKeyVerification,
-  ValidatorsExitBusOracle,
+  WithdrawalsOracle,
 } from "typechain-types";
 
 import {
@@ -14,7 +14,7 @@ import {
   numberToHex,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-  VEBO_CONSENSUS_VERSION,
+  WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
 } from "lib";
 
 import { deployHashConsensus } from "./hashConsensus";
@@ -34,7 +34,7 @@ export interface WithdrawalRequest {
   amount: bigint;
 }
 
-export interface VEBOReportFields {
+export interface WithdrawalsOracleReportFields {
   consensusVersion: bigint;
   refSlot: bigint;
   requestsCount: number;
@@ -54,7 +54,7 @@ export function encodeWithdrawalRequests(requests: WithdrawalRequest[]): string 
   );
 }
 
-export function calcVEBOReportDataHash(report: VEBOReportFields): string {
+export function calcWithdrawalsOracleReportDataHash(report: WithdrawalsOracleReportFields): string {
   const reportData = [report.consensusVersion, report.refSlot, report.requestsCount, report.data];
   return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,bytes)"], [reportData]));
 }
@@ -69,7 +69,11 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, accounting: string, admin: string) {
+async function deployOracleReportSanityCheckerForWithdrawalsOracle(
+  lidoLocator: string,
+  accounting: string,
+  admin: string,
+) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
     f.deploy(lidoLocator, accounting, admin, {
       exitedEthAmountPerDayLimit: 0n,
@@ -93,10 +97,10 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ac
 }
 
 async function deployTWB() {
-  return await ethers.deployContract("TriggerableWithdrawalsBus__MockForVEB");
+  return await ethers.deployContract("TriggerableWithdrawalsBus__MockForWithdrawalsOracle");
 }
 
-export async function deployVEBO(
+export async function deployWithdrawalsOracle(
   admin: string,
   {
     epochsPerFrame = EPOCHS_PER_FRAME,
@@ -111,7 +115,7 @@ export async function deployVEBO(
   const locatorAddr = await locator.getAddress();
 
   // Deploy mock StakingRouter with default module configurations
-  const stakingRouter = await ethers.deployContract("StakingRouter__MockForValidatorsExitBus");
+  const stakingRouter = await ethers.deployContract("StakingRouter__MockForWithdrawalsOracle");
   const stakingRouterAddr = await stakingRouter.getAddress();
 
   // Configure default modules:
@@ -147,7 +151,7 @@ export async function deployVEBO(
     stakingRouter: stakingRouterAddr,
   });
 
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
+  const oracle = await ethers.deployContract("WithdrawalsOracle__Harness", [
     secondsPerSlot,
     genesisTime,
     locatorAddr,
@@ -173,14 +177,14 @@ export async function deployVEBO(
     triggerableWithdrawalsBus: await triggerableWithdrawalsBus.getAddress(),
   });
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForWithdrawalsOracle(
     locatorAddr,
     accountingAddress,
     admin,
   );
 
   await updateLidoLocatorImplementation(locatorAddr, {
-    validatorsExitBusOracle: await oracle.getAddress(),
+    withdrawalsOracle: await oracle.getAddress(),
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
     triggerableWithdrawalsBus: await triggerableWithdrawalsBus.getAddress(),
   });
@@ -247,9 +251,9 @@ export async function seedMockModuleSigningKeys(
   }
 }
 
-interface VEBOConfig {
+interface WithdrawalsOracleConfig {
   admin: string;
-  oracle: ValidatorsExitBusOracle;
+  oracle: WithdrawalsOracle;
   consensus: HashConsensus__Harness;
   dataSubmitter?: string;
   consensusVersion?: bigint;
@@ -257,15 +261,15 @@ interface VEBOConfig {
   resumeAfterDeploy?: boolean;
 }
 
-export async function initVEBO({
+export async function initWithdrawalsOracle({
   admin,
   oracle,
   consensus,
   dataSubmitter = undefined,
-  consensusVersion = VEBO_CONSENSUS_VERSION,
+  consensusVersion = WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
-}: VEBOConfig) {
+}: WithdrawalsOracleConfig) {
   const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
