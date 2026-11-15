@@ -71,7 +71,7 @@ type DualGovernanceAddresses = {
 // The deploy config format of scripts/deploy/DeployConfigurable.s.sol at DUAL_GOVERNANCE_REF.
 // Voting is the admin proposer, the proposals canceller and the emergency governance proposer, as on mainnet.
 // One address holds every committee role. The sealable withdrawal blockers are empty: DG refuses a paused
-// sealable, and WithdrawalQueue and ValidatorsExitBusOracle stay paused until the protocol is activated.
+// sealable, and WithdrawalQueue and WithdrawalsOracle stay paused until the protocol is activated.
 function buildDeployConfig(
   chainId: bigint,
   emergencyProtectionEndDate: bigint,

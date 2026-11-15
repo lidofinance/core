@@ -351,6 +351,9 @@ export async function main() {
           `Update [consolidationMigrator].targetModuleId in the scratch deploy params.`,
       );
     }
+
+    // LIP-38: CMv2 is the only module with partial withdrawals allowed
+    await makeTx(stakingRouter, "setStakingModulePartialWithdrawalsAllowed", [cmv2ModuleId, true], { from: deployer });
   }
 
   await executeScratchDecision({ description: "Scratch module activation", agent: agentCalls }, state);

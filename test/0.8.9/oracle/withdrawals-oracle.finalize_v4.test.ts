@@ -4,20 +4,20 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ValidatorsExitBus__Harness } from "typechain-types";
+import { WithdrawalsOracle__Harness } from "typechain-types";
 
-import { VEBO_CONSENSUS_VERSION } from "lib";
+import { WITHDRAWALS_ORACLE_CONSENSUS_VERSION } from "lib";
 
-import { deployVEBO, initVEBO } from "test/deploy";
+import { deployWithdrawalsOracle, initWithdrawalsOracle } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v4", () => {
-  let oracle: ValidatorsExitBus__Harness;
+describe("WithdrawalsOracle.sol:finalizeUpgrade_v4", () => {
+  let oracle: WithdrawalsOracle__Harness;
   let admin: HardhatEthersSigner;
 
   let originalState: string;
 
-  const NEW_CONSENSUS_VERSION = VEBO_CONSENSUS_VERSION + 1n;
+  const NEW_CONSENSUS_VERSION = WITHDRAWALS_ORACLE_CONSENSUS_VERSION + 1n;
 
   const EXIT_BALANCE_LIMIT_SLOT = ethers.keccak256(ethers.toUtf8Bytes("lido.ValidatorsExitBus.exitBalanceLimitEth"));
   const MAX_VALIDATORS_PER_REPORT_SLOT = ethers.keccak256(
@@ -26,14 +26,20 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v4", () => {
   const DATA_PROCESSING_STATE_SLOT = ethers.keccak256(
     ethers.toUtf8Bytes("lido.ValidatorsExitBusOracle.dataProcessingState"),
   );
+  const OLD_TOTAL_REQUESTS_PROCESSED_SLOT = ethers.keccak256(
+    ethers.toUtf8Bytes("lido.ValidatorsExitBusOracle.totalRequestsProcessed"),
+  );
+  const TOTAL_REQUESTS_PROCESSED_SLOT = ethers.keccak256(
+    ethers.toUtf8Bytes("lido.WithdrawalsOracle.totalRequestsProcessed"),
+  );
 
   before(async () => {
     [admin] = await ethers.getSigners();
 
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     oracle = deployed.oracle;
 
-    await initVEBO({ admin: admin.address, oracle, consensus: deployed.consensus });
+    await initWithdrawalsOracle({ admin: admin.address, oracle, consensus: deployed.consensus });
 
     // emulate the proxy state before the upgrade: v3 storage
     await oracle.setContractVersion(3);
@@ -49,7 +55,9 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v4", () => {
     const tx = await oracle.finalizeUpgrade_v4(NEW_CONSENSUS_VERSION);
 
     await expect(tx).to.emit(oracle, "ContractVersionSet").withArgs(4);
-    await expect(tx).to.emit(oracle, "ConsensusVersionSet").withArgs(NEW_CONSENSUS_VERSION, VEBO_CONSENSUS_VERSION);
+    await expect(tx)
+      .to.emit(oracle, "ConsensusVersionSet")
+      .withArgs(NEW_CONSENSUS_VERSION, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
 
     expect(await oracle.getContractVersion()).to.equal(4);
     expect(await oracle.getConsensusVersion()).to.equal(NEW_CONSENSUS_VERSION);
@@ -73,6 +81,32 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v4", () => {
     expect(await ethers.provider.getStorage(oracleAddress, DATA_PROCESSING_STATE_SLOT)).to.equal(ZeroHash);
   });
 
+  it("should move totalRequestsProcessed to the new slot and clear the old one", async () => {
+    // emulate v3 state: the counter lives in the old slot
+    const total = 1234n;
+    const oracleAddress = await oracle.getAddress();
+    await ethers.provider.send("hardhat_setStorageAt", [
+      oracleAddress,
+      OLD_TOTAL_REQUESTS_PROCESSED_SLOT,
+      ethers.toBeHex(total, 32),
+    ]);
+    expect(await oracle.getTotalRequestsProcessed()).to.equal(0);
+
+    await oracle.finalizeUpgrade_v4(NEW_CONSENSUS_VERSION);
+
+    expect(await oracle.getTotalRequestsProcessed()).to.equal(total);
+    expect(await ethers.provider.getStorage(oracleAddress, TOTAL_REQUESTS_PROCESSED_SLOT)).to.equal(
+      ethers.toBeHex(total, 32),
+    );
+    expect(await ethers.provider.getStorage(oracleAddress, OLD_TOTAL_REQUESTS_PROCESSED_SLOT)).to.equal(ZeroHash);
+  });
+
+  it("should keep totalRequestsProcessed at zero if the old slot is empty", async () => {
+    await oracle.finalizeUpgrade_v4(NEW_CONSENSUS_VERSION);
+
+    expect(await oracle.getTotalRequestsProcessed()).to.equal(0);
+  });
+
   it("should revert on a second call", async () => {
     await oracle.finalizeUpgrade_v4(NEW_CONSENSUS_VERSION);
 
@@ -92,7 +126,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v4", () => {
   });
 
   it("should revert if the consensus version is not changed", async () => {
-    await expect(oracle.finalizeUpgrade_v4(VEBO_CONSENSUS_VERSION)).to.be.revertedWithCustomError(
+    await expect(oracle.finalizeUpgrade_v4(WITHDRAWALS_ORACLE_CONSENSUS_VERSION)).to.be.revertedWithCustomError(
       oracle,
       "VersionCannotBeSame",
     );

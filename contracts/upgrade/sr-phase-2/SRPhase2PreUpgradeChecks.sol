@@ -13,11 +13,12 @@ import {SRPhase2UpgradeChecksBase} from "./SRPhase2UpgradeChecksBase.sol";
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
 import {
     GatewayConsumerLimits,
+    IEjector,
     ILidoLocatorWithVerifier,
     IStakingRouter,
     ITriggerableWithdrawalsBus,
     ITriggerableWithdrawalsGateway,
-    IValidatorsExitBusOracle,
+    IWithdrawalsOracle,
     IWithdrawalsManagerProxy,
     IWithdrawalVault
 } from "./SRPhase2UpgradeTypes.sol";
@@ -54,6 +55,7 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         ILidoLocator candidate = ILidoLocator(config.NEW_LOCATOR_IMPLEMENTATION());
         _assertAddress("candidate-gateway", candidate.triggerableWithdrawalsGateway(), newGateway);
         _assertAddress("candidate-bus", candidate.triggerableWithdrawalsBus(), bus);
+        _assertAddress("candidate-withdrawals-oracle", candidate.withdrawalsOracle(), config.WITHDRAWALS_ORACLE());
         if (_locatorHashOfUnchangedMembers(locator) != _locatorHashOfUnchangedMembers(candidate)) {
             revert LocatorChangedBeyondUpgrade();
         }
@@ -87,20 +89,36 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
             locator.consolidationGateway()
         );
 
-        // The VEBO candidate keeps the chain spec of the live oracle and carries the configured record cap
-        IValidatorsExitBusOracle vebo = IValidatorsExitBusOracle(config.VALIDATORS_EXIT_BUS_ORACLE());
-        IValidatorsExitBusOracle candidateVebo = IValidatorsExitBusOracle(config.NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL());
+        // The WithdrawalsOracle candidate keeps the chain spec of the live oracle and carries the configured record cap
+        IWithdrawalsOracle withdrawalsOracle = IWithdrawalsOracle(config.WITHDRAWALS_ORACLE());
+        IWithdrawalsOracle candidateWithdrawalsOracle = IWithdrawalsOracle(config.NEW_WITHDRAWALS_ORACLE_IMPL());
         _assertNotYetUpgraded(
-            "vebo", IOssifiableProxy(address(vebo)).proxy__getImplementation(), address(candidateVebo)
+            "wo",
+            IOssifiableProxy(address(withdrawalsOracle)).proxy__getImplementation(),
+            address(candidateWithdrawalsOracle)
         );
-        _assertAddress("vebo-admin", IOssifiableProxy(address(vebo)).proxy__getAdmin(), agent);
-        _assertUint("vebo-version", vebo.getContractVersion(), VEBO_PREVIOUS_CONTRACT_VERSION);
-        _assertUint("vebo-candidate-seconds-per-slot", candidateVebo.SECONDS_PER_SLOT(), vebo.SECONDS_PER_SLOT());
-        _assertUint("vebo-candidate-genesis-time", candidateVebo.GENESIS_TIME(), vebo.GENESIS_TIME());
+        _assertAddress("wo-admin", IOssifiableProxy(address(withdrawalsOracle)).proxy__getAdmin(), agent);
+        _assertUint("wo-version", withdrawalsOracle.getContractVersion(), WITHDRAWALS_ORACLE_PREVIOUS_CONTRACT_VERSION);
         _assertUint(
-            "vebo-candidate-max-requests",
-            candidateVebo.MAX_REQUESTS_PER_REPORT(),
-            config.VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT()
+            "wo-candidate-seconds-per-slot",
+            candidateWithdrawalsOracle.SECONDS_PER_SLOT(),
+            withdrawalsOracle.SECONDS_PER_SLOT()
+        );
+        _assertUint(
+            "wo-candidate-genesis-time", candidateWithdrawalsOracle.GENESIS_TIME(), withdrawalsOracle.GENESIS_TIME()
+        );
+        _assertUint(
+            "wo-candidate-max-requests",
+            candidateWithdrawalsOracle.MAX_REQUESTS_PER_REPORT(),
+            config.WITHDRAWALS_ORACLE_MAX_REQUESTS_PER_REPORT()
+        );
+
+        // The module id allowed partial withdrawals belongs to the CMv2 ejector, consumer 3 of the config
+        GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
+        _assertAddress(
+            "cmv2-module",
+            IStakingRouter(config.STAKING_ROUTER()).getStakingModule(config.CMV2_STAKING_MODULE_ID()).stakingModuleAddress,
+            IEjector(consumers[3].consumer).MODULE()
         );
 
         // --- StakingRouter roles removed with the exit hooks ---
@@ -131,7 +149,6 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertAddress("new-gateway-pauser", ICircuitBreaker(config.CIRCUIT_BREAKER()).getPauser(newGateway), address(0));
 
         // No consumer has limits yet, so each one the vote configures starts with a full quota
-        GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
         for (uint256 i = 0; i < consumers.length; ++i) {
             (
                 ITriggerableWithdrawalsGateway.LimitInfo memory pwrLimit,

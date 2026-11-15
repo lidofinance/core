@@ -86,11 +86,11 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     accountingOracle: {
       deployParameters: params.accountingOracle,
     },
-    hashConsensusForValidatorsExitBusOracle: {
-      deployParameters: params.hashConsensusForValidatorsExitBusOracle,
+    hashConsensusForWithdrawalsOracle: {
+      deployParameters: params.hashConsensusForWithdrawalsOracle,
     },
-    validatorsExitBusOracle: {
-      deployParameters: params.validatorsExitBusOracle,
+    withdrawalsOracle: {
+      deployParameters: params.withdrawalsOracle,
     },
     depositSecurityModule: {
       deployParameters: {

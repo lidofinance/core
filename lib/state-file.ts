@@ -81,11 +81,11 @@ export enum Sk {
   dummyEmptyContract = "dummyEmptyContract",
   eip712StETH = "eip712StETH",
   hashConsensusForAccountingOracle = "hashConsensusForAccountingOracle",
-  hashConsensusForValidatorsExitBusOracle = "hashConsensusForValidatorsExitBusOracle",
+  hashConsensusForWithdrawalsOracle = "hashConsensusForWithdrawalsOracle",
   oracleDaemonConfig = "oracleDaemonConfig",
   oracleReportSanityChecker = "oracleReportSanityChecker",
   secondOpinionOracle = "secondOpinionOracle",
-  validatorsExitBusOracle = "validatorsExitBusOracle",
+  withdrawalsOracle = "withdrawalsOracle",
   withdrawalQueueERC721 = "withdrawalQueueERC721",
   depositContract = "depositContract",
   wstETH = "wstETH",
@@ -165,7 +165,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.aragonSimpleDvtAppRepo:
     case Sk.lidoLocator:
     case Sk.stakingRouter:
-    case Sk.validatorsExitBusOracle:
+    case Sk.withdrawalsOracle:
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
     case Sk.lazyOracle:
@@ -201,7 +201,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.gateSealTW:
     case Sk.resealManager:
     case Sk.hashConsensusForAccountingOracle:
-    case Sk.hashConsensusForValidatorsExitBusOracle:
+    case Sk.hashConsensusForWithdrawalsOracle:
     case Sk.ldo:
     case Sk.lidoApm:
     case Sk.lidoTemplate:

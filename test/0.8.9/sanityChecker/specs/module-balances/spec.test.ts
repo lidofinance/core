@@ -31,7 +31,7 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
         accountingOracle: await accountingOracle.getAddress(),
         oracleReportSanityChecker: deployer.address,
         burner: await burner.getAddress(),
-        validatorsExitBusOracle: deployer.address,
+        withdrawalsOracle: deployer.address,
         stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: await withdrawalQueue.getAddress(),

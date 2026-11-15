@@ -566,7 +566,7 @@
       "epochsPerFrame": 225
     }
   },
-  "hashConsensusForValidatorsExitBusOracle": {
+  "hashConsensusForWithdrawalsOracle": {
     "address": "0x7FaDB6358950c5fAA66Cb5EB8eE5147De3df355a",
     "contract": "contracts/0.8.9/oracle/HashConsensus.sol",
     "deployTx": "0xed1ab73dd5458b5ec0b174508318d2f39a31029112af21f87d09106933bd3a9e",
@@ -1186,7 +1186,7 @@
       98304
     ]
   },
-  "validatorsExitBusOracle": {
+  "withdrawalsOracle": {
     "proxy": {
       "address": "0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e",
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",

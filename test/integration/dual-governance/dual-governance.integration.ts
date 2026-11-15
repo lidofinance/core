@@ -125,7 +125,7 @@ describe("Integration: Dual Governance", () => {
   });
 
   it("lets the reseal manager pause and resume the withdrawal queue and the exit bus oracle", async () => {
-    for (const sealable of [ctx.contracts.withdrawalQueue, ctx.contracts.validatorsExitBusOracle]) {
+    for (const sealable of [ctx.contracts.withdrawalQueue, ctx.contracts.withdrawalsOracle]) {
       expect(await sealable.hasRole(await sealable.PAUSE_ROLE(), resealManager)).to.equal(true);
       expect(await sealable.hasRole(await sealable.RESUME_ROLE(), resealManager)).to.equal(true);
     }

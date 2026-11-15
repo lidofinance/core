@@ -51,7 +51,7 @@ describe("OracleReportSanityChecker: module and CL balances", () => {
         accountingOracle: await accountingOracle.getAddress(),
         oracleReportSanityChecker: deployer.address,
         burner: await burner.getAddress(),
-        validatorsExitBusOracle: deployer.address,
+        withdrawalsOracle: deployer.address,
         stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: await withdrawalQueue.getAddress(),

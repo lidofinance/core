@@ -3,11 +3,12 @@
 
 pragma solidity 0.8.25;
 
-import {GatewayConsumerLimits, SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
+import {GatewayConsumerLimits, OracleDaemonConfigValues, SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
 
 /// @title SRPhase2UpgradeConfig
 /// @notice Immutable address book for the SR phase 2 (LIP-38) upgrade, validated once at deployment.
-/// @dev The gateway consumer limits are a list, so they live in storage; nothing changes them after deployment.
+/// @dev The gateway consumer limits are an array and the OracleDaemonConfig values are `bytes`; neither can be
+///      `immutable`, so they live in storage. Nothing changes them after deployment.
 contract SRPhase2UpgradeConfig {
     error ZeroAddress(string field);
     error ZeroValue(string field);
@@ -35,12 +36,13 @@ contract SRPhase2UpgradeConfig {
     address public immutable OLD_LOCATOR_IMPLEMENTATION;
     address public immutable NEW_LOCATOR_IMPLEMENTATION;
 
-    address public immutable VALIDATORS_EXIT_BUS_ORACLE;
-    address public immutable NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
+    address public immutable WITHDRAWALS_ORACLE;
+    address public immutable NEW_WITHDRAWALS_ORACLE_IMPL;
     /// @notice The consensus version of the new report format, set by `finalizeUpgrade_v4`
-    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION;
+    uint256 public immutable WITHDRAWALS_ORACLE_CONSENSUS_VERSION;
     /// @notice The record cap the new implementation must carry in its immutable
-    uint256 public immutable VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT;
+    uint256 public immutable WITHDRAWALS_ORACLE_MAX_REQUESTS_PER_REPORT;
+    address public immutable ORACLE_DAEMON_CONFIG;
     address public immutable ORACLE_REPORT_SANITY_CHECKER;
     address public immutable CIRCUIT_BREAKER;
     address public immutable CIRCUIT_BREAKER_COMMITTEE;
@@ -65,7 +67,11 @@ contract SRPhase2UpgradeConfig {
     /// @notice The sanity limit the vote sets, in whole ETH
     uint256 public immutable MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH;
 
+    /// @notice The only staking module with partial withdrawals allowed after the vote
+    uint256 public immutable CMV2_STAKING_MODULE_ID;
+
     GatewayConsumerLimits[] internal _gatewayConsumers;
+    OracleDaemonConfigValues internal _oracleDaemonConfigValues;
 
     constructor(SRPhase2UpgradeParameters memory params) {
         if (params.chainId == 0) revert InvalidChainId(params.chainId);
@@ -80,15 +86,16 @@ contract SRPhase2UpgradeConfig {
         OLD_LOCATOR_IMPLEMENTATION = _nonZero(params.oldLocatorImplementation, "oldLocatorImplementation");
         NEW_LOCATOR_IMPLEMENTATION = _nonZero(params.newLocatorImplementation, "newLocatorImplementation");
 
-        VALIDATORS_EXIT_BUS_ORACLE = _nonZero(params.validatorsExitBusOracle, "validatorsExitBusOracle");
-        NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL =
-            _nonZero(params.newValidatorsExitBusOracleImpl, "newValidatorsExitBusOracleImpl");
-        VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION =
-            _nonZeroUint(params.validatorsExitBusOracleConsensusVersion, "validatorsExitBusOracleConsensusVersion");
-        VALIDATORS_EXIT_BUS_ORACLE_MAX_REQUESTS_PER_REPORT = _nonZeroUint(
-            params.validatorsExitBusOracleMaxRequestsPerReport,
-            "validatorsExitBusOracleMaxRequestsPerReport"
+        WITHDRAWALS_ORACLE = _nonZero(params.withdrawalsOracle, "withdrawalsOracle");
+        NEW_WITHDRAWALS_ORACLE_IMPL =
+            _nonZero(params.newWithdrawalsOracleImpl, "newWithdrawalsOracleImpl");
+        WITHDRAWALS_ORACLE_CONSENSUS_VERSION =
+            _nonZeroUint(params.withdrawalsOracleConsensusVersion, "withdrawalsOracleConsensusVersion");
+        WITHDRAWALS_ORACLE_MAX_REQUESTS_PER_REPORT = _nonZeroUint(
+            params.withdrawalsOracleMaxRequestsPerReport,
+            "withdrawalsOracleMaxRequestsPerReport"
         );
+        ORACLE_DAEMON_CONFIG = _nonZero(params.oracleDaemonConfig, "oracleDaemonConfig");
         ORACLE_REPORT_SANITY_CHECKER = _nonZero(params.oracleReportSanityChecker, "oracleReportSanityChecker");
         CIRCUIT_BREAKER = _nonZero(params.circuitBreaker, "circuitBreaker");
         CIRCUIT_BREAKER_COMMITTEE = _nonZero(params.circuitBreakerCommittee, "circuitBreakerCommittee");
@@ -121,6 +128,8 @@ contract SRPhase2UpgradeConfig {
         _setGatewayConsumers(params.gatewayConsumers, params.triggerableWithdrawalsBus);
         _checkSanityLimit(params.maxBalanceExitRequestedPerReportInEth, params.gatewayConsumers[0].pwrLimit.maxLimit);
         MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH = params.maxBalanceExitRequestedPerReportInEth;
+        CMV2_STAKING_MODULE_ID = _nonZeroUint(params.cmv2StakingModuleId, "cmv2StakingModuleId");
+        _oracleDaemonConfigValues = params.oracleDaemonConfigValues;
 
         // A parameters file that repeats an address on both sides would make the vote a no-op
         // and the template's pre/post checks contradictory, so reject it here.
@@ -135,6 +144,11 @@ contract SRPhase2UpgradeConfig {
     /// @notice Limits the vote sets on the new gateway: the bus, then the CSM, CSM 0x02 and CMv2 ejectors.
     function getGatewayConsumers() external view returns (GatewayConsumerLimits[] memory) {
         return _gatewayConsumers;
+    }
+
+    /// @notice Values of the keys the vote adds to the OracleDaemonConfig; the config itself rejects an empty one.
+    function getOracleDaemonConfigValues() external view returns (OracleDaemonConfigValues memory) {
+        return _oracleDaemonConfigValues;
     }
 
     /// @dev The limit values are checked by the gateway itself when the vote sets them.
@@ -152,9 +166,9 @@ contract SRPhase2UpgradeConfig {
         }
     }
 
-    /// @dev LIP-38 sizes the bus PWR quota (in gwei) as the most one VEBO report can carry, so it equals the sanity
-    ///      limit. The checker keeps the limit in whole ETH in a uint16. Zero would reject every report with exit
-    ///      requests.
+    /// @dev LIP-38 sizes the bus PWR quota (in gwei) as the most one WithdrawalsOracle report can carry, so it equals
+    ///      the sanity limit. The checker keeps the limit in whole ETH in a uint16. Zero would reject every report
+    ///      with exit requests.
     function _checkSanityLimit(uint256 limitInEth, uint256 busPwrMaxLimit) private pure {
         if (limitInEth == 0 || limitInEth > type(uint16).max || limitInEth * GWEI_PER_ETH != busPwrMaxLimit) {
             revert SanityLimitMismatch(limitInEth, busPwrMaxLimit);

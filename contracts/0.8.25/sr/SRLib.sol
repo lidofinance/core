@@ -2,7 +2,6 @@
 pragma solidity 0.8.25;
 
 import {Math, SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
-import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
@@ -12,7 +11,6 @@ import {
     ModuleState,
     StakingModuleConfig,
     StakingModuleStatus,
-    StakingModule,
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting,
@@ -27,7 +25,6 @@ import {ISRBase} from "./ISRBase.sol";
  */
 
 library SRLib {
-    using StorageSlot for bytes32;
     using WithdrawalCredentials for bytes32;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
@@ -45,135 +42,6 @@ library SRLib {
         uint16 shareLimit;
         StakingModuleStatus status;
         uint8 wcType;
-    }
-
-    /// @notice One-time migration from old storage layout to new RouterState struct.
-    /// @dev Storage slot positions are computed inline for migration-only use.
-    ///      After migration, this function can be removed.
-    function _migrateStorage(uint256 maxEBType1, uint256 expectedVersion) public {
-        if (SRStorage.getModulesCount() > 0) {
-            revert ISRBase.AlreadyMigrated();
-        }
-
-        // Old storage slot positions (computed inline for migration-only use)
-        bytes32 LIDO_POS = keccak256("lido.StakingRouter.lido");
-        bytes32 WITHDRAWAL_CREDENTIALS_POS = keccak256("lido.StakingRouter.withdrawalCredentials");
-        bytes32 STAKING_MODULES_COUNT_POS = keccak256("lido.StakingRouter.stakingModulesCount");
-        bytes32 LAST_STAKING_MODULE_ID_POS = keccak256("lido.StakingRouter.lastStakingModuleId");
-        bytes32 CONTRACT_VERSION_POS = keccak256("lido.Versioned.contractVersion");
-        bytes32 STAKING_MODULES_MAPPING_POS = keccak256("lido.StakingRouter.stakingModules");
-        bytes32 STAKING_MODULE_INDICES_POS = keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
-
-        uint256 actualVersion = CONTRACT_VERSION_POS.getUint256Slot().value;
-        if (actualVersion != expectedVersion) {
-            revert ISRBase.UnexpectedContractVersion(expectedVersion, actualVersion);
-        }
-
-        // cleanup old storage slots
-        delete LIDO_POS.getBytes32Slot().value;
-        delete CONTRACT_VERSION_POS.getBytes32Slot().value;
-
-        // migrate last staking module ID
-        SRStorage.getRouterState().lastModuleId = uint24(LAST_STAKING_MODULE_ID_POS.getUint256Slot().value);
-        delete LAST_STAKING_MODULE_ID_POS.getBytes32Slot().value;
-
-        // migrate WC
-        SRStorage.getRouterState().withdrawalCredentials = WITHDRAWAL_CREDENTIALS_POS.getBytes32Slot().value;
-        delete WITHDRAWAL_CREDENTIALS_POS.getBytes32Slot().value;
-
-        uint256 modulesCount = STAKING_MODULES_COUNT_POS.getUint256Slot().value;
-        delete STAKING_MODULES_COUNT_POS.getBytes32Slot().value;
-
-        // get old storage ref. for staking modules mapping
-        mapping(uint256 => StakingModule) storage oldStakingModules =
-            _getStorageStakingModulesMapping(STAKING_MODULES_MAPPING_POS);
-        // get old storage ref. for staking modules indices mapping
-        mapping(uint256 => uint256) storage oldStakingModuleIndices =
-            _getStorageStakingIndicesMapping(STAKING_MODULE_INDICES_POS);
-
-        uint64 totalValidatorsBalanceGwei;
-        StakingModule memory smOld;
-
-        for (uint256 i; i < modulesCount; ++i) {
-            smOld = oldStakingModules[i];
-
-            uint256 _moduleId = smOld.id;
-            // push module ID to EnumerableSet
-            SRStorage.addModuleId(_moduleId);
-
-            ModuleState storage moduleState = _moduleId.getModuleState();
-
-            // 1 SSTORE
-            moduleState.name = smOld.name;
-
-            // 1 SSTORE
-            moduleState.config = ModuleStateConfig({
-                moduleAddress: smOld.stakingModuleAddress,
-                moduleFee: smOld.stakingModuleFee,
-                treasuryFee: smOld.treasuryFee,
-                stakeShareLimit: smOld.stakeShareLimit,
-                priorityExitShareThreshold: smOld.priorityExitShareThreshold,
-                status: StakingModuleStatus(smOld.status),
-                withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01,
-                partialWithdrawalsAllowed: false
-            });
-
-            // 1 SSTORE
-            moduleState.deposits = ModuleStateDeposits({
-                lastDepositAt: smOld.lastDepositAt,
-                lastDepositBlock: SafeCast.toUint64(smOld.lastDepositBlock),
-                maxDepositsPerBlock: smOld.maxDepositsPerBlock,
-                minDepositBlockDistance: smOld.minDepositBlockDistance
-            });
-
-            /// @dev calculate module effective balance at the migration moment
-            (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) =
-                _getStakingModuleSummary(IStakingModule(smOld.stakingModuleAddress));
-            // The module might not receive all exited validators data yet => we need to replacing
-            // the exitedValidatorsCount with the one that the staking router is aware of.
-            uint256 activeCount =
-                depositedValidatorsCount - Math.max(smOld.exitedValidatorsCount, exitedValidatorsCount);
-            uint64 validatorsBalanceGwei = SRUtils._toGwei(activeCount * maxEBType1);
-
-            // 1 SSTORE
-            moduleState.accounting = ModuleStateAccounting({
-                validatorsBalanceGwei: validatorsBalanceGwei,
-                exitedValidatorsCount: SafeCast.toUint64(smOld.exitedValidatorsCount)
-            });
-
-            totalValidatorsBalanceGwei += validatorsBalanceGwei;
-
-            // cleanup old storage for staking module data
-            delete oldStakingModules[i];
-            delete oldStakingModuleIndices[_moduleId];
-        }
-
-        /// @dev set the total validators balance at the migration moment;
-        /// next Oracle report will update the value
-        SRStorage.getRouterState().accounting =
-            RouterStateAccounting({validatorsBalanceGwei: totalValidatorsBalanceGwei});
-    }
-
-    /// @dev Helper for migration - returns old staking modules mapping storage reference
-    function _getStorageStakingModulesMapping(bytes32 _position)
-        internal
-        pure
-        returns (mapping(uint256 => StakingModule) storage $)
-    {
-        assembly ("memory-safe") {
-            $.slot := _position
-        }
-    }
-
-    /// @dev Helper for migration - returns old staking module indices mapping storage reference
-    function _getStorageStakingIndicesMapping(bytes32 _position)
-        internal
-        pure
-        returns (mapping(uint256 => uint256) storage $)
-    {
-        assembly ("memory-safe") {
-            $.slot := _position
-        }
     }
 
     /// @notice Registers a new staking module.

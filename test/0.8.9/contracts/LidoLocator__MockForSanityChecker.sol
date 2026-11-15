@@ -14,7 +14,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address accountingOracle;
         address oracleReportSanityChecker;
         address burner;
-        address validatorsExitBusOracle;
+        address withdrawalsOracle;
         address stakingRouter;
         address treasury;
         address withdrawalQueue;
@@ -40,6 +40,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable accountingOracle;
     address public immutable oracleReportSanityChecker;
     address public immutable burner;
+    address public immutable withdrawalsOracle;
     address public immutable validatorsExitBusOracle;
     address public immutable stakingRouter;
     address public immutable treasury;
@@ -66,7 +67,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         accountingOracle = addresses.accountingOracle;
         oracleReportSanityChecker = addresses.oracleReportSanityChecker;
         burner = addresses.burner;
-        validatorsExitBusOracle = addresses.validatorsExitBusOracle;
+        withdrawalsOracle = addresses.withdrawalsOracle;
+        validatorsExitBusOracle = addresses.withdrawalsOracle;
         stakingRouter = addresses.stakingRouter;
         treasury = addresses.treasury;
         withdrawalQueue = addresses.withdrawalQueue;

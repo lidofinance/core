@@ -29,10 +29,10 @@ import {
   TriggerableWithdrawalsGateway,
   UpgradeableBeacon,
   ValidatorConsolidationRequests,
-  ValidatorsExitBusOracle,
   VaultFactory,
   VaultHub,
   WithdrawalQueueERC721,
+  WithdrawalsOracle,
   WithdrawalVault,
   WstETH,
 } from "typechain-types";
@@ -57,7 +57,7 @@ export type ProtocolNetworkItems = {
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
-  validatorsExitBusOracle: string;
+  withdrawalsOracle: string;
   triggerableWithdrawalsGateway: string;
   triggerableWithdrawalsBus: string;
   consolidationGateway: string;
@@ -98,7 +98,7 @@ export interface ContractTypes {
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
-  ValidatorsExitBusOracle: ValidatorsExitBusOracle;
+  WithdrawalsOracle: WithdrawalsOracle;
   WithdrawalQueueERC721: WithdrawalQueueERC721;
   WithdrawalVault: WithdrawalVault;
   OracleDaemonConfig: OracleDaemonConfig;
@@ -141,7 +141,7 @@ export type CoreContracts = {
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
-  validatorsExitBusOracle: LoadedContract<ValidatorsExitBusOracle>;
+  withdrawalsOracle: LoadedContract<WithdrawalsOracle>;
   withdrawalQueue: LoadedContract<WithdrawalQueueERC721>;
   withdrawalVault: LoadedContract<WithdrawalVault>;
   oracleDaemonConfig: LoadedContract<OracleDaemonConfig>;

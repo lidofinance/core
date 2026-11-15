@@ -7,32 +7,32 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   HashConsensus__Harness,
   StakingModule__MockForKeyVerification,
-  StakingRouter__MockForValidatorsExitBus,
-  ValidatorsExitBus__Harness,
+  StakingRouter__MockForWithdrawalsOracle,
+  WithdrawalsOracle__Harness,
 } from "typechain-types";
 
-import { VEBO_CONSENSUS_VERSION } from "lib";
+import { WITHDRAWALS_ORACLE_CONSENSUS_VERSION } from "lib";
 
 import {
-  calcVEBOReportDataHash,
+  calcWithdrawalsOracleReportDataHash,
   computeTimestampAtSlot,
-  deployVEBO,
+  deployWithdrawalsOracle,
   encodeWithdrawalRequests,
-  initVEBO,
+  initWithdrawalsOracle,
   makeMockPubkey,
   MAX_REQUESTS_PER_REPORT,
   SECONDS_PER_FRAME,
   seedMockModuleSigningKeys,
   SLOTS_PER_FRAME,
-  VEBOReportFields,
   WithdrawalRequest,
+  WithdrawalsOracleReportFields,
 } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("ValidatorsExitBusOracle.sol:gas", () => {
+describe("WithdrawalsOracle.sol:gas", () => {
   let consensus: HashConsensus__Harness;
-  let oracle: ValidatorsExitBus__Harness;
-  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
+  let oracle: WithdrawalsOracle__Harness;
+  let stakingRouter: StakingRouter__MockForWithdrawalsOracle;
   let admin: HardhatEthersSigner;
   let mockModules: {
     module1: StakingModule__MockForKeyVerification;
@@ -56,8 +56,8 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -84,13 +84,13 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
   before(async () => {
     [admin, member1, member2, member3] = await ethers.getSigners();
 
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     stakingRouter = deployed.stakingRouter;
     mockModules = deployed.mockModules;
 
-    // Measure the VEBO part only: the mock bus would spend most of the gas storing intents from zero slots
+    // Measure the WithdrawalsOracle part only: the mock bus would spend most of the gas storing intents from zero slots
     await deployed.triggerableWithdrawalsBus.setStoreIntents(false);
 
     // Use legacy withdrawal credentials (32 ETH per validator) for all modules exercised in this suite
@@ -98,7 +98,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
       await stakingRouter.setStakingModuleWithdrawalCredentialsType(moduleId, 0x01);
     }
 
-    await initVEBO({
+    await initWithdrawalsOracle({
       admin: admin.address,
       oracle,
       consensus,
@@ -126,7 +126,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
   )) {
     context(`Total requests: ${totalRequests}, ${order} modules`, () => {
       let requests: WithdrawalRequest[];
-      let reportFields: VEBOReportFields;
+      let reportFields: WithdrawalsOracleReportFields;
       let reportHash: string;
       let originalState: string;
 
@@ -151,7 +151,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         requests = generateRequests(totalRequests, order === "interleaved");
 
         reportFields = {
-          consensusVersion: VEBO_CONSENSUS_VERSION,
+          consensusVersion: WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
           refSlot: refSlot,
           requestsCount: requests.length,
           data: encodeWithdrawalRequests(requests),
@@ -166,7 +166,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
           })),
         );
 
-        reportHash = calcVEBOReportDataHash(reportFields);
+        reportHash = calcWithdrawalsOracleReportDataHash(reportFields);
 
         await triggerConsensusOnHash(reportHash);
       });

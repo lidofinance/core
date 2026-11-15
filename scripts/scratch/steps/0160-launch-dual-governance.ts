@@ -8,7 +8,7 @@ import { readNetworkState, Sk } from "lib/state-file";
 
 // The launch puts the Agent under Dual Governance as mainnet's launch omnibus did
 // (dual-governance scripts/launch/mainnet/DGLaunchOmnibusMainnet.sol, items 31-38 and 52).
-// WithdrawalQueue and ValidatorsExitBusOracle stay paused until the protocol is activated, so they
+// WithdrawalQueue and WithdrawalsOracle stay paused until the protocol is activated, so they
 // are not yet sealable withdrawal blockers: Dual Governance refuses a paused sealable.
 const RUN_SCRIPT_ROLE = ethers.id("RUN_SCRIPT_ROLE");
 const EXECUTE_ROLE = ethers.id("EXECUTE_ROLE");
@@ -34,7 +34,7 @@ export async function main() {
   const acl = await loadContract<ACL>("ACL", state[Sk.aragonAcl].proxy.address);
 
   // Items 35-38: the reseal manager may pause and resume the withdrawal queue and the exit bus oracle.
-  const sealables = [state[Sk.withdrawalQueueERC721].proxy.address, state[Sk.validatorsExitBusOracle].proxy.address];
+  const sealables = [state[Sk.withdrawalQueueERC721].proxy.address, state[Sk.withdrawalsOracle].proxy.address];
   const resealCalls: DaoCall[] = sealables.flatMap((sealable) =>
     [PAUSE_ROLE, RESUME_ROLE].map((role) => ({
       to: sealable,

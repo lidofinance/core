@@ -3,8 +3,8 @@
 
 pragma solidity 0.8.9;
 
-/// @notice Minimal mock to control MaxEB weights for ValidatorsExitBus tests
-contract OracleReportSanityChecker__MockForExitBusWeights {
+/// @notice Minimal mock to control MaxEB weights for WithdrawalsOracle tests
+contract OracleReportSanityChecker__MockForWithdrawalsOracleWeights {
     uint256 private _w1;
     uint256 private _w2;
 

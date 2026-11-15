@@ -5,8 +5,8 @@ pragma solidity 0.8.9;
 
 import {WithdrawalIntent} from "contracts/common/interfaces/WithdrawalIntent.sol";
 
-/// @notice Records the withdrawal intents passed by the VEBO, in the order they were passed
-contract TriggerableWithdrawalsBus__MockForVEB {
+/// @notice Records the withdrawal intents passed by the WithdrawalsOracle, in the order they were passed
+contract TriggerableWithdrawalsBus__MockForWithdrawalsOracle {
     WithdrawalIntent[] internal _intents;
     uint256 public addWithdrawalIntentsCalls;
     uint256 public receivedIntentsCount;

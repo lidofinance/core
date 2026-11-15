@@ -80,7 +80,6 @@ interface ISRBase {
 
     // Staking module
     error StakingModuleAddressExists();
-    error AlreadyMigrated();
     error StakingModulesLimitExceeded();
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
@@ -95,5 +94,4 @@ interface ISRBase {
     error InvalidFeeSum();
     error InconsistentFeeSum();
     error UnexpectedModuleId(uint256 expectedId, uint256 actualId);
-    error UnexpectedContractVersion(uint256 expected, uint256 actual);
 }

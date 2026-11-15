@@ -3,18 +3,24 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import { HashConsensus__Harness, WithdrawalsOracle__Harness } from "typechain-types";
 
-import { advanceChainTime, getCurrentBlockTimestamp, VEBO_CONSENSUS_VERSION } from "lib";
+import { advanceChainTime, getCurrentBlockTimestamp, WITHDRAWALS_ORACLE_CONSENSUS_VERSION } from "lib";
 
-import { calcVEBOReportDataHash, deployVEBO, encodeWithdrawalRequests, initVEBO, VEBOReportFields } from "test/deploy";
+import {
+  calcWithdrawalsOracleReportDataHash,
+  deployWithdrawalsOracle,
+  encodeWithdrawalRequests,
+  initWithdrawalsOracle,
+  WithdrawalsOracleReportFields,
+} from "test/deploy";
 
 const LAST_PROCESSING_REF_SLOT = 1;
 
 const REQUESTS = [{ moduleId: 1, nodeOpId: 0, keyIndex: 0, amount: 0n }];
 
-describe("ValidatorsExitBus: pause checks", () => {
-  let oracle: ValidatorsExitBus__Harness;
+describe("WithdrawalsOracle: pause checks", () => {
+  let oracle: WithdrawalsOracle__Harness;
   let consensus: HashConsensus__Harness;
   let admin: HardhatEthersSigner;
   let pauser: HardhatEthersSigner;
@@ -24,18 +30,18 @@ describe("ValidatorsExitBus: pause checks", () => {
   let member2: HardhatEthersSigner;
 
   // Builds a report and brings the committee to consensus on its hash
-  const prepareReport = async (): Promise<VEBOReportFields> => {
+  const prepareReport = async (): Promise<WithdrawalsOracleReportFields> => {
     const { refSlot } = await consensus.getCurrentFrame();
     const report = {
-      consensusVersion: VEBO_CONSENSUS_VERSION,
+      consensusVersion: WITHDRAWALS_ORACLE_CONSENSUS_VERSION,
       refSlot,
       requestsCount: REQUESTS.length,
       data: encodeWithdrawalRequests(REQUESTS),
     };
-    const reportHash = calcVEBOReportDataHash(report);
+    const reportHash = calcWithdrawalsOracleReportDataHash(report);
 
-    await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
-    await consensus.connect(member2).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, reportHash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
+    await consensus.connect(member2).submitReport(refSlot, reportHash, WITHDRAWALS_ORACLE_CONSENSUS_VERSION);
 
     return report;
   };
@@ -43,11 +49,11 @@ describe("ValidatorsExitBus: pause checks", () => {
   beforeEach(async () => {
     [admin, pauser, resumer, stranger, member1, member2] = await ethers.getSigners();
 
-    const deployed = await deployVEBO(admin.address);
+    const deployed = await deployWithdrawalsOracle(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
 
-    await initVEBO({
+    await initWithdrawalsOracle({
       admin: admin.address,
       oracle,
       consensus,

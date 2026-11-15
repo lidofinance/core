@@ -5,10 +5,7 @@
 pragma solidity 0.8.25;
 
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
-import {
-    AccessControlEnumerableUpgradeable,
-    EnumerableSet
-} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {BeaconChainDepositor, IDepositContract} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
@@ -39,7 +36,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     using WithdrawalCredentials for bytes32;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
-    using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @dev ACL roles
     bytes32 public constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
@@ -116,52 +112,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setWithdrawalCredentials(_withdrawalCredentials);
         _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
-    }
-
-    /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
-    /// @param _maxTopUpPerBlockGwei Initial value for the global per-block top-up cap (in Gwei).
-    function finalizeUpgrade_v4(uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
-        _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
-
-        // migrate current modules to new storage
-        SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01, 3);
-
-        /// @dev migrate OZ roles
-        ///      Due to OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots we should
-        ///      migrate roles from old storage to new one.
-        ///      We use only _roleMembers mapping and safely ignore the second mapping _roles, because
-        ///      both mappings are updated atomically, so we only need one.
-
-        // pre upgrade roles
-        bytes32[9] memory roles = [
-            DEFAULT_ADMIN_ROLE,
-            MANAGE_WITHDRAWAL_CREDENTIALS_ROLE,
-            STAKING_MODULE_MANAGE_ROLE,
-            STAKING_MODULE_UNVETTING_ROLE,
-            REPORT_EXITED_VALIDATORS_ROLE,
-            keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE"),
-            keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE"),
-            UNSAFE_SET_EXITED_VALIDATORS_ROLE,
-            REPORT_REWARDS_MINTED_ROLE
-        ];
-
-        EnumerableSet.AddressSet storage members;
-        for (uint256 i = 0; i < roles.length; ++i) {
-            bytes32 role = roles[i];
-            members = _getStorageRoleMembersOld()[role];
-            for (uint256 j; j < members.length(); ++j) {
-                _grantRole(role, members.at(j));
-            }
-        }
-    }
-
-    /// @dev Helper for migration - returns OZ AccessControlEnumerable _roleMembers mapping storage reference
-    function _getStorageRoleMembersOld() private pure returns (mapping(bytes32 => EnumerableSet.AddressSet) storage $) {
-        /// @dev Old _roleMembers storage slot.
-        bytes32 position = keccak256("openzeppelin.AccessControlEnumerable._roleMembers");
-        assembly ("memory-safe") {
-            $.slot := position
-        }
     }
 
     /// @dev Prohibit direct transfer to contract.

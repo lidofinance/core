@@ -53,7 +53,7 @@ export async function main(): Promise<void> {
     burner: await locator.burner(),
     stakingRouter: await locator.stakingRouter(),
     treasury: await locator.treasury(),
-    validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
+    withdrawalsOracle: await locator.withdrawalsOracle(),
     withdrawalQueue: await locator.withdrawalQueue(),
     withdrawalVault: await locator.withdrawalVault(),
     oracleDaemonConfig: await locator.oracleDaemonConfig(),

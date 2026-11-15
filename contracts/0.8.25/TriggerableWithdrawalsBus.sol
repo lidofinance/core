@@ -20,7 +20,7 @@ import {WithdrawalIntent, MAX_PWR_AMOUNT_GWEI} from "contracts/common/interfaces
  *         EIP-7002 fee payment.
  *
  * The workflow:
- * 1. The ValidatorsExitBusOracle appends decoded report records to the tail of the queue (ADD_WITHDRAWAL_INTENTS_ROLE)
+ * 1. The WithdrawalsOracle appends decoded report records to the tail of the queue (ADD_WITHDRAWAL_INTENTS_ROLE)
  * 2. Anyone pops intents from the head of the queue in order, paying the EIP-7002 fee;
  *    the bus forwards them to the TriggerableWithdrawalsGateway resolved via LidoLocator
  *

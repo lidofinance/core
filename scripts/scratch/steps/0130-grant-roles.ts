@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+import { Burner, StakingRouter, WithdrawalQueueERC721, WithdrawalsOracle } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -21,7 +21,7 @@ export async function main() {
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const accountingAddress = state[Sk.accounting].proxy.address;
-  const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
+  const withdrawalsOracleAddress = state[Sk.withdrawalsOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
 
   // StakingRouter
@@ -45,22 +45,14 @@ export async function main() {
     from: deployer,
   });
 
-  // ValidatorsExitBusOracle
+  // WithdrawalsOracle
   if (circuitBreakerAddress) {
-    const validatorsExitBusOracle = await loadContract<ValidatorsExitBusOracle>(
-      "ValidatorsExitBusOracle",
-      validatorsExitBusOracleAddress,
-    );
-    await makeTx(
-      validatorsExitBusOracle,
-      "grantRole",
-      [await validatorsExitBusOracle.PAUSE_ROLE(), circuitBreakerAddress],
-      {
-        from: deployer,
-      },
-    );
+    const withdrawalsOracle = await loadContract<WithdrawalsOracle>("WithdrawalsOracle", withdrawalsOracleAddress);
+    await makeTx(withdrawalsOracle, "grantRole", [await withdrawalsOracle.PAUSE_ROLE(), circuitBreakerAddress], {
+      from: deployer,
+    });
   } else {
-    log(`CircuitBreaker is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
+    log(`CircuitBreaker is not specified or deployed: skipping assigning PAUSE_ROLE of withdrawalsOracle`);
     log.emptyLine();
   }
 
