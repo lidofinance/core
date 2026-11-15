@@ -19,7 +19,7 @@ import { prepareExternalProject, RPC_GAS_ARGS } from "./external-project";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 // CSM `gloas` branch (PR 880): the Verifier proves against both the pre-Gloas and the Gloas state layouts.
-const STAKING_MODULES_REPO_REF = "77bff501c3f270bc91734675a118e7ececee6a87";
+const STAKING_MODULES_REPO_BRANCH = "gloas";
 
 type ExternalDeployArtifact = Record<string, unknown> & {
   CSModule?: string;
@@ -353,7 +353,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
     getAddress(Sk.hashConsensusForAccountingOracle, state),
   );
   const { epochsPerFrame } = await hashConsensus.getFrameConfig();
-  const tmpDir = prepareExternalProject("staking-modules", STAKING_MODULES_REPO, STAKING_MODULES_REPO_REF, [
+  const tmpDir = prepareExternalProject("staking-modules", STAKING_MODULES_REPO, STAKING_MODULES_REPO_BRANCH, [
     ["just", "deps"],
   ]);
 

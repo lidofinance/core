@@ -9,7 +9,7 @@ import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 const CIRCUIT_BREAKER_REPO = "https://github.com/lidofinance/circuit-breaker.git";
-const CIRCUIT_BREAKER_REF = "2567a2a683fa901a51a85f84d9427448201eb773";
+const CIRCUIT_BREAKER_BRANCH = "deploy-script";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -38,7 +38,7 @@ export async function main() {
 
   const params = state[Sk.circuitBreaker].deployParameters;
 
-  const tmpDir = prepareExternalProject("circuit-breaker", CIRCUIT_BREAKER_REPO, CIRCUIT_BREAKER_REF, [
+  const tmpDir = prepareExternalProject("circuit-breaker", CIRCUIT_BREAKER_REPO, CIRCUIT_BREAKER_BRANCH, [
     ["forge", "install"],
   ]);
 
@@ -112,6 +112,6 @@ export async function main() {
   updateObjectInState(Sk.circuitBreaker, {
     address: circuitBreakerAddress,
     repository: CIRCUIT_BREAKER_REPO,
-    ref: CIRCUIT_BREAKER_REF,
+    ref: execFileSync("git", ["rev-parse", "HEAD"], { cwd: tmpDir, encoding: "utf8" }).trim(),
   });
 }
