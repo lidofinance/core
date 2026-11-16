@@ -100,7 +100,12 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
 
     await setupLidoForVaults(ctx);
 
-    const { operatorGrid, lido, vaultHub } = ctx.contracts;
+    const { operatorGrid, lido, vaultHub, withdrawalQueue } = ctx.contracts;
+    // Finalization is FIFO, and the report that finalizes live requests would also internalize the debt queued in tests.
+    // It burns their shares, so the tier limit below must come from the reduced total shares.
+    if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
+      await finalizeWQViaElVault(ctx);
+    }
     const totalShares = await lido.getTotalShares();
     const maxRelativeShareLimit = await vaultHub.MAX_RELATIVE_SHARE_LIMIT_BP();
     const existingTierParams = await operatorGrid.tier(await operatorGrid.DEFAULT_TIER_ID());
@@ -130,10 +135,6 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
 
   it("finalizes requests at the share rate after the queued bad debt is internalized", async () => {
     const { lido, withdrawalQueue, vaultHub } = ctx.contracts;
-    // Finalization is FIFO, and the report that finalizes live requests would also internalize the debt queued below.
-    if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
-      await finalizeWQViaElVault(ctx);
-    }
     const setup = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
     await queueBadDebtInternalization(ctx, setup.stakingVault, setup.badDebtShares);
     await requestWithdrawals();
