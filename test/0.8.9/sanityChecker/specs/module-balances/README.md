@@ -2,43 +2,50 @@
 
 ## Goal
 
-Test per-module validators balance checks on top of the protocol-level CL increase formula.
+Check the per-module validators-balance guard against an independent TypeScript implementation of its current formula.
 
 ## Formula
 
-The checker first verifies that module validators balances sum to the reported post-CL validators balance.
-That consistency check is covered by technical tests.
-
-The formula specs focus on two budgets:
+The model first bounds the reported pending balance:
 
 ```ts
-validatorsGrowthLimit = activatedBalance + annualSafetyCap;
-moduleValidatorsGrowthLimit = validatorsGrowthLimit + consolidationLimit;
+fundedPendingBalance = prePendingBalance + deposits;
+pendingBalanceCap = fundedPendingBalance + externalPendingBalanceCap;
 ```
 
-Only positive module deltas with previous accounting are aggregated:
+Pending consumed by the report is treated as activated balance. Its period allowance includes one 2048 ETH validator to account for discrete Electra activations:
 
 ```ts
-totalPositiveModuleDelta = sum(max(postModuleValidators - previousModuleValidators, 0n));
+activatedBalance = max(fundedPendingBalance - postPendingBalance, 0n);
+activatedBalanceLimit = appearedBalanceAllowance + 2048 ETH;
 ```
 
-Modules without previous accounting do not contribute to `totalPositiveModuleDelta`.
+The module-growth budget consists of activated balance, the annual soft rewards allowance calculated on `preValidatorsBalance + activatedBalance`, and the consolidation allowance:
 
-The runner executes report steps in order. Accepted setup reports update sanity-check state and module balances, so
-fixtures can cover first-report skip behavior and the next-report invariant.
+```ts
+moduleGrowthLimit = activatedBalance + annualSoftAllowance + consolidationAllowance;
+```
+
+Only positive deltas of modules with a previous accounting baseline consume this budget:
+
+```ts
+grossPositiveModuleDeltas = sum(max(postModuleBalance - previousModuleBalance, 0n));
+```
+
+A newly registered empty module has no baseline, so its first reported balance is excluded from the delta aggregation. Subsequent reports use the balance stored by `StakingRouter`.
+
+Zero elapsed time uses the same one-hour effective interval as the contract.
+
+## Scope
+
+These specs exercise `checkModuleAndCLBalancesChangeRates(...)`. They intentionally do not model migration, vault transfers, accounting-report application, or the separate aggregate CL rebase classifier.
 
 ## Files
 
-- Library: `lib.ts`
-- Fixture sets: `fixtures/*.ts`
+- Independent formula: `lib.ts`
+- Fixtures: `fixtures/*.ts`
 - Fixture index: `fixtures/index.ts`
-- Test runner: `spec.test.ts`
-
-The runner imports `fixtures/index.ts` and runs every fixture set exported there. Add network-specific data as separate
-files, for example `fixtures/hoodi.ts` or `fixtures/mainnet.ts`.
-
-Each fixture set defines the full `OracleReportSanityChecker` limits object once. A case uses `steps`; the final report
-step is checked, and previous report steps are accepted setup state.
+- Contract runner: `spec.test.ts`
 
 ## Run
 

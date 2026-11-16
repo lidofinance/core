@@ -6,6 +6,7 @@
     "upgrade/gloas/0500-mock-upgrade",
     "upgrade/steps/0600-deploy-sr-phase-2-contracts",
     "upgrade/steps/0610-deploy-sr-phase-2-vote-script",
-    "upgrade/steps/0620-mock-sr-phase-2-upgrade"
+    "upgrade/steps/0620-mock-sr-phase-2-upgrade",
+    "upgrade/steps/0120-mock-upgrade-lean-rebase"
   ]
 }

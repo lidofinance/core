@@ -105,7 +105,7 @@ pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 [oracleReportSanityChecker]
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
-annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
+annualCLRebaseIncreaseSoftBPLimit = 700                # Soft annual CL rebase increase limit (BP)
 simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
 maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
@@ -113,9 +113,10 @@ maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight
 maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
 requestTimestampMargin = 128                           # Request timestamp margin
-maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
-maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
-clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
+annualCLRebaseIncreaseHardBPLimit = 1700               # Hard annual CL rebase increase limit (BP)
+clRebaseDecreaseSoftBPLimit = 0                        # Soft CL rebase decrease limit per report (BP)
+dailyCLRebaseDecreaseHardBPLimit = 20                  # Hard CL rebase decrease limit per day of elapsed time (BP); provisional, under analysis
+clRebaseDecreaseHardBPLimit = 200                      # Hard CL rebase decrease ceiling per report (BP); provisional, under analysis
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups

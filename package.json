@@ -34,6 +34,7 @@
     "test:integration:upgrade:local": "RUN_NETWORK=local yarn test:integration:upgrade",
     "test:integration:upgrade-template": "TEMPLATE_TEST=true yarn test:integration:upgrade",
     "test:integration:scratch": "MODE=scratch yarn test:integration",
+    "test:integration:scratch:dual-governance": "mkdir -p .local && cat scripts/scratch/deploy-params-testnet.toml scripts/scratch/deploy-params-dual-governance.toml > .local/deploy-params-dual-governance.toml && SCRATCH_DEPLOY_CONFIG=.local/deploy-params-dual-governance.toml yarn test:integration:scratch test/integration/dual-governance/dual-governance.integration.ts",
     "test:integration:fork:local": "MODE=forking NETWORK=local yarn test:integration",
     "test:node:docker:fork": "MODE=forking bash scripts/run-fork-node-docker.sh",
     "test:node:docker:scratch": "MODE=scratch bash scripts/run-fork-node-docker.sh",
@@ -56,7 +57,8 @@
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
     "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
-    "postinstall": "husky"
+    "postinstall": "husky",
+    "test:integration:chronix": "SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true SKIP_LINT_SOLIDITY=true hardhat --network chronix test test/integration/chronix/verifiers.devnet.ts"
   },
   "lint-staged": {
     "./**/*.ts": [
@@ -71,12 +73,14 @@
   },
   "devDependencies": {
     "@chainsafe/blst": "2.2.0",
+    "@chainsafe/persistent-merkle-tree": "1.3.1",
     "@chainsafe/ssz": "1.8.1",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@eslint/compat": "1.3.0",
     "@eslint/js": "9.28.0",
     "@iarna/toml": "^2.2.5",
+    "@lidofinance/chronix-client": "github:lidofinance/chronix#04da2d79e10101931f47f5c0c56258544d4816b1",
     "@lodestar/types": "1.49.0",
     "@nomicfoundation/ethereumjs-util": "^9.0.4",
     "@nomicfoundation/hardhat-chai-matchers": "2.0.9",

@@ -2,6 +2,10 @@ import { z } from "zod";
 
 // Common schemas
 const EthereumAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
+const NonZeroEthereumAddressSchema = EthereumAddressSchema.refine(
+  (address) => !/^0x0{40}$/i.test(address),
+  "Ethereum address cannot be zero",
+);
 const HexStringSchema = z.string().regex(/^0x[a-fA-F0-9]+$/, "Invalid hex string");
 const BigIntStringSchema = z.string().regex(/^\d+$/, "Invalid BigInt string");
 const BasisPointsSchema = z.number().int().min(0).max(10000);
@@ -280,6 +284,50 @@ const CircuitBreakerSchema = z.object({
   initialHeartbeatInterval: PositiveIntSchema,
 });
 
+// Dual Governance schema (optional, for scratch deployment).
+// Durations are in seconds; rage quit support values are PercentD16 (1e16 = 1%).
+const DualGovernanceSchema = z.object({
+  tiebreakerActivationTimeout: PositiveIntSchema,
+  sanityCheckParams: z.object({
+    minWithdrawalsBatchSize: PositiveIntSchema,
+    minTiebreakerActivationTimeout: PositiveIntSchema,
+    maxTiebreakerActivationTimeout: PositiveIntSchema,
+    maxSealableWithdrawalBlockersCount: PositiveIntSchema,
+    maxMinAssetsLockDuration: PositiveIntSchema,
+  }),
+  configProvider: z.object({
+    firstSealRageQuitSupport: BigIntStringSchema,
+    secondSealRageQuitSupport: BigIntStringSchema,
+    minAssetsLockDuration: PositiveIntSchema,
+    vetoSignallingMinDuration: PositiveIntSchema,
+    vetoSignallingMinActiveDuration: PositiveIntSchema,
+    vetoSignallingMaxDuration: PositiveIntSchema,
+    vetoSignallingDeactivationMaxDuration: PositiveIntSchema,
+    vetoCooldownDuration: PositiveIntSchema,
+    rageQuitExtensionPeriodDuration: PositiveIntSchema,
+    rageQuitEthWithdrawalsMinDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsMaxDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsDelayGrowth: PositiveIntSchema,
+  }),
+  timelock: z.object({
+    afterSubmitDelay: NonNegativeIntSchema,
+    afterScheduleDelay: NonNegativeIntSchema,
+    sanityCheckParams: z.object({
+      minExecutionDelay: NonNegativeIntSchema,
+      maxAfterSubmitDelay: PositiveIntSchema,
+      maxAfterScheduleDelay: PositiveIntSchema,
+      maxEmergencyModeDuration: PositiveIntSchema,
+      maxEmergencyProtectionDuration: PositiveIntSchema,
+    }),
+    emergencyModeDuration: PositiveIntSchema,
+    // The emergency protection end date is the deploy block timestamp plus this duration
+    emergencyProtectionDuration: PositiveIntSchema,
+  }),
+  tiebreaker: z.object({
+    executionDelay: PositiveIntSchema,
+  }),
+});
+
 // DAO schema
 const DaoSchema = z.object({
   aragonId: z.string().min(1),
@@ -337,13 +385,10 @@ const DepositSecurityModuleSchema = z.object({
 
 // Oracle report sanity checker schema
 export const OracleReportSanityCheckerBaseScheme = z.object({
-  annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
-  maxPositiveTokenRebase: PositiveIntSchema,
-  clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
 });
 
 export const OracleReportSanityCheckerUpgradeScheme = z.object({
@@ -355,12 +400,20 @@ export const OracleReportSanityCheckerUpgradeScheme = z.object({
   externalPendingBalanceCapEth: NonNegativeIntSchema,
   consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
   exitedValidatorEthAmountLimit: PositiveIntSchema,
-  maxCLBalanceDecreaseBP: BasisPointsSchema,
+  annualCLRebaseIncreaseSoftBPLimit: BasisPointsSchema,
+  annualCLRebaseIncreaseHardBPLimit: BasisPointsSchema,
+  clRebaseDecreaseSoftBPLimit: BasisPointsSchema,
+  dailyCLRebaseDecreaseHardBPLimit: BasisPointsSchema,
+  clRebaseDecreaseHardBPLimit: BasisPointsSchema,
 });
 
 export const OracleReportSanityCheckerSchema = z.object({
   ...OracleReportSanityCheckerBaseScheme.shape,
   ...OracleReportSanityCheckerUpgradeScheme.shape,
+});
+
+const SecondOpinionOracleSchema = z.object({
+  committee: NonZeroEthereumAddressSchema,
 });
 
 // Oracle daemon config schema
@@ -405,6 +458,7 @@ const LidoSchema = z.object({
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
   circuitBreaker: CircuitBreakerSchema,
+  dualGovernance: DualGovernanceSchema.optional(),
   lidoApm: LidoApmSchema,
   lido: LidoSchema.optional(),
   dao: DaoSchema,
@@ -443,6 +497,8 @@ export const UpgradeParametersSchema = z.object({
   easyTrack: EasyTrackSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerUpgradeScheme,
+  // Optional until the committee address is approved. The deployment step refuses to proceed without it.
+  secondOpinionOracle: SecondOpinionOracleSchema.optional(),
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
   consolidationMigrator: ConsolidationMigratorSchema,
