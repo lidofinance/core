@@ -176,7 +176,11 @@ export const getTopUpRoleSigner = async (ctx: ProtocolContext): Promise<HardhatE
 
 /**
  * Make sure Lido has at least `minWei` of depositable ether, submitting the shortfall
- * (plus the reserve blocked by unfinalized withdrawals) from a test whale if needed.
+ * from a test whale if needed.
+ *
+ * Depositable ether is max(depositsReserve, buffered - unfinalizedStETH): a submit does
+ * not grow the deposits reserve, so the submitted ether covers unfinalized withdrawals
+ * first and only the buffer above them becomes depositable.
  */
 export const topUpEnsureDepositableEther = async (ctx: ProtocolContext, minWei: bigint) => {
   const { lido, withdrawalQueue } = ctx.contracts;
@@ -186,8 +190,8 @@ export const topUpEnsureDepositableEther = async (ctx: ProtocolContext, minWei: 
 
   const buffered = await lido.getBufferedEther();
   const unfinalized = await withdrawalQueue.unfinalizedStETH();
-  const reserve = unfinalized > buffered ? unfinalized - buffered : 0n;
-  const submitValue = minWei - depositable + reserve + ether("1");
+  // depositable >= buffered - unfinalized, so this is positive whenever depositable < minWei
+  const submitValue = minWei + unfinalized - buffered + ether("1");
 
   await ensureSubmitFitsStakeLimit(ctx, submitValue);
   const whale = await impersonate(certainAddress("topup:eth:whale"), submitValue + ether("10"));
