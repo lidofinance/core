@@ -31,7 +31,8 @@ type ExternalDeployArtifact = Record<string, unknown> & {
 // `XImpl`, plus singletons (`Verifier`, `CuratedVerifier`, `Ejector`, gates) and lists (`CuratedGates`). We
 // map them into canonical sub-keys that mirror the on-chain upgrade config / TOML params.
 //
-// Verifier and CuratedVerifier are different contracts: CSM deploys Verifier, CMv2 deploys CuratedVerifier.
+// Verifier and CuratedVerifier are different contracts: CSM and CSM 0x02 deploy Verifier, CMv2 deploys
+// CuratedVerifier.
 //
 type ContractMap =
   | { kind: "proxied"; proxyKey?: string; implKey?: string }
