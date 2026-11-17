@@ -28,8 +28,10 @@ type ExternalDeployArtifact = Record<string, unknown> & {
 // ---- Artifact -> canonical substate mapping ----
 //
 // The external deploy artifacts are flat maps of PascalCase keys: a proxy `X` and its implementation
-// `XImpl`, plus singletons (`Verifier`, `Ejector`, gates) and lists (`CuratedGates`). We map them into
-// canonical sub-keys that mirror the on-chain upgrade config / TOML params.
+// `XImpl`, plus singletons (`Verifier`, `CuratedVerifier`, `Ejector`, gates) and lists (`CuratedGates`). We
+// map them into canonical sub-keys that mirror the on-chain upgrade config / TOML params.
+//
+// Verifier and CuratedVerifier are different contracts: CSM deploys Verifier, CMv2 deploys CuratedVerifier.
 //
 type ContractMap =
   | { kind: "proxied"; proxyKey?: string; implKey?: string }
@@ -68,7 +70,7 @@ const CM_CONTRACTS: Record<string, ContractMap> = {
   metaRegistry: { kind: "proxied", proxyKey: "MetaRegistry", implKey: "MetaRegistryImpl" },
   gateFactory: { kind: "single", addressKey: "CuratedGateFactory" },
   depositAllocator: { kind: "single", addressKey: "CuratedDepositAllocator" },
-  verifier: { kind: "single", addressKey: "Verifier" },
+  curatedVerifier: { kind: "single", addressKey: "CuratedVerifier" },
   curatedGates: { kind: "list", listKey: "CuratedGates" },
 };
 
@@ -101,7 +103,8 @@ const CSM_TOML_MAP: Record<string, TomlMap> = {
 const CM_TOML_SECTION = "curatedModule";
 const CM_TOML_MAP: Record<string, TomlMap> = {
   module: { proxyParam: "module" },
-  verifier: { addressParam: "verifier" },
+  // The upgrade template's `curatedModule.verifier` param is the CMv2 CuratedVerifier
+  curatedVerifier: { addressParam: "verifier" },
   curatedGates: { listParam: "curatedGates" },
 };
 

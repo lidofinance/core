@@ -77,6 +77,7 @@ type ExternalDeployArtifact = {
   Accounting?: string;
   CSModule?: string;
   CuratedModule?: string;
+  CuratedVerifier?: string;
   Ejector?: string;
   FeeOracle?: string;
   HashConsensus?: string;
@@ -84,6 +85,14 @@ type ExternalDeployArtifact = {
   Verifier?: string;
   VettedGate?: string;
 };
+
+type ExternalModuleField = "CSModule" | "CuratedModule";
+
+// Verifier and CuratedVerifier are different contracts: CSM modules use Verifier, CMv2 uses CuratedVerifier
+const MODULE_VERIFIER_FIELD = {
+  CSModule: "Verifier",
+  CuratedModule: "CuratedVerifier",
+} as const satisfies Record<ExternalModuleField, keyof ExternalDeployArtifact>;
 
 type ExternalModuleSetup = {
   accounting: string;
@@ -123,16 +132,17 @@ function getExternalModuleSetup(
   state: ReturnType<typeof readNetworkState>,
   stateKey: Sk,
   moduleLabel: string,
-  moduleField: "CSModule" | "CuratedModule",
+  moduleField: ExternalModuleField,
   extraPausableFields: { field: keyof ExternalDeployArtifact; label: string }[] = [],
 ): ExternalModuleSetup {
   const artifact = getExternalArtifact(state, stateKey, moduleLabel);
   const module = requireArtifactAddress(artifact, moduleField, moduleLabel);
+  const verifierField = MODULE_VERIFIER_FIELD[moduleField];
   const pausableContracts = [
     { address: module, label: moduleLabel },
     { address: requireArtifactAddress(artifact, "Accounting", moduleLabel), label: `${moduleLabel} Accounting` },
     { address: requireArtifactAddress(artifact, "FeeOracle", moduleLabel), label: `${moduleLabel} FeeOracle` },
-    { address: requireArtifactAddress(artifact, "Verifier", moduleLabel), label: `${moduleLabel} Verifier` },
+    { address: requireArtifactAddress(artifact, verifierField, moduleLabel), label: `${moduleLabel} ${verifierField}` },
     { address: requireArtifactAddress(artifact, "Ejector", moduleLabel), label: `${moduleLabel} Ejector` },
   ];
 
