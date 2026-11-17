@@ -31,6 +31,7 @@ import { getAddressValidated, readNetworkState, Sk } from "lib/state-file";
 import { Snapshot } from "test/suite";
 
 // Curated Module Committee multisig by chain id. It holds DISALLOW_PAIR_ROLE on the CMv1 -> CMv2 migrator.
+// Forks only: a scratch node may run with chain id 1 and has no committee.
 const CURATED_MODULE_COMMITTEE: Record<string, string> = {
   "1": "0x2570e0b22AD904501dfB0d49575991ACB801dD91",
   "560048": "0x84DffcfB232594975C608DE92544Ff239a24c9E9",
@@ -111,7 +112,7 @@ describe("Integration: Consolidation inside CMv2 (Real CMv2 -> Real CMv2)", () =
     );
 
     const { chainId } = await ethers.provider.getNetwork();
-    knownCommittee = CURATED_MODULE_COMMITTEE[chainId.toString()];
+    knownCommittee = ctx.isScratch ? undefined : CURATED_MODULE_COMMITTEE[chainId.toString()];
     const [committeeAddress] = await migrator.getRoleMembers(await migrator.ALLOW_PAIR_ROLE());
     committee = await impersonate(committeeAddress, ether("10"));
 
