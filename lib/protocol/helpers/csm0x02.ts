@@ -3,6 +3,7 @@ import { Contract } from "ethers";
 import { ethers } from "hardhat";
 
 import { certainAddress, ether, impersonate, ONE_GWEI } from "lib";
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02 } from "lib/constants";
 
 import { ProtocolContext } from "../types";
 
@@ -14,6 +15,10 @@ import {
 } from "./accounting";
 import { buildModuleAccountingReportParams, depositAndReportValidators } from "./staking";
 import { randomPubkeys, randomSignatures } from "./staking-module";
+import { buildTopUpData, getTopUpRoleSigner, prepareTopUpWitnesses } from "./topup";
+
+// The module tops up a key to at most the max effective balance minus the 32 ETH activation balance
+const CSM0X02_KEY_BALANCE_CAP = MAX_EFFECTIVE_BALANCE_WC_TYPE_02 - MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
 
 const CSM0X02_ABI = [
   "function ACCOUNTING() view returns (address)",
@@ -25,6 +30,8 @@ const CSM0X02_ABI = [
   "function getTopUpQueueItem(uint256 index) view returns (uint256 nodeOperatorId, uint256 keyIndex)",
   "function getSigningKeys(uint256 nodeOperatorId, uint256 startIndex, uint256 keysCount) view returns (bytes)",
   "function getKeyAllocatedBalances(uint256 nodeOperatorId, uint256 startIndex, uint256 keysCount) view returns (uint256[])",
+  "function isValidatorWithdrawn(uint256 nodeOperatorId, uint256 keyIndex) view returns (bool)",
+  "function isValidatorSlashed(uint256 nodeOperatorId, uint256 keyIndex) view returns (bool)",
 ];
 
 const PERMISSIONLESS_GATE_ABI = [
@@ -43,16 +50,69 @@ export const getCSM0x02Module = (ctx: ProtocolContext) => {
 };
 
 /**
- * Prepare real deposited keys at the head of the CSM 0x02 FIFO top-up queue.
+ * Whether the module would top up the key by `topUpPerKey`: withdrawn and slashed keys get nothing,
+ * and the allocation is capped by the key balance cap.
+ */
+const csm0x02CanTopUpKey = async (module: Contract, operatorId: bigint, keyIndex: bigint, topUpPerKey: bigint) => {
+  if (await module.isValidatorWithdrawn(operatorId, keyIndex)) return false;
+  if (await module.isValidatorSlashed(operatorId, keyIndex)) return false;
+  const [allocated] = await module.getKeyAllocatedBalances(operatorId, keyIndex, 1n);
+  return allocated + topUpPerKey <= CSM0X02_KEY_BALANCE_CAP;
+};
+
+/**
+ * Drop the top-up queue head up to the last of its first `keysCount` keys the module would not top up.
+ * The live queue holds other operators' keys, which may get withdrawn or slashed while they wait.
+ * Top-ups strictly follow the queue, so the keys in front of such a key are dropped too.
+ * Like the depositor bot, send them in a top-up with zero limits: the module allocates nothing and dequeues them.
+ */
+const csm0x02DropStaleTopUpQueueHead = async (ctx: ProtocolContext, keysCount: bigint, topUpPerKey: bigint) => {
+  const { topUpGateway } = ctx.contracts;
+  const { moduleId, module } = getCSM0x02Module(ctx);
+
+  for (;;) {
+    const { queueLength } = await module.getTopUpQueue();
+    const head = { operatorIds: [] as bigint[], keyIndices: [] as bigint[] };
+    let dropCount = 0;
+    for (let i = 0n; i < keysCount && i < queueLength; i++) {
+      const [operatorId, keyIndex] = await module.getTopUpQueueItem(i);
+      head.operatorIds.push(operatorId);
+      head.keyIndices.push(keyIndex);
+      if (!(await csm0x02CanTopUpKey(module, operatorId, keyIndex, topUpPerKey))) dropCount = head.keyIndices.length;
+    }
+    if (dropCount === 0) return;
+
+    const drop = { operatorIds: head.operatorIds.slice(0, dropCount), keyIndices: head.keyIndices.slice(0, dropCount) };
+    // A validator at the target balance gets a zero limit from the gateway
+    const targetBalanceGwei = await topUpGateway.getTargetBalanceGwei();
+    const validators = await Promise.all(
+      drop.keyIndices.map(async (keyIndex, i) => ({
+        pubkey: await module.getSigningKeys(drop.operatorIds[i], keyIndex, 1n),
+        effectiveBalanceGwei: targetBalanceGwei,
+      })),
+    );
+    const bundle = await prepareTopUpWitnesses(ctx, validators);
+    const caller = await getTopUpRoleSigner(ctx);
+    const receipt = (await (await topUpGateway.connect(caller).topUp(buildTopUpData(moduleId, drop, bundle))).wait())!;
+    expect(ctx.getEvents(receipt, "StakingRouterETHTopUp")[0].args.amount).to.equal(0n);
+    expect((await module.getTopUpQueue()).queueLength).to.equal(queueLength - BigInt(dropCount));
+  }
+};
+
+/**
+ * Prepare real deposited keys at the head of the CSM 0x02 FIFO top-up queue, each able to take `topUpPerKey`.
  * On an empty module, create keys through its PermissionlessGate, pay the bond,
  * and deposit through DSM -> Router -> module -> DepositContract. On populated
- * forks, use the queue head rather than jumping to a fresh operator's keys.
+ * forks, use the queue head rather than jumping to a fresh operator's keys,
+ * dropping the head keys the module would not top up.
  */
-export const csm0x02EnsureDepositedKeys = async (ctx: ProtocolContext, keysCount: bigint) => {
+export const csm0x02EnsureDepositedKeys = async (ctx: ProtocolContext, keysCount: bigint, topUpPerKey = 0n) => {
   const { moduleId, module } = getCSM0x02Module(ctx);
-  const queue = await module.getTopUpQueue();
-  expect(queue.enabled, "CSM 0x02 top-up queue must be enabled").to.equal(true);
+  expect((await module.getTopUpQueue()).enabled, "CSM 0x02 top-up queue must be enabled").to.equal(true);
 
+  await csm0x02DropStaleTopUpQueueHead(ctx, keysCount, topUpPerKey);
+
+  const queue = await module.getTopUpQueue();
   if (queue.queueLength < keysCount) {
     const role = await module.CREATE_NODE_OPERATOR_ROLE();
     const holdersCount = await module.getRoleMemberCount(role);

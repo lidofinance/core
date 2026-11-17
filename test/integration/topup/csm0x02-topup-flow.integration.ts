@@ -34,7 +34,7 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CSM 0x0
   before(async () => {
     ctx = await getProtocolContext();
     globalSnapshot = await Snapshot.take();
-    target = await csm0x02EnsureDepositedKeys(ctx, 2n);
+    target = await csm0x02EnsureDepositedKeys(ctx, 2n, TOP_UP_PER_KEY);
     topUpCaller = await getTopUpRoleSigner(ctx);
     effectiveBalanceGwei = (await ctx.contracts.topUpGateway.getTargetBalanceGwei()) - TOP_UP_PER_KEY / ONE_GWEI;
 
