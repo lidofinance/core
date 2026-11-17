@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -11,6 +12,7 @@ import {
   ProtocolContext,
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
+  updateOracleReportLimits,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -213,5 +215,39 @@ describe("Integration: Negative rebase", () => {
       oracleReportSanityChecker,
       "IncorrectCLBalanceDecrease",
     );
+  });
+
+  // Tests the CL decrease check through the full oracle path
+  // (HashConsensus -> AccountingOracle.submitReportData -> Accounting -> sanity checker).
+  // The tests above call `checkAccountingOracleReport` directly instead.
+  it("Should revert with IncorrectCLBalanceDecrease via the full oracle report flow", async () => {
+    const { oracleReportSanityChecker } = ctx.contracts;
+
+    // Put a baseline report into the check window and align the withdrawal vault
+    // baseline. Without this, `_getCLWithdrawals` would explain the reported decrease
+    // as withdrawals and the check would not fire.
+    await resetCLBalanceDecreaseWindow(ctx, {
+      excludeVaultsBalances: false,
+      reportElVault: false,
+    });
+    await ensureAtLeastOneStoredReport();
+
+    // With the limit set to zero, any real CL decrease must revert.
+    await updateOracleReportLimits(ctx, { maxCLBalanceDecreaseBP: 0n });
+
+    // The checker reverts directly only when no second opinion oracle is set.
+    // With one set, it would call `_askSecondOpinion` instead.
+    expect(await oracleReportSanityChecker.secondOpinionOracle()).to.equal(
+      ZeroAddress,
+      "test requires no second opinion oracle so the checker reverts directly",
+    );
+
+    await expect(
+      reportWithoutClActivation(ctx, {
+        effectiveClDiff: -ether("1"),
+        skipWithdrawals: true,
+        reportElVault: false,
+      }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceDecrease");
   });
 });

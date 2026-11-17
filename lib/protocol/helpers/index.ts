@@ -68,6 +68,17 @@ export type { CMv2OperatorKeys } from "./cmv2";
 export { csm0x02EnsureDepositedKeys, csm0x02EnsureValidatorsBalance, getCSM0x02Module } from "./csm0x02";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";
 export {
+  encodeVebExitRequests,
+  ensureVebHashConsensusInitialEpoch,
+  ensureVebOracleCommitteeMembers,
+  ensureVebResumed,
+  getVebHashConsensus,
+  submitVebReportWithConsensus,
+  VEB_DATA_FORMAT_LIST_WITH_KEY_INDEX,
+  waitVebReportFrame,
+} from "./veb";
+export type { VebExitRequest } from "./veb";
+export {
   buildTopUpData,
   depositEventAmountWei,
   depositEventInterface,
