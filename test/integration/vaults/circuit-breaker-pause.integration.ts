@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, PredepositGuarantee, StakingVault, VaultHub } from "typechain-types";
 
-import { ether, generateValidator, impersonate } from "lib";
+import { ether, generateValidator, getCurrentBlockTimestamp, impersonate } from "lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
@@ -26,6 +26,7 @@ interface ICircuitBreaker {
   getPauser(pausable: string): Promise<string>;
   getPausables(): Promise<string[]>;
   isPauserLive(pauser: string): Promise<boolean>;
+  heartbeatExpiry(pauser: string): Promise<bigint>;
   pauseDuration(): Promise<bigint>;
 }
 
@@ -36,6 +37,7 @@ const ICircuitBreaker_ABI = [
   "function getPauser(address _pausable) external view returns (address)",
   "function getPausables() external view returns (address[])",
   "function isPauserLive(address _pauser) external view returns (bool)",
+  "function heartbeatExpiry(address _pauser) external view returns (uint256)",
   "function pauseDuration() external view returns (uint256)",
   "event PauseTriggered(address indexed pausable, address indexed pauser, uint256 pauseDuration)",
   "error SenderNotPauser()",
@@ -122,6 +124,22 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
   beforeEach(async () => (snapshot = await Snapshot.take()));
   afterEach(async () => await Snapshot.restore(snapshot));
   after(async () => await Snapshot.restore(originalSnapshot));
+
+  it("All registered pausers are live with unexpired heartbeats", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
+    const pausables = await circuitBreaker.getPausables();
+    const pausers = new Set(await Promise.all(pausables.map((pausable) => circuitBreaker.getPauser(pausable))));
+    const blockTimestamp = await getCurrentBlockTimestamp();
+
+    for (const pauser of pausers) {
+      expect(await circuitBreaker.isPauserLive(pauser), `pauser ${pauser} is live`).to.equal(true);
+      expect(await circuitBreaker.heartbeatExpiry(pauser), `pauser ${pauser} heartbeat expiry`).to.be.gt(
+        blockTimestamp,
+      );
+    }
+  });
 
   it("CircuitBreaker can pause VaultHub", async function () {
     if (ctx.isScratch) {
