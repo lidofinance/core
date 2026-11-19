@@ -26,6 +26,7 @@ export interface DeployStakingRouterParams {
   lidoLocator?: LidoLocator;
   maxEBType1?: bigint;
   maxEBType2?: bigint;
+  maxTopUpBalance?: bigint;
 }
 
 export async function deployStakingRouter(
@@ -36,6 +37,7 @@ export async function deployStakingRouter(
     lidoLocator,
     maxEBType1 = MAX_EFFECTIVE_BALANCE_WC_TYPE_01,
     maxEBType2 = MAX_EFFECTIVE_BALANCE_WC_TYPE_02,
+    maxTopUpBalance = maxEBType2,
   }: DeployStakingRouterParams = {},
 ): Promise<{
   depositContract: DepositContract__MockForBeaconChainDepositor;
@@ -73,7 +75,7 @@ export async function deployStakingRouter(
 
   const impl = await stakingRouterFactory
     .connect(deployer)
-    .deploy(depositContract, lido, lidoLocator, maxEBType1, maxEBType2);
+    .deploy(depositContract, lido, lidoLocator, maxEBType1, maxEBType2, maxTopUpBalance);
   const [stakingRouter] = await proxify({ impl, admin, caller: user });
 
   return { stakingRouter, depositContract, impl, beaconChainDepositor };

@@ -38,6 +38,7 @@ library SRLib {
     struct Config {
         uint256 maxEBType1;
         uint256 maxEBType2;
+        uint256 maxTopUpBalance;
     }
 
     struct ModuleParamsCache {
@@ -445,8 +446,8 @@ library SRLib {
     /**
      * @notice calculate allocation amounts for all modules
      * @dev If `_isTopUp` is `true`, allocation is performed for top-up deposits targeting
-     *      WC type `0x02` validators. In this case, `_cfg.maxEBType2` used
-     *      to correctly calculate the module's capacity.
+     *      WC type `0x02` validators. In this case, `_cfg.maxTopUpBalance` (the gateway's
+     *      executable per-validator ceiling) is used to calculate the module's capacity.
      *
      * @dev The Allocation logic must preserve the same priority between modules
      *      regardless of the allocation type or amount (initial seed deposits or top-ups).
@@ -533,17 +534,19 @@ library SRLib {
         }
         _capacities = new uint256[](modulesCount);
 
-        // put calldata msxEBType2 to stack
-        uint256 maxEBType2 = _cfg.maxEBType2;
+        // put calldata vars to stack
+        uint256 maxTopUpBalance = Math.min(_cfg.maxTopUpBalance, _cfg.maxEBType2);
 
         for (uint256 i = 0; i < modulesCount; ++i) {
             // module initial capacity = current allocation
             uint256 validatorsCapacity = _allocations[i];
             if (cache[i].status == StakingModuleStatus.Active) {
                 if (_isTopUp && WithdrawalCredentials.isType2(cache[i].wcType)) {
-                    // max eth capacity of active validators = n * maxEB,
-                    // so capacity in validators equivalent = n * maxEBType2 / maxEBType1
-                    validatorsCapacity = cache[i].activeCount * maxEBType2 / maxEBType1;
+                    // The executable per-validator ceiling is the TopUpGateway target balance,
+                    // which can be below maxEBType2. Reserving capacity at maxEBType2 would
+                    // lock budget for top-ups the gateway can never fund (e.g. the remainder
+                    // below the gateway minimum), starving other Active modules.
+                    validatorsCapacity = cache[i].activeCount * maxTopUpBalance / maxEBType1;
                 } else {
                     validatorsCapacity = _allocations[i] + cache[i].depositableCount;
                 }
