@@ -37,8 +37,9 @@ contract StakingRouter__Harness is StakingRouter {
         address _lido,
         address _lidoLocator,
         uint256 _maxEBType1,
-        uint256 _maxEBType2
-    ) StakingRouter(_depositContract, _lido, _lidoLocator, _maxEBType1, _maxEBType2) {}
+        uint256 _maxEBType2,
+        uint256 _maxTopUpBalanceWC02
+    ) StakingRouter(_depositContract, _lido, _lidoLocator, _maxEBType1, _maxEBType2, _maxTopUpBalanceWC02) {}
 
     /// @notice Simulates old 0.8.9 StakingRouter state before v4 migration.
     /// Sets all old unstructured storage slots that _migrateStorage() reads and cleans up.

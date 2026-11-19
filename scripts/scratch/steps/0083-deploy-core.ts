@@ -182,7 +182,14 @@ export async function main() {
     "StakingRouter",
     proxyContractsOwner,
     deployer,
-    [depositContract, lidoAddress, locator.address, stakingRouterParams.maxEBType1, stakingRouterParams.maxEBType2],
+    [
+      depositContract,
+      lidoAddress,
+      locator.address,
+      stakingRouterParams.maxEBType1,
+      stakingRouterParams.maxEBType2,
+      BigInt(state[Sk.topUpGateway].deployParameters.targetBalanceGwei) * 10n ** 9n,
+    ],
     null,
     true,
     {

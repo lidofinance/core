@@ -65,6 +65,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     uint256 public immutable MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
     uint256 public immutable MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
 
+    /// @notice Executable per-validator top-up ceiling for WC type `0x02` modules (in wei).
+    /// @dev Mirrors TopUpGateway.targetBalanceGwei and is always <= MAX_EFFECTIVE_BALANCE_WC_TYPE_02.
+    ///      Used instead of the theoretical max EB when reserving top-up budget so that the
+    ///      router does not lock funds for top-ups the gateway will never fund.
+    uint256 public immutable MAX_TOP_UP_BALANCE_WC_TYPE_02;
+
     /// @dev backward-compatible getter for a constant moved to a shared library
     function INITIAL_DEPOSIT_SIZE() external view returns (uint256) {
         return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
@@ -90,7 +96,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         address _lido,
         address _lidoLocator,
         uint256 _maxEBType1,
-        uint256 _maxEBType2
+        uint256 _maxEBType2,
+        uint256 _maxTopUpBalanceWC02
     ) {
         SRUtils._requireNotZero(_depositContract);
         SRUtils._requireNotZero(_lido);
@@ -102,8 +109,11 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
         SRUtils._requireNotZero(_maxEBType1);
         SRUtils._requireNotZero(_maxEBType2);
+        SRUtils._requireNotZero(_maxTopUpBalanceWC02);
+        if (_maxTopUpBalanceWC02 > _maxEBType2) revert InvalidMaxTopUpBalance();
         MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = _maxEBType1;
         MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = _maxEBType2;
+        MAX_TOP_UP_BALANCE_WC_TYPE_02 = _maxTopUpBalanceWC02;
 
         _disableInitializers();
     }
@@ -1182,7 +1192,11 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @dev Build once per tx, reuse across all lib calls
     function _getConfig() private view returns (SRLib.Config memory) {
         return
-            SRLib.Config({maxEBType1: MAX_EFFECTIVE_BALANCE_WC_TYPE_01, maxEBType2: MAX_EFFECTIVE_BALANCE_WC_TYPE_02});
+            SRLib.Config({
+                maxEBType1: MAX_EFFECTIVE_BALANCE_WC_TYPE_01,
+                maxEBType2: MAX_EFFECTIVE_BALANCE_WC_TYPE_02,
+                maxTopUpBalance: MAX_TOP_UP_BALANCE_WC_TYPE_02
+            });
     }
 
     function _toE4Precision(uint256 _value, uint256 _precision) internal pure returns (uint16) {

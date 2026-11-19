@@ -53,6 +53,7 @@ export async function main() {
     locatorAddress,
     parameters.stakingRouter.maxEBType1,
     parameters.stakingRouter.maxEBType2,
+    BigInt(parameters.topUpGateway.targetBalanceGwei) * 10n ** 9n,
   ];
 
   logStartReview();

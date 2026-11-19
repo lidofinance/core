@@ -527,6 +527,43 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       expect(result.totalAllocated).to.equal(0n);
       expect(result.allocated).to.deep.equal([0n]);
     });
+
+    it("does not reserve top-up budget the gateway will not fund (#2043)", async () => {
+      // Mainnet-like TopUpGateway target: 2046.75 ETH, below the 2048 ETH max EB.
+      const gatewayTarget = 204675n * 10n ** 7n * ONE_GWEI;
+      const { stakingRouter: cappedRouter } = await deployStakingRouter(
+        { deployer, admin },
+        { lidoLocator: locator, lido: lidoMock, maxTopUpBalance: gatewayTarget },
+      );
+      await cappedRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
+      await cappedRouter.grantRole(await cappedRouter.STAKING_MODULE_MANAGE_ROLE(), admin);
+      const cappedCtx: CtxConfig = { deployer, admin, stakingRouter: cappedRouter };
+
+      const validators = 64n;
+      // Validators already received the largest quantized top-up (32 + 2014 = 2046 ETH).
+      // The remaining 0.75 ETH is below the gateway minimum, so it cannot be funded.
+      const trackedBalance = 2046n * 10n ** 18n;
+      const moduleConfig = {
+        ...DEFAULT_CONFIG,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        deposited: validators,
+        totalModuleStake: validators * trackedBalance,
+      };
+
+      await setupModule(ctx, moduleConfig);
+      await setupModule(cappedCtx, moduleConfig);
+
+      const amount = 1000n * DEFAULT_MEB;
+      const before = await stakingRouter.getDepositAllocations(amount, true);
+      const after = await cappedRouter.getDepositAllocations(amount, true);
+
+      // maxEBType2 ceiling (2048 ETH) reserved floor(64 / 16) = 4 validators-equivalent (128 ETH).
+      expect(before.allocated).to.deep.equal([4n * DEFAULT_MEB]);
+      // Gateway-target ceiling (2046.75 ETH): floor(64 * 2046.75 / 32) - ceil(64 * 2046 / 32)
+      // = 4093 - 4092 = 1 validators-equivalent (32 ETH) instead of 4.
+      expect(after.allocated).to.deep.equal([1n * DEFAULT_MEB]);
+      expect(after.allocated[0]).to.be.lessThan(before.allocated[0]);
+    });
   });
 
   context("multi-module top-up scenarios", () => {

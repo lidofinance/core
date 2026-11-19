@@ -92,6 +92,7 @@ interface ISRBase {
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
     error InvalidMaxTopUpPerBlockGwei();
+    error InvalidMaxTopUpBalance();
     error LidoDepositsPaused();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
