@@ -17,10 +17,7 @@ import {
 
 import { deployHashConsensus } from "./hashConsensus";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
-import {
-  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-} from "./validatorExitBusOracle";
+import { MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02 } from "./withdrawalsOracle";
 
 export const ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
 export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;

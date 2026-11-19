@@ -627,6 +627,107 @@ describe("StakingRouter.sol:module-management", () => {
     });
   });
 
+  context("setStakingModulePartialWithdrawalsAllowed", () => {
+    const MODULE_0x01_ADDRESS = certainAddress("test:staking-router-modules:staking-module-pwr-0x01");
+    const MODULE_0x02_ADDRESS = certainAddress("test:staking-router-modules:staking-module-pwr-0x02");
+
+    const stakingModuleConfig = {
+      stakeShareLimit: 1_00n,
+      priorityExitShareThreshold: 1_00n,
+      stakingModuleFee: 5_00n,
+      treasuryFee: 5_00n,
+      maxDepositsPerBlock: 150n,
+      minDepositBlockDistance: 25n,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+    };
+
+    let ID_MOD_0x01: bigint;
+    let ID_MOD_0x02: bigint;
+
+    beforeEach(async () => {
+      await stakingRouter.addStakingModule("StakingModule0x01", MODULE_0x01_ADDRESS, stakingModuleConfig);
+      ID_MOD_0x01 = await stakingRouter.getStakingModulesCount();
+
+      await stakingRouter.addStakingModule("StakingModule0x02", MODULE_0x02_ADDRESS, {
+        ...stakingModuleConfig,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+      ID_MOD_0x02 = await stakingRouter.getStakingModulesCount();
+    });
+
+    it("Is false by default", async () => {
+      expect((await stakingRouter.getStakingModuleStateConfig(ID_MOD_0x02)).partialWithdrawalsAllowed).to.equal(false);
+    });
+
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(stakingRouter.connect(user).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x02, true))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+    });
+
+    it("Reverts if the staking module id does not exist", async () => {
+      await expect(
+        stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(999, true),
+      ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleUnregistered");
+    });
+
+    it("Reverts if allowing partial withdrawals for a 0x01 module", async () => {
+      await expect(
+        stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x01, true),
+      ).to.be.revertedWithCustomError(stakingRouter, "WrongWithdrawalCredentialsType");
+    });
+
+    it("Allows partial withdrawals for a 0x02 module and emits the event", async () => {
+      await expect(stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x02, true))
+        .to.emit(stakingRouter, "StakingModulePartialWithdrawalsAllowedSet")
+        .withArgs(ID_MOD_0x02, true, admin.address);
+
+      expect((await stakingRouter.getStakingModuleStateConfig(ID_MOD_0x02)).partialWithdrawalsAllowed).to.equal(true);
+    });
+
+    it("Disallows partial withdrawals for a 0x02 module", async () => {
+      await stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x02, true);
+
+      await expect(stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x02, false))
+        .to.emit(stakingRouter, "StakingModulePartialWithdrawalsAllowedSet")
+        .withArgs(ID_MOD_0x02, false, admin.address);
+
+      expect((await stakingRouter.getStakingModuleStateConfig(ID_MOD_0x02)).partialWithdrawalsAllowed).to.equal(false);
+    });
+
+    it("Allows setting false for a 0x02 module", async () => {
+      await expect(stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x02, false))
+        .to.emit(stakingRouter, "StakingModulePartialWithdrawalsAllowedSet")
+        .withArgs(ID_MOD_0x02, false, admin.address);
+
+      expect((await stakingRouter.getStakingModuleStateConfig(ID_MOD_0x02)).partialWithdrawalsAllowed).to.equal(false);
+    });
+
+    it("Allows setting false for a 0x01 module", async () => {
+      await expect(stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x01, false))
+        .to.emit(stakingRouter, "StakingModulePartialWithdrawalsAllowedSet")
+        .withArgs(ID_MOD_0x01, false, admin.address);
+
+      expect((await stakingRouter.getStakingModuleStateConfig(ID_MOD_0x01)).partialWithdrawalsAllowed).to.equal(false);
+    });
+
+    it("Does not modify other module state config fields", async () => {
+      const before = await stakingRouter.getStakingModuleStateConfig(ID_MOD_0x02);
+
+      await stakingRouter.connect(admin).setStakingModulePartialWithdrawalsAllowed(ID_MOD_0x02, true);
+
+      const after = await stakingRouter.getStakingModuleStateConfig(ID_MOD_0x02);
+      expect(after.partialWithdrawalsAllowed).to.equal(true);
+      expect(after.moduleAddress).to.equal(before.moduleAddress);
+      expect(after.moduleFee).to.equal(before.moduleFee);
+      expect(after.treasuryFee).to.equal(before.treasuryFee);
+      expect(after.stakeShareLimit).to.equal(before.stakeShareLimit);
+      expect(after.priorityExitShareThreshold).to.equal(before.priorityExitShareThreshold);
+      expect(after.status).to.equal(before.status);
+      expect(after.withdrawalCredentialsType).to.equal(before.withdrawalCredentialsType);
+    });
+  });
+
   context("updateAllStakingModulesFees", () => {
     const MODULE_ONE_NAME = "StakingModule1";
     const MODULE_TWO_NAME = "StakingModule2";

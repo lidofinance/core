@@ -28,7 +28,7 @@ contract NodeOperatorsRegistry__Mock {
         key = signingKeys[nodeOperatorId][keyIndex];
 
         // In permissive mode, return empty key if not explicitly set
-        // The ValidatorsExitBus contract will skip validation for empty keys
+        // The WithdrawalsOracle contract will skip validation for empty keys
         // This allows tests to work without pre-configuring every possible (nodeOpId, keyIndex) combination
         // Tests can still explicitly set keys using setSigningKey() if needed
 

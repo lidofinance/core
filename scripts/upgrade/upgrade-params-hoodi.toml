@@ -38,22 +38,40 @@ withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#specification
 consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250
-exitsPerFrame = 1
-frameDurationInSec = 240
+# Limits the SR phase 2 vote sets on the new triggerable withdrawals gateway (LIP-38 "Initial limits"):
+# `pwr` limits partial withdrawals in gwei, `fwr` limits full withdrawals in validators; all zero disables a limit.
+[triggerableWithdrawalsGateway.busLimits]   # TriggerableWithdrawalsBus: a full WithdrawalsOracle report of either kind restores within 8 hours
+pwr = { maxLimit = 11_520_000_000_000, limitPerFrame = 32_000_000_000, frameDurationInSec = 48 }  # 11,520 ETH, 32 ETH per 48 s
+fwr = { maxLimit = 400, limitPerFrame = 5, frameDurationInSec = 288 }                             # 400 validators, 5 per 288 s
+
+# Staking module ejectors: the ejectors that hold ADD_FULL_WITHDRAWAL_REQUEST_ROLE on the live gateway
+# (read on-chain on 2026-10-27). Replace them if the CSM release deploys new ejectors that call `triggerWithdrawals`.
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM"   # staking module 4, 0x01
+address = "0xCAe028378d69D54dc8bF809e6C44CF751F997b80"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 400, limitPerFrame = 1, frameDurationInSec = 192 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CSM 0x02"   # staking module 6, 0x02
+address = "0xf8a71C08DBe7D2efaD76D3951a3065B8cE20e4f0"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
+
+[[triggerableWithdrawalsGateway.ejectors]]
+name = "CMv2"   # staking module 5, 0x02
+address = "0xfDbde2B3554B69C84e0f8d7daB68D390Ff0f4394"
+pwr = { maxLimit = 0, limitPerFrame = 0, frameDurationInSec = 0 }
+fwr = { maxLimit = 150, limitPerFrame = 1, frameDurationInSec = 384 }
 
 # Accounting oracle configuration
 [accountingOracle]
 consensusVersion = 6
 
-# Validators exit bus oracle configuration
-[validatorsExitBusOracle]
-maxValidatorsPerReport = 600
-maxExitBalanceEth = 358400
-balancePerFrameEth = 32
-frameDurationInSec = 48
-consensusVersion = 5
+# Withdrawals oracle configuration
+[withdrawalsOracle]
+maxRequestsPerReport = 400   # Maximum records per report (LIP-38)
+consensusVersion = 6         # LIP-38 report format, set by finalizeUpgrade_v4 (live: 5)
 
 [validatorExitDelayVerifier]
 firstSupportedSlot = 65536 # ELECTRA_FORK_EPOCH 2048 * 32, @see https://github.com/eth-clients/hoodi/blob/main/metadata/config.yaml#L41
@@ -160,3 +178,27 @@ hashConsensusInitialEpoch = 93833
 # The upgrade transaction must be executed before this deadline
 # TODO: placeholder, set the real deadline once the Gloas vote is scheduled.
 expiryTimestamp = 1798761599 # December 31, 2026 at 23:59:59 UTC
+
+[srPhase2UpgradeVoteScript]
+# Expiry timestamp after which the SR phase 2 (LIP-38) upgrade transaction will revert
+# TODO: placeholder, set the real deadline once the SR phase 2 vote is scheduled.
+expiryTimestamp = 1830297599 # December 31, 2027 at 23:59:59 UTC
+# Easy Track factories of the exit request hash delivery that LIP-38 removes from the WithdrawalsOracle
+curatedSubmitExitRequestHashesFactory = "0x397206ecdbdcb1A55A75e60Fc4D054feC72E5f63"
+sdvtSubmitExitRequestHashesFactory = "0xAa3D6A8B52447F272c1E8FAaA06EA06658bd95E2"
+# Sanity limit the vote sets on the OracleReportSanityChecker (live: 19,200); equals the bus PWR maxLimit (LIP-38)
+maxBalanceExitRequestedPerReportInEth = 11520   # ETH
+# The only staking module with partial withdrawals allowed after the vote (LIP-38); checked against the CMv2 ejector
+cmv2StakingModuleId = 5
+
+# Keys the vote adds to the OracleDaemonConfig (LIP-38). `set` rejects an empty value, so 0 is stored as one zero byte.
+[srPhase2UpgradeVoteScript.oracleDaemonConfig]
+EXIT_ITERATION_CHUNK = 32   # ETH, LIP-38 default
+# TODO: placeholders, LIP-38 has no initial values for the keys below. Set the real values once the oracle team and
+# the LIP authors fix them. With ACTIVE_REBALANCING_ENABLED = 0 Phase 3 is off, so the rate limit and the excess keys
+# stay unused; the grace period also shapes the CMv2 target stake in Phase 1, so 0 there means no grace period.
+ACTIVE_REBALANCING_ENABLED = 0               # 0 or 1
+ACTIVE_REBALANCING_RATE_LIMIT = 0            # ETH per report
+ACTIVE_REBALANCING_OPERATOR_EXCESS_BP = 0    # BP
+ACTIVE_REBALANCING_MODULE_EXCESS_BP = 0      # BP
+ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS = 0   # epochs

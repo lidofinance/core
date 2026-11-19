@@ -70,8 +70,8 @@ A detailed overview of the deployment script's process:
 - Issue DAO tokens (via `LidoTemplate`)
 - Deploy non-Aragon Lido contracts: `OracleDaemonConfig`, `LidoLocator`, `OracleReportSanityChecker`, `EIP712StETH`,
   `WstETH`, `WithdrawalQueueERC721`, `WithdrawalVault`, `LidoExecutionLayerRewardsVault`, `StakingRouter`,
-  `DepositSecurityModule`, `AccountingOracle`, `HashConsensus` for AccountingOracle, `ValidatorsExitBusOracle`,
-  `HashConsensus` for ValidatorsExitBusOracle, `Burner`
+  `DepositSecurityModule`, `AccountingOracle`, `HashConsensus` for AccountingOracle, `WithdrawalsOracle`,
+  `HashConsensus` for WithdrawalsOracle, `Burner`
 - Finalize Lido DAO deployment: issue unvested LDO tokens, set Aragon permissions, register Lido DAO name in Aragon ID
   (via `LidoTemplate`)
 - Initialize non-Aragon Lido contracts
@@ -83,9 +83,9 @@ A detailed overview of the deployment script's process:
 - Plug staking modules: NodeOperatorsRegistry as Curated, SimpleDVT, and CSM/CMv2 if they were deployed
 - Transfer all admin roles from deployer to `Agent`
   - OpenZeppelin admin roles: `Burner`, `HashConsensus` for `AccountingOracle`, `HashConsensus` for
-    `ValidatorsExitBusOracle`,
-    `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`, `WithdrawalQueueERC721`, `OracleDaemonConfig`
-  - OssifiableProxy admin roles: `LidoLocator`, `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`,
+    `WithdrawalsOracle`, `StakingRouter`, `AccountingOracle`, `WithdrawalsOracle`, `WithdrawalQueueERC721`,
+    `OracleDaemonConfig`
+  - OssifiableProxy admin roles: `LidoLocator`, `StakingRouter`, `AccountingOracle`, `WithdrawalsOracle`,
     `WithdrawalQueueERC721`
   - `DepositSecurityModule` owner
 
@@ -210,9 +210,9 @@ See `@aragon/os/contracts/apps/AppProxyBase.sol` for the details.
 
 In order to make the protocol fully operational, the following additional steps are required:
 
-- add oracle committee members to `HashConsensus` contracts for `AccountingOracle` and `ValidatorsExitBusOracle`:
+- add oracle committee members to `HashConsensus` contracts for `AccountingOracle` and `WithdrawalsOracle`:
   `HashConsensus.addMember`;
-- initialize initial epoch for `HashConsensus` contracts for `AccountingOracle` and `ValidatorsExitBusOracle`:
+- initialize initial epoch for `HashConsensus` contracts for `AccountingOracle` and `WithdrawalsOracle`:
   `HashConsensus.updateInitialEpoch`;
 - add guardians to `DepositSecurityModule`: `DepositSecurityModule.addGuardians`;
 - resume protocol: `Lido.resume`;

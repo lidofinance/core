@@ -2,7 +2,6 @@
 pragma solidity 0.8.25;
 
 import {Math, SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
-import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
@@ -12,11 +11,9 @@ import {
     ModuleState,
     StakingModuleConfig,
     StakingModuleStatus,
-    StakingModule,
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting,
-    ValidatorExitData,
     ValidatorsCountsCorrection,
     RouterStateAccounting
 } from "./SRTypes.sol";
@@ -28,7 +25,6 @@ import {ISRBase} from "./ISRBase.sol";
  */
 
 library SRLib {
-    using StorageSlot for bytes32;
     using WithdrawalCredentials for bytes32;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
@@ -46,134 +42,6 @@ library SRLib {
         uint16 shareLimit;
         StakingModuleStatus status;
         uint8 wcType;
-    }
-
-    /// @notice One-time migration from old storage layout to new RouterState struct.
-    /// @dev Storage slot positions are computed inline for migration-only use.
-    ///      After migration, this function can be removed.
-    function _migrateStorage(uint256 maxEBType1, uint256 expectedVersion) public {
-        if (SRStorage.getModulesCount() > 0) {
-            revert ISRBase.AlreadyMigrated();
-        }
-
-        // Old storage slot positions (computed inline for migration-only use)
-        bytes32 LIDO_POS = keccak256("lido.StakingRouter.lido");
-        bytes32 WITHDRAWAL_CREDENTIALS_POS = keccak256("lido.StakingRouter.withdrawalCredentials");
-        bytes32 STAKING_MODULES_COUNT_POS = keccak256("lido.StakingRouter.stakingModulesCount");
-        bytes32 LAST_STAKING_MODULE_ID_POS = keccak256("lido.StakingRouter.lastStakingModuleId");
-        bytes32 CONTRACT_VERSION_POS = keccak256("lido.Versioned.contractVersion");
-        bytes32 STAKING_MODULES_MAPPING_POS = keccak256("lido.StakingRouter.stakingModules");
-        bytes32 STAKING_MODULE_INDICES_POS = keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
-
-        uint256 actualVersion = CONTRACT_VERSION_POS.getUint256Slot().value;
-        if (actualVersion != expectedVersion) {
-            revert ISRBase.UnexpectedContractVersion(expectedVersion, actualVersion);
-        }
-
-        // cleanup old storage slots
-        delete LIDO_POS.getBytes32Slot().value;
-        delete CONTRACT_VERSION_POS.getBytes32Slot().value;
-
-        // migrate last staking module ID
-        SRStorage.getRouterState().lastModuleId = uint24(LAST_STAKING_MODULE_ID_POS.getUint256Slot().value);
-        delete LAST_STAKING_MODULE_ID_POS.getBytes32Slot().value;
-
-        // migrate WC
-        SRStorage.getRouterState().withdrawalCredentials = WITHDRAWAL_CREDENTIALS_POS.getBytes32Slot().value;
-        delete WITHDRAWAL_CREDENTIALS_POS.getBytes32Slot().value;
-
-        uint256 modulesCount = STAKING_MODULES_COUNT_POS.getUint256Slot().value;
-        delete STAKING_MODULES_COUNT_POS.getBytes32Slot().value;
-
-        // get old storage ref. for staking modules mapping
-        mapping(uint256 => StakingModule) storage oldStakingModules =
-            _getStorageStakingModulesMapping(STAKING_MODULES_MAPPING_POS);
-        // get old storage ref. for staking modules indices mapping
-        mapping(uint256 => uint256) storage oldStakingModuleIndices =
-            _getStorageStakingIndicesMapping(STAKING_MODULE_INDICES_POS);
-
-        uint64 totalValidatorsBalanceGwei;
-        StakingModule memory smOld;
-
-        for (uint256 i; i < modulesCount; ++i) {
-            smOld = oldStakingModules[i];
-
-            uint256 _moduleId = smOld.id;
-            // push module ID to EnumerableSet
-            SRStorage.addModuleId(_moduleId);
-
-            ModuleState storage moduleState = _moduleId.getModuleState();
-
-            // 1 SSTORE
-            moduleState.name = smOld.name;
-
-            // 1 SSTORE
-            moduleState.config = ModuleStateConfig({
-                moduleAddress: smOld.stakingModuleAddress,
-                moduleFee: smOld.stakingModuleFee,
-                treasuryFee: smOld.treasuryFee,
-                stakeShareLimit: smOld.stakeShareLimit,
-                priorityExitShareThreshold: smOld.priorityExitShareThreshold,
-                status: StakingModuleStatus(smOld.status),
-                withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01
-            });
-
-            // 1 SSTORE
-            moduleState.deposits = ModuleStateDeposits({
-                lastDepositAt: smOld.lastDepositAt,
-                lastDepositBlock: SafeCast.toUint64(smOld.lastDepositBlock),
-                maxDepositsPerBlock: smOld.maxDepositsPerBlock,
-                minDepositBlockDistance: smOld.minDepositBlockDistance
-            });
-
-            /// @dev calculate module effective balance at the migration moment
-            (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) =
-                _getStakingModuleSummary(IStakingModule(smOld.stakingModuleAddress));
-            // The module might not receive all exited validators data yet => we need to replacing
-            // the exitedValidatorsCount with the one that the staking router is aware of.
-            uint256 activeCount =
-                depositedValidatorsCount - Math.max(smOld.exitedValidatorsCount, exitedValidatorsCount);
-            uint64 validatorsBalanceGwei = SRUtils._toGwei(activeCount * maxEBType1);
-
-            // 1 SSTORE
-            moduleState.accounting = ModuleStateAccounting({
-                validatorsBalanceGwei: validatorsBalanceGwei,
-                exitedValidatorsCount: SafeCast.toUint64(smOld.exitedValidatorsCount)
-            });
-
-            totalValidatorsBalanceGwei += validatorsBalanceGwei;
-
-            // cleanup old storage for staking module data
-            delete oldStakingModules[i];
-            delete oldStakingModuleIndices[_moduleId];
-        }
-
-        /// @dev set the total validators balance at the migration moment;
-        /// next Oracle report will update the value
-        SRStorage.getRouterState().accounting =
-            RouterStateAccounting({validatorsBalanceGwei: totalValidatorsBalanceGwei});
-    }
-
-    /// @dev Helper for migration - returns old staking modules mapping storage reference
-    function _getStorageStakingModulesMapping(bytes32 _position)
-        internal
-        pure
-        returns (mapping(uint256 => StakingModule) storage $)
-    {
-        assembly ("memory-safe") {
-            $.slot := _position
-        }
-    }
-
-    /// @dev Helper for migration - returns old staking module indices mapping storage reference
-    function _getStorageStakingIndicesMapping(bytes32 _position)
-        internal
-        pure
-        returns (mapping(uint256 => uint256) storage $)
-    {
-        assembly ("memory-safe") {
-            $.slot := _position
-        }
     }
 
     /// @notice Registers a new staking module.
@@ -369,6 +237,14 @@ library SRLib {
         emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
     }
 
+    function _setModulePartialWithdrawalsAllowed(uint256 _moduleId, bool _allowed) public {
+        ModuleStateConfig storage stateConfig = _moduleId.getModuleState().config;
+        /// @dev PWRs are supported only for modules with 0x02 withdrawal credentials
+        if (_allowed) SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
+        stateConfig.partialWithdrawalsAllowed = _allowed;
+        emit ISRBase.StakingModulePartialWithdrawalsAllowedSet(_moduleId, _allowed, msg.sender);
+    }
+
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
     function _getStakingModuleSummary(IStakingModule module)
         internal
@@ -555,61 +431,6 @@ library SRLib {
             }
 
             _capacities[i] = validatorsCapacity;
-        }
-    }
-
-    /// @notice Handles tracking and penalization logic for a node operator who failed to exit their validator within the defined exit window.
-    /// @dev This function is called to report the current exit-related status of a validator belonging to a specific node operator.
-    ///      It accepts a validator's public key, associated with the duration (in seconds) it was eligible to exit but has not exited.
-    ///      This data could be used to trigger penalties for the node operator if the validator has been non-exiting for too long.
-    /// @param _stakingModuleId The ID of the staking module.
-    /// @param _nodeOperatorId The ID of the node operator whose validator status is being delivered.
-    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
-    /// @param _publicKey The public key of the validator being reported.
-    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit after request but has not exited.
-    function _reportValidatorExitDelay(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes calldata _publicKey,
-        uint256 _eligibleToExitInSec
-    ) public {
-        SRUtils._requireModuleIdExists(_stakingModuleId);
-        _stakingModuleId.getIStakingModule()
-            .reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
-    }
-
-    /// @notice Handles the triggerable exit event for a set of validators.
-    /// @dev This function is called when validators are exited using triggerable exit requests on the Execution Layer.
-    /// @param validatorExitData An array of `ValidatorExitData` structs, each representing a validator
-    ///        for which a triggerable exit was requested. Each entry includes:
-    ///        - `stakingModuleId`: ID of the staking module.
-    ///        - `nodeOperatorId`: ID of the node operator.
-    ///        - `pubkey`: Validator public key, 48 bytes length.
-    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
-    /// @param _exitType The type of exit being performed.
-    ///        This parameter may be interpreted differently across various staking modules depending on their specific implementation.
-    function _onValidatorExitTriggered(
-        ValidatorExitData[] calldata validatorExitData,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) public {
-        ValidatorExitData calldata data;
-        for (uint256 i = 0; i < validatorExitData.length; ++i) {
-            data = validatorExitData[i];
-            SRUtils._requireModuleIdExists(data.stakingModuleId);
-            try data.stakingModuleId.getIStakingModule()
-                .onValidatorExitTriggered(data.nodeOperatorId, data.pubkey, _withdrawalRequestPaidFee, _exitType) {}
-            catch (bytes memory lowLevelRevertData) {
-                /// @dev This check is required to prevent incorrect gas estimation of the method.
-                ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                ///      return an invalid value when the onValidatorExitTriggered()
-                ///      reverts because of the "out of gas" error. Here we assume that the
-                ///      onValidatorExitTriggered() method doesn't have reverts with
-                ///      empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert ISRBase.UnrecoverableModuleError();
-                emit ISRBase.StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
-            }
         }
     }
 
