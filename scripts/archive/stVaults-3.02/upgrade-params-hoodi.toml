@@ -1,3 +1,0 @@
-# Vault hub configuration
-[vaultHub]
-maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)

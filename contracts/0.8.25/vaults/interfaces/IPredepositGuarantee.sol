@@ -6,13 +6,14 @@
 pragma solidity >=0.8.0;
 
 import {IStakingVault} from "./IStakingVault.sol";
+import {ICLProofVerifier} from "contracts/common/interfaces/ICLProofVerifier.sol";
 
 /**
  * @title IPredepositGuarantee
  * @author Lido
  * @notice Interface for the `PredepositGuarantee` contract
  */
-interface IPredepositGuarantee {
+interface IPredepositGuarantee is ICLProofVerifier {
     /**
      * @notice represents validator stages in PDG flow
      * @param NONE - initial stage
@@ -38,24 +39,6 @@ interface IPredepositGuarantee {
         ValidatorStage stage;
         IStakingVault stakingVault;
         address nodeOperator;
-    }
-
-    /**
-     * @notice user input for validator proof verification
-     * @custom:proof array of merkle proofs from parent(pubkey,wc) node to Beacon block root
-     * @custom:pubkey of validator to prove
-     * @custom:validatorIndex of validator in CL state tree
-     * @custom:childBlockTimestamp of EL block that has parent block beacon root in BEACON_ROOTS contract
-     * @custom:slot of the beacon block for which the proof is generated
-     * @custom:proposerIndex of the beacon block for which the proof is generated
-     */
-    struct ValidatorWitness {
-        bytes32[] proof;
-        bytes pubkey;
-        uint256 validatorIndex;
-        uint64 childBlockTimestamp;
-        uint64 slot;
-        uint64 proposerIndex;
     }
 
     function pendingActivations(IStakingVault _vault) external view returns (uint256);
