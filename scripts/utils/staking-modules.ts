@@ -28,8 +28,11 @@ type ExternalDeployArtifact = Record<string, unknown> & {
 // ---- Artifact -> canonical substate mapping ----
 //
 // The external deploy artifacts are flat maps of PascalCase keys: a proxy `X` and its implementation
-// `XImpl`, plus singletons (`Verifier`, `Ejector`, gates) and lists (`CuratedGates`). We map them into
-// canonical sub-keys that mirror the on-chain upgrade config / TOML params.
+// `XImpl`, plus singletons (`Verifier`, `CuratedVerifier`, `Ejector`, gates) and lists (`CuratedGates`). We
+// map them into canonical sub-keys that mirror the on-chain upgrade config / TOML params.
+//
+// Verifier and CuratedVerifier are different contracts: CSM and CSM 0x02 deploy Verifier, CMv2 deploys
+// CuratedVerifier.
 //
 type ContractMap =
   | { kind: "proxied"; proxyKey?: string; implKey?: string }
@@ -68,7 +71,7 @@ const CM_CONTRACTS: Record<string, ContractMap> = {
   metaRegistry: { kind: "proxied", proxyKey: "MetaRegistry", implKey: "MetaRegistryImpl" },
   gateFactory: { kind: "single", addressKey: "CuratedGateFactory" },
   depositAllocator: { kind: "single", addressKey: "CuratedDepositAllocator" },
-  verifier: { kind: "single", addressKey: "Verifier" },
+  curatedVerifier: { kind: "single", addressKey: "CuratedVerifier" },
   curatedGates: { kind: "list", listKey: "CuratedGates" },
 };
 
@@ -101,7 +104,8 @@ const CSM_TOML_MAP: Record<string, TomlMap> = {
 const CM_TOML_SECTION = "curatedModule";
 const CM_TOML_MAP: Record<string, TomlMap> = {
   module: { proxyParam: "module" },
-  verifier: { addressParam: "verifier" },
+  // The upgrade template's `curatedModule.verifier` param is the CMv2 CuratedVerifier
+  curatedVerifier: { addressParam: "verifier" },
   curatedGates: { listParam: "curatedGates" },
 };
 
@@ -260,16 +264,21 @@ function writeSubstateToToml(section: string, tomlMap: Record<string, TomlMap>, 
   }
 }
 
-export function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
+export function saveCSMArtifact(
+  state: DeploymentState,
+  artifact: ExternalDeployArtifact,
+  isScratch: boolean,
+  stateKey: Sk.sm_CSM | Sk.sm_CSM0x02 = Sk.sm_CSM,
+) {
   if (!artifact.CSModule) throw new Error("CSM deploy artifact does not contain CSModule address");
 
-  const existing = (state[Sk.sm_CSM]?.contracts ?? {}) as Substate;
+  const existing = (state[stateKey]?.contracts ?? {}) as Substate;
   const proxyAddress = isNonZeroAddress(existing.module?.proxy?.address)
     ? (existing.module!.proxy!.address as string)
     : artifact.CSModule;
   const contracts = buildSubstate(artifact, isScratch ? CSM_CONTRACTS : CSM_UPGRADE_CONTRACTS, existing);
 
-  updateObjectInState(Sk.sm_CSM, {
+  updateObjectInState(stateKey, {
     proxy: {
       address: proxyAddress,
       contract: "external:staking-modules/src/CSModule.sol:CSModule",
@@ -279,7 +288,9 @@ export function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeploy
     deployArtifact: artifact,
   });
 
-  writeSubstateToToml(CSM_TOML_SECTION, CSM_TOML_MAP, contracts);
+  if (stateKey === Sk.sm_CSM) {
+    writeSubstateToToml(CSM_TOML_SECTION, CSM_TOML_MAP, contracts);
+  }
 }
 
 export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
@@ -308,25 +319,31 @@ export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDe
 /**
  * Clones the external community-staking-module repo and deploys the Community Staking Module (CSM)
  * and Curated Module v2 (CMv2), saving their addresses into the deployment state file.
+ * Scratch deployments also include CSM 0x02 as a separate module.
  *
  * Shared between the scratch deploy step and the protocol upgrade step.
  */
 export async function deployStakingModules(state: DeploymentState): Promise<void> {
+  const { isScratch, chain } = getEnvParams();
   // A module counts as deployed only once BOTH its proxy address and its deploy artifact are recorded.
   // During an upgrade the proxies are pre-written into the state file before the new implementations are
   // deployed, so the proxy address alone must not suppress the deploy.
   const csmDeployed = !!(state[Sk.sm_CSM]?.proxy?.address && state[Sk.sm_CSM]?.deployArtifact);
+  const csm0x02Deployed = !!(state[Sk.sm_CSM0x02]?.proxy?.address && state[Sk.sm_CSM0x02]?.deployArtifact);
   const curatedDeployed = !!(state[Sk.sm_CM]?.proxy?.address && state[Sk.sm_CM]?.deployArtifact);
 
-  if (csmDeployed && curatedDeployed) {
+  if (csmDeployed && curatedDeployed && (!isScratch || csm0x02Deployed)) {
     log(`Using the deployed CSM address: ${cy(state[Sk.sm_CSM].proxy.address)}`);
     log(`Using the deployed CMv2 address: ${cy(state[Sk.sm_CM].proxy.address)}`);
+    if (isScratch) {
+      log(`Using the deployed CSM 0x02 address: ${cy(state[Sk.sm_CSM0x02].proxy.address)}`);
+    }
     log.emptyLine();
     return;
   }
 
   if (hardhatNetwork.name === "hardhat") {
-    log("In-memory 'hardhat' network detected: skipping external CSM/CMv2 deployment (no RPC URL for Foundry).");
+    log("In-memory 'hardhat' network detected: skipping external staking module deployment (no RPC URL for Foundry).");
     log.emptyLine();
     return;
   }
@@ -358,7 +375,6 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
     );
     run("just", ["deps"], tmpDir, process.env);
 
-    const { isScratch, chain } = getEnvParams();
     const artifactsDir = "./artifacts/local/";
 
     const externalEnv = {
@@ -415,6 +431,15 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, "curated", artifactsFile));
       saveCuratedArtifact(state, artifact);
       log(`Curated Module v2 deployed at: ${cy(artifact.CuratedModule!)}`);
+      log.emptyLine();
+    }
+
+    if (isScratch && !csm0x02Deployed) {
+      log("Deploying CSM 0x02 from external repo...");
+      run("just", ["deploy-csm0x02", `--private-key=${privateKey}`], tmpDir, externalEnv);
+      const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm0x02", `deploy-${chain}.json`));
+      saveCSMArtifact(state, artifact, true, Sk.sm_CSM0x02);
+      log(`CSM 0x02 deployed at: ${cy(artifact.CSModule!)}`);
       log.emptyLine();
     }
 

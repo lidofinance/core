@@ -265,6 +265,7 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
   if (!skipWithdrawals) {
     if (withdrawalFinalizationBatches.length === 0) {
       withdrawalFinalizationBatches = await getFinalizationBatches(ctx, {
+        refSlot,
         shareRate: simulatedShareRate,
         limitedWithdrawalVaultBalance: withdrawals,
         limitedElRewardsVaultBalance: elRewards,
@@ -764,6 +765,7 @@ export const handleOracleReport = async (
 };
 
 type FinalizationBatchesParams = {
+  refSlot: bigint;
   shareRate: bigint;
   limitedWithdrawalVaultBalance: bigint;
   limitedElRewardsVaultBalance: bigint;
@@ -774,9 +776,9 @@ type FinalizationBatchesParams = {
  */
 const getFinalizationBatches = async (
   ctx: ProtocolContext,
-  { shareRate, limitedWithdrawalVaultBalance, limitedElRewardsVaultBalance }: FinalizationBatchesParams,
+  { refSlot, shareRate, limitedWithdrawalVaultBalance, limitedElRewardsVaultBalance }: FinalizationBatchesParams,
 ): Promise<bigint[]> => {
-  const { oracleReportSanityChecker, lido, withdrawalQueue } = ctx.contracts;
+  const { hashConsensus, oracleReportSanityChecker, lido, withdrawalQueue } = ctx.contracts;
 
   const { requestTimestampMargin } = await oracleReportSanityChecker.getOracleReportLimits();
 
@@ -785,8 +787,11 @@ const getFinalizationBatches = async (
   const reservedBuffer = await lido.getWithdrawalsReserve();
   const availableEth = limitedWithdrawalVaultBalance + limitedElRewardsVaultBalance + reservedBuffer;
 
-  const blockTimestamp = await getCurrentBlockTimestamp();
-  const maxTimestamp = blockTimestamp - requestTimestampMargin;
+  // The sanity checker measures the margin from the report timestamp (the ref slot time), not from the
+  // block time. The block time is later, so a request created inside the margin would pass here and revert there.
+  const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
+  const reportTimestamp = genesisTime + refSlot * secondsPerSlot;
+  const maxTimestamp = reportTimestamp - requestTimestampMargin;
   const MAX_REQUESTS_PER_CALL = 1000n;
 
   if (availableEth === 0n) {
