@@ -16,6 +16,7 @@ import {
   report,
   reportWithoutClActivation,
   setStakingLimit,
+  waitNextAvailableReportTime,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -265,6 +266,8 @@ describe("Integration: Deposits reserve", () => {
     await updateBalance(elRewardsVaultAddress, ether("3"));
 
     await prepareNoWvbReport();
+    // The request must be older than the margin at the refSlot, as the sanity checker requires.
+    await waitNextAvailableReportTime(ctx);
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Build dry-run report with explicit refSlot to make batches deterministic.
     const dryRunParams = {
@@ -324,6 +327,8 @@ describe("Integration: Deposits reserve", () => {
     expect(withdrawalsReserveBefore).to.be.gt(0n);
 
     await prepareNoWvbReport();
+    // The request must be older than the margin at the refSlot, as the sanity checker requires.
+    await waitNextAvailableReportTime(ctx);
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Build dry-run data at fixed refSlot, then change target and re-run with the same refSlot.
     const dryRunParams = {
@@ -413,6 +418,8 @@ describe("Integration: Deposits reserve", () => {
     expect(withdrawalsReserveBefore).to.be.gt(0n);
 
     await prepareNoWvbReport();
+    // The request must be older than the margin at the refSlot, as the sanity checker requires.
+    await waitNextAvailableReportTime(ctx);
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Fix refSlot first, then spend depositable ether to emulate post-refSlot CL deposits.
     const reportParams = {

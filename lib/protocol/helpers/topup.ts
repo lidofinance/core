@@ -5,6 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { certainAddress, ether, impersonate, log } from "lib";
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01 } from "lib/constants";
 import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "lib/pdg";
 import { buildBeaconHeaderProof, buildValidatorStateProofs } from "lib/top-ups";
 
@@ -169,7 +170,11 @@ export const getTopUpRoleSigner = async (ctx: ProtocolContext): Promise<HardhatE
 
 /**
  * Make sure Lido has at least `minWei` of depositable ether, submitting the shortfall
- * (plus the reserve blocked by unfinalized withdrawals) from a test whale if needed.
+ * from a test whale if needed.
+ *
+ * Depositable ether is max(depositsReserve, buffered - unfinalizedStETH): a submit does
+ * not grow the deposits reserve, so the submitted ether covers unfinalized withdrawals
+ * first and only the buffer above them becomes depositable.
  */
 export const topUpEnsureDepositableEther = async (ctx: ProtocolContext, minWei: bigint) => {
   const { lido, withdrawalQueue } = ctx.contracts;
@@ -179,8 +184,8 @@ export const topUpEnsureDepositableEther = async (ctx: ProtocolContext, minWei: 
 
   const buffered = await lido.getBufferedEther();
   const unfinalized = await withdrawalQueue.unfinalizedStETH();
-  const reserve = unfinalized > buffered ? unfinalized - buffered : 0n;
-  const submitValue = minWei - depositable + reserve + ether("1");
+  // depositable >= buffered - unfinalized, so this is positive whenever depositable < minWei
+  const submitValue = minWei + unfinalized - buffered + ether("1");
 
   await ensureSubmitFitsStakeLimit(ctx, submitValue);
   const whale = await impersonate(certainAddress("topup:eth:whale"), submitValue + ether("10"));
@@ -196,19 +201,20 @@ export const topUpEnsureDepositableEther = async (ctx: ProtocolContext, minWei: 
  * Make sure the router allocates at least `minWei` of top-up capacity to the module.
  *
  * On forks the module's stake share limit may cap the allocation; raise it to 100%
- * through the manager role when the current allocation is not enough. Reverts if the
- * allocation is still short afterwards (e.g. module capacity itself is the limit).
+ * through the manager role when the current allocation is not enough. Other 0x02 modules
+ * with free top-up capacity share the depositable ether, so submit the shortfall until the
+ * module gets enough. Reverts if the allocation is still short afterwards (e.g. module
+ * capacity itself is the limit).
  */
 export const topUpEnsureModuleAllocation = async (ctx: ProtocolContext, moduleId: bigint, minWei: bigint) => {
   const { lido, stakingRouter } = ctx.contracts;
 
-  const depositable = await lido.getDepositableEther();
   const moduleIds = await stakingRouter.getStakingModuleIds();
   const moduleIndex = moduleIds.findIndex((id) => id === moduleId);
   if (moduleIndex === -1) throw new Error(`Staking module ${moduleId} is not registered`);
 
   const allocationOf = async () => {
-    const { allocated } = await stakingRouter.getDepositAllocations(depositable, true);
+    const { allocated } = await stakingRouter.getDepositAllocations(await lido.getDepositableEther(), true);
     return allocated[moduleIndex] ?? 0n;
   };
 
@@ -216,7 +222,16 @@ export const topUpEnsureModuleAllocation = async (ctx: ProtocolContext, moduleId
 
   await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
 
-  const allocation = await allocationOf();
+  let allocation = await allocationOf();
+  for (let attempt = 0; attempt < 5 && allocation < minWei; attempt++) {
+    // The router allocates in 32 ETH units: add one unit on top of the shortfall
+    const shortfall = minWei - allocation + MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+    await topUpEnsureDepositableEther(ctx, (await lido.getDepositableEther()) + shortfall);
+    const increased = await allocationOf();
+    if (increased === allocation) break;
+    allocation = increased;
+  }
+
   if (allocation < minWei) {
     throw new Error(`Top-up allocation for module ${moduleId} is ${allocation}, expected at least ${minWei}`);
   }

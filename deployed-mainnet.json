@@ -325,6 +325,27 @@
       ]
     }
   },
+  "consolidationMigratorCMv2": {
+    "proxy": {
+      "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
+      "address": "0xc8a7F4917cA03FDCD24a5E11A48Ab448318976e7",
+      "constructorArgs": [
+        "0x5D2DDD6817180c2135b4652503bD555c2d3Bb392",
+        "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
+        "0xc4d66de80000000000000000000000008db3077406432d73fbe6c5eebd1435c6846d40d7"
+      ]
+    },
+    "implementation": {
+      "contract": "contracts/0.8.25/consolidation/ConsolidationMigrator.sol",
+      "address": "0x5D2DDD6817180c2135b4652503bD555c2d3Bb392",
+      "constructorArgs": [
+        "0xFdDf38947aFB03C621C71b06C9C70bce73f12999",
+        "0xd907CE33B4Be423823d1CFFe80BD147E8b8554C8",
+        4,
+        4
+      ]
+    }
+  },
   "createAppReposTx": "0xf48cb21c6be021dd18bd8e02ce89ac7b924245b859f0a8b7c47e88a39016ed41",
   "daoAragonId": "lido-dao",
   "daoFactoryAddress": "0x7378ad1ba8f3c8e64bbb2a04473edd35846360f1",
@@ -773,7 +794,7 @@
   "resealManager": {
     "address": "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
   },
-  "scratchDeployGasUsed": "127488213",
+  "scratchDeployGasUsed": "130226317",
   "sm:CM": {
     "proxy": {
       "address": "0xDa5F930cE326EB5205085D66c72A4E79d60cB8C1",

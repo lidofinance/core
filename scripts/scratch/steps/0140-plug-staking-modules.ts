@@ -55,6 +55,15 @@ const CSM_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 30;
 const CSM_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
 const CSM_WITHDRAWAL_TYPE = WithdrawalCredentialsType.WC0x01;
 
+const CSM0X02_STAKING_MODULE_NAME = "Community Staking 0x02";
+const CSM0X02_STAKING_MODULE_TARGET_SHARE_BP = 1; // 0.01%
+const CSM0X02_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 240; // 2.4%
+const CSM0X02_STAKING_MODULE_MODULE_FEE_BP = 200; // 2%
+const CSM0X02_STAKING_MODULE_TREASURY_FEE_BP = 800; // 8%
+const CSM0X02_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 30;
+const CSM0X02_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
+const CSM0X02_WITHDRAWAL_TYPE = WithdrawalCredentialsType.WC0x02;
+
 const CMV2_STAKING_MODULE_NAME = "curated-onchain-v2";
 const CMV2_STAKING_MODULE_TARGET_SHARE_BP = 10000; // 100%
 const CMV2_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
@@ -68,6 +77,7 @@ type ExternalDeployArtifact = {
   Accounting?: string;
   CSModule?: string;
   CuratedModule?: string;
+  CuratedVerifier?: string;
   Ejector?: string;
   FeeOracle?: string;
   HashConsensus?: string;
@@ -75,6 +85,35 @@ type ExternalDeployArtifact = {
   Verifier?: string;
   VettedGate?: string;
 };
+
+type ExternalArtifactField = keyof ExternalDeployArtifact;
+
+// Contracts each module puts under the CircuitBreaker, as deploy artifact keys. The modules are built from
+// different contracts, so each one lists its own set, matching the CircuitBreaker registrations on mainnet.
+const CSM_CIRCUIT_BREAKER_PAUSABLES: ExternalArtifactField[] = [
+  "CSModule",
+  "Accounting",
+  "FeeOracle",
+  "Verifier",
+  "Ejector",
+  "VettedGate",
+  "IdentifiedDVTClusterGate",
+];
+// CMv2 uses CuratedVerifier, not Verifier. Its curated gates are paused by their own pause manager.
+const CMV2_CIRCUIT_BREAKER_PAUSABLES: ExternalArtifactField[] = [
+  "CuratedModule",
+  "Accounting",
+  "FeeOracle",
+  "CuratedVerifier",
+  "Ejector",
+];
+const CSM0X02_CIRCUIT_BREAKER_PAUSABLES: ExternalArtifactField[] = [
+  "CSModule",
+  "Accounting",
+  "FeeOracle",
+  "Verifier",
+  "Ejector",
+];
 
 type ExternalModuleSetup = {
   accounting: string;
@@ -105,32 +144,19 @@ function requireArtifactAddress(
   return value;
 }
 
-function optionalArtifactAddress(artifact: ExternalDeployArtifact, field: keyof ExternalDeployArtifact) {
-  const value = artifact[field];
-  return value && value !== ZERO_ADDRESS ? value : null;
-}
-
 function getExternalModuleSetup(
   state: ReturnType<typeof readNetworkState>,
   stateKey: Sk,
   moduleLabel: string,
   moduleField: "CSModule" | "CuratedModule",
-  extraPausableFields: { field: keyof ExternalDeployArtifact; label: string }[] = [],
+  pausableFields: ExternalArtifactField[],
 ): ExternalModuleSetup {
   const artifact = getExternalArtifact(state, stateKey, moduleLabel);
   const module = requireArtifactAddress(artifact, moduleField, moduleLabel);
-  const pausableContracts = [
-    { address: module, label: moduleLabel },
-    { address: requireArtifactAddress(artifact, "Accounting", moduleLabel), label: `${moduleLabel} Accounting` },
-    { address: requireArtifactAddress(artifact, "FeeOracle", moduleLabel), label: `${moduleLabel} FeeOracle` },
-    { address: requireArtifactAddress(artifact, "Verifier", moduleLabel), label: `${moduleLabel} Verifier` },
-    { address: requireArtifactAddress(artifact, "Ejector", moduleLabel), label: `${moduleLabel} Ejector` },
-  ];
-
-  for (const { field, label } of extraPausableFields) {
-    const address = optionalArtifactAddress(artifact, field);
-    if (address) pausableContracts.push({ address, label });
-  }
+  const pausableContracts = pausableFields.map((field) => ({
+    address: requireArtifactAddress(artifact, field, moduleLabel),
+    label: field === moduleField ? moduleLabel : `${moduleLabel} ${field}`,
+  }));
 
   return {
     accounting: requireArtifactAddress(artifact, "Accounting", moduleLabel),
@@ -279,10 +305,13 @@ export async function main() {
   );
 
   if (state[Sk.sm_CSM]?.proxy?.address) {
-    const setup = getExternalModuleSetup(state, Sk.sm_CSM, CSM_STAKING_MODULE_NAME, "CSModule", [
-      { field: "VettedGate", label: `${CSM_STAKING_MODULE_NAME} VettedGate` },
-      { field: "IdentifiedDVTClusterGate", label: `${CSM_STAKING_MODULE_NAME} IdentifiedDVTClusterGate` },
-    ]);
+    const setup = getExternalModuleSetup(
+      state,
+      Sk.sm_CSM,
+      CSM_STAKING_MODULE_NAME,
+      "CSModule",
+      CSM_CIRCUIT_BREAKER_PAUSABLES,
+    );
     await makeTx(
       stakingRouter,
       "addStakingModule",
@@ -305,7 +334,13 @@ export async function main() {
   }
 
   if (state[Sk.sm_CM]?.proxy?.address) {
-    const setup = getExternalModuleSetup(state, Sk.sm_CM, CMV2_STAKING_MODULE_NAME, "CuratedModule");
+    const setup = getExternalModuleSetup(
+      state,
+      Sk.sm_CM,
+      CMV2_STAKING_MODULE_NAME,
+      "CuratedModule",
+      CMV2_CIRCUIT_BREAKER_PAUSABLES,
+    );
     await makeTx(
       stakingRouter,
       "addStakingModule",
@@ -346,6 +381,36 @@ export async function main() {
           `Update [consolidationMigrator].targetModuleId in the scratch deploy params.`,
       );
     }
+  }
+
+  // Keep CMv2 at module ID 4: CSM 0x02 must be plugged after it.
+  if (state[Sk.sm_CSM0x02]?.proxy?.address) {
+    const setup = getExternalModuleSetup(
+      state,
+      Sk.sm_CSM0x02,
+      CSM0X02_STAKING_MODULE_NAME,
+      "CSModule",
+      CSM0X02_CIRCUIT_BREAKER_PAUSABLES,
+    );
+    await makeTx(
+      stakingRouter,
+      "addStakingModule",
+      [
+        CSM0X02_STAKING_MODULE_NAME,
+        state[Sk.sm_CSM0x02].proxy.address,
+        {
+          stakeShareLimit: CSM0X02_STAKING_MODULE_TARGET_SHARE_BP,
+          priorityExitShareThreshold: CSM0X02_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
+          stakingModuleFee: CSM0X02_STAKING_MODULE_MODULE_FEE_BP,
+          treasuryFee: CSM0X02_STAKING_MODULE_TREASURY_FEE_BP,
+          maxDepositsPerBlock: CSM0X02_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+          minDepositBlockDistance: CSM0X02_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+          withdrawalCredentialsType: CSM0X02_WITHDRAWAL_TYPE,
+        },
+      ],
+      { from: deployer },
+    );
+    await enableExternalModule(setup, state, deployer);
   }
 
   // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.

@@ -13,6 +13,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
 import {
+  csm0x02EnsureValidatorsBalance,
   ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
@@ -508,6 +509,8 @@ describe("Integration: Accounting", () => {
 
     await ensureFirstPostMigrationReport(ctx);
     await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    // The request must be older than the margin at the refSlot, as the sanity checker requires.
+    await waitNextAvailableReportTime(ctx);
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
 
     const dryRunParams = {
@@ -587,6 +590,9 @@ describe("Integration: Accounting", () => {
 
   it("Should account correctly with positive CL rebase close to the limits", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
+
+    // Exercise the existing fee-distribution checks with a non-empty CSM 0x02.
+    await csm0x02EnsureValidatorsBalance(ctx);
 
     const { clPendingBalanceAtLastReport: carriedPendingBeforeSeed } = await lido.getBalanceStats();
     await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
