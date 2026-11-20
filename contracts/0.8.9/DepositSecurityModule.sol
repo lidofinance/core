@@ -26,7 +26,6 @@ interface IStakingRouter {
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        bytes[] calldata _pubkeys,
         uint256[] calldata _topUpLimits
     ) external;
 }
@@ -535,14 +534,14 @@ contract DepositSecurityModule {
      * @param stakingModuleId The ID of the staking module.
      * @param keyIndices The indices of the keys in the staking module.
      * @param operatorIds The node operator IDs of the keys.
-     * @param pubkeys The public keys of the validators to top up.
      * @param topUpLimits The maximum amount in wei to top up per key.
      * @dev Reverts if any of the following is true:
      *   - the caller is not the top-up depositor;
      *   - deposits are paused;
      *   - min deposit distance is not passed.
      *
-     * No guardian signatures are checked. A top-up goes only to keys that already received a seed
+     * No guardian signatures are checked. The caller names a key by its node operator and index, and the
+     * staking module returns its public key. A top-up goes only to keys that already received a seed
      * deposit through this contract: the staking module rejects unused keys and caps the amount per key.
      * The min deposit distance after the seed deposit gives the guardians time to pause on a front-run.
      */
@@ -550,14 +549,13 @@ contract DepositSecurityModule {
         uint256 stakingModuleId,
         uint256[] calldata keyIndices,
         uint256[] calldata operatorIds,
-        bytes[] calldata pubkeys,
         uint256[] calldata topUpLimits
     ) external {
         if (msg.sender != topUpDepositor) revert NotATopUpDepositor(msg.sender);
         if (isDepositsPaused) revert DepositsArePaused();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
 
-        STAKING_ROUTER.topUp(stakingModuleId, keyIndices, operatorIds, pubkeys, topUpLimits);
+        STAKING_ROUTER.topUp(stakingModuleId, keyIndices, operatorIds, topUpLimits);
 
         _setLastDepositBlock(block.number);
     }

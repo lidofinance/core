@@ -207,17 +207,13 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
     // --- Top-up mock data ---
 
     uint256[] private allocations__mocked;
+    bytes[] private pubkeys__mocked;
+    bool private pubkeysMocked;
     uint256 private lastDepositBlockProbeModuleId;
 
     event Mock__LastDepositBlockSeen(uint256 lastDepositBlock);
 
-    event TopUpData(
-        uint256 _amount,
-        bytes[] _pubkeys,
-        uint256[] _keyIndices,
-        uint256[] _operatorIds,
-        uint256[] _topUpLimits
-    );
+    event TopUpData(uint256 _amount, uint256[] _keyIndices, uint256[] _operatorIds, uint256[] _topUpLimits);
 
     /**
      *
@@ -227,6 +223,17 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         allocations__mocked = amounts;
     }
 
+    /// @dev Makes `allocateDeposits` return these public keys instead of the default ones
+    function mock__setPubkeys(bytes[] calldata pubkeys) external {
+        pubkeys__mocked = pubkeys;
+        pubkeysMocked = true;
+    }
+
+    /// @dev The default public key that `allocateDeposits` returns for the allocation at `index`
+    function mock__defaultPubkey(uint256 index) public pure returns (bytes memory) {
+        return abi.encodePacked(keccak256(abi.encode(index)), bytes16(0));
+    }
+
     /// @dev Makes `allocateDeposits` emit the last deposit block that the router stores for the module
     function mock__probeLastDepositBlock(uint256 moduleId) external {
         lastDepositBlockProbeModuleId = moduleId;
@@ -234,18 +241,16 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
 
     /**
      * @dev mock method that used for SR.topUp method
-     * returns how much to topUp to each key
-     * By default mock returns the same data it gets
+     * returns the mocked allocations and one public key per allocation
      *
      */
     function allocateDeposits(
         uint256 _amount,
-        bytes[] calldata _pubkeys,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
         uint256[] calldata _topUpLimits
-    ) external returns (uint256[] memory topUpAmounts) {
-        emit TopUpData(_amount, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
+    ) external returns (bytes[] memory pubkeys, uint256[] memory topUpAmounts) {
+        emit TopUpData(_amount, _keyIndices, _operatorIds, _topUpLimits);
 
         if (lastDepositBlockProbeModuleId != 0) {
             emit Mock__LastDepositBlockSeen(
@@ -255,7 +260,15 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
             );
         }
 
-        return allocations__mocked;
+        topUpAmounts = allocations__mocked;
+        if (pubkeysMocked) {
+            pubkeys = pubkeys__mocked;
+        } else {
+            pubkeys = new bytes[](topUpAmounts.length);
+            for (uint256 i; i < topUpAmounts.length; ++i) {
+                pubkeys[i] = mock__defaultPubkey(i);
+            }
+        }
     }
 
     event Mock__onExitedAndStuckValidatorsCountsUpdated();

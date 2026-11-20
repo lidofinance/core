@@ -7,7 +7,6 @@ import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import { DSMAttestMessage, ether, findEventsWithInterfaces } from "lib";
 import { StakingModuleStatus } from "lib/constants";
-import { randomValidatorPubkey } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   cmv2CreateOperatorWithKeys,
@@ -30,11 +29,7 @@ import { getStakingModuleManagerSigner, prepareStakingModuleForTestDeposit } fro
 import { Snapshot } from "test/suite";
 
 /** Minimal interface to match custom errors of the external CMv2 module. */
-const CMV2_ERRORS_ABI = [
-  "error InvalidSigningKey()",
-  "error SigningKeysInvalidOffset()",
-  "error DepositInfoIsNotUpToDate()",
-];
+const CMV2_ERRORS_ABI = ["error SigningKeysInvalidOffset()", "error DepositInfoIsNotUpToDate()"];
 
 const DEPOSIT_CONTRACT_ABI = ["function get_deposit_root() view returns (bytes32)"];
 
@@ -53,7 +48,8 @@ const MAX_EXTRA_BALANCE = ether("2016");
  * suite fails loudly; skipping is allowed only via the explicit
  * INTEGRATION_WITH_CMv2=off opt-out.
  */
-describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
+// TODO: unskip when CMv2 and CSM 0x02 ship allocateDeposits without public keys (LIP-44)
+describe.skip("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
   let ctx: ProtocolContext;
 
   let topUpDepositor: HardhatEthersSigner;
@@ -103,13 +99,11 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
   const targetKeys = () => ({
     keyIndices: target.keyIndices,
     operatorIds: target.keyIndices.map(() => target.operatorId),
-    pubkeys: target.pubkeys,
   });
 
   const singleKey = (position: number) => ({
     keyIndices: [target.keyIndices[position]],
     operatorIds: [target.operatorId],
-    pubkeys: [target.pubkeys[position]],
   });
 
   type Keys = ReturnType<typeof targetKeys>;
@@ -117,7 +111,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
   const callTopUp = (keys: Keys, limits: bigint[], caller = topUpDepositor, id = moduleId) =>
     ctx.contracts.depositSecurityModule
       .connect(caller)
-      .topUpBufferedEther(id, keys.keyIndices, keys.operatorIds, keys.pubkeys, limits);
+      .topUpBufferedEther(id, keys.keyIndices, keys.operatorIds, limits);
 
   const topUp = async (keys: Keys, limits: bigint[], caller = topUpDepositor) => {
     await topUpEnsureDistancePassed(ctx, moduleId);
@@ -338,9 +332,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
       const keys = singleKey(0);
 
       await expect(
-        stakingRouter
-          .connect(topUpDepositor)
-          .topUp(moduleId, keys.keyIndices, keys.operatorIds, keys.pubkeys, [TOP_UP_PER_KEY]),
+        stakingRouter.connect(topUpDepositor).topUp(moduleId, keys.keyIndices, keys.operatorIds, [TOP_UP_PER_KEY]),
       ).to.be.revertedWithCustomError(stakingRouter, "NotAuthorized");
     });
 
@@ -377,14 +369,6 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
       );
     });
 
-    it("Should revert in CMv2 when the pubkey does not match the module key", async () => {
-      const cmv2Errors = new ethers.Contract(ctx.modules.cmv2!.stakingModuleAddress, CMV2_ERRORS_ABI, ethers.provider);
-
-      const keys = { ...singleKey(0), pubkeys: [randomValidatorPubkey()] };
-
-      await expect(topUp(keys, [TOP_UP_PER_KEY])).to.be.revertedWithCustomError(cmv2Errors, "InvalidSigningKey");
-    });
-
     it("Should revert in CMv2 for a bonded but undeposited key", async () => {
       const cmv2Errors = new ethers.Contract(ctx.modules.cmv2!.stakingModuleAddress, CMV2_ERRORS_ABI, ethers.provider);
 
@@ -392,7 +376,6 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
       const keys = {
         keyIndices: [undeposited.keyIndices[0]],
         operatorIds: [undeposited.operatorId],
-        pubkeys: [undeposited.pubkeys[0]],
       };
 
       await expect(topUp(keys, [TOP_UP_PER_KEY])).to.be.revertedWithCustomError(cmv2Errors, "SigningKeysInvalidOffset");

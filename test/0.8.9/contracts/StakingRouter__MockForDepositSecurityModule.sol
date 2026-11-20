@@ -22,7 +22,6 @@ interface IStakingRouter {
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        bytes[] calldata _pubkeys,
         uint256[] calldata _topUpLimits
     ) external;
 }
@@ -40,7 +39,6 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         uint24 stakingModuleId,
         uint256[] keyIndices,
         uint256[] operatorIds,
-        bytes[] pubkeys,
         uint256[] topUpLimits
     );
     event StakingModuleStatusSet(uint24 indexed stakingModuleId, StakingModuleStatus status, address setBy);
@@ -72,10 +70,9 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         uint256 stakingModuleId,
         uint256[] calldata keyIndices,
         uint256[] calldata operatorIds,
-        bytes[] calldata pubkeys,
         uint256[] calldata topUpLimits
     ) external whenModuleIsRegistered(stakingModuleId) {
-        emit StakingModuleToppedUp(uint24(stakingModuleId), keyIndices, operatorIds, pubkeys, topUpLimits);
+        emit StakingModuleToppedUp(uint24(stakingModuleId), keyIndices, operatorIds, topUpLimits);
     }
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(

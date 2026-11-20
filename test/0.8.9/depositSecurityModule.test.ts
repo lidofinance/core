@@ -1310,13 +1310,10 @@ describe("DepositSecurityModule.sol", () => {
   context("Function `topUpBufferedEther`", () => {
     const keyIndices = [1n, 2n];
     const operatorIds = [3n, 4n];
-    const pubkeys = ["0x" + "11".repeat(48), "0x" + "22".repeat(48)];
     const topUpLimits = [ether("10"), ether("20")];
 
     async function topUp(caller: HardhatEthersSigner = topUpDepositor): Promise<ContractTransactionResponse> {
-      return await dsm
-        .connect(caller)
-        .topUpBufferedEther(STAKING_MODULE_ID, keyIndices, operatorIds, pubkeys, topUpLimits);
+      return await dsm.connect(caller).topUpBufferedEther(STAKING_MODULE_ID, keyIndices, operatorIds, topUpLimits);
     }
 
     async function pauseByGuardian() {
@@ -1416,7 +1413,7 @@ describe("DepositSecurityModule.sol", () => {
 
         await expect(tx)
           .to.emit(stakingRouter, "StakingModuleToppedUp")
-          .withArgs(STAKING_MODULE_ID, keyIndices, operatorIds, pubkeys, topUpLimits);
+          .withArgs(STAKING_MODULE_ID, keyIndices, operatorIds, topUpLimits);
         await expect(tx).to.emit(dsm, "LastDepositBlockChanged").withArgs(topUpBlock);
         expect(await dsm.getLastDepositBlock()).to.equal(topUpBlock);
       });

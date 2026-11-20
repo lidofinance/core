@@ -184,6 +184,8 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             config.STAKING_ROUTER(),
             abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (config.NEW_STAKING_ROUTER_IMPL()))
         );
+        // TODO add the LIP-42 items and upgrade CMv2 and CSM 0x02 to implementations whose allocateDeposits
+        // takes no public keys (LIP-44). The new StakingRouter.topUp does not work with the live modules.
 
         // --- DepositSecurityModule: the locator lists the new DSM since 1.1.2, so it takes the unvetting role ---
         items[i++] = _item(

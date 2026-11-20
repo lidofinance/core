@@ -20,7 +20,8 @@ import {
 
 import { Snapshot } from "test/suite";
 
-describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CSM 0x02)", () => {
+// TODO: unskip when CMv2 and CSM 0x02 ship allocateDeposits without public keys (LIP-44)
+describe.skip("Integration: TopUp Flow (DSM -> StakingRouter -> Real CSM 0x02)", () => {
   let ctx: ProtocolContext;
   let target: Awaited<ReturnType<typeof csm0x02EnsureDepositedKeys>>;
   let topUpDepositor: HardhatEthersSigner;
@@ -52,7 +53,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CSM 0x02)", () =
     const limits = target.keyIndices.map(() => TOP_UP_PER_KEY);
     return ctx.contracts.depositSecurityModule
       .connect(topUpDepositor)
-      .topUpBufferedEther(target.moduleId, target.keyIndices, target.operatorIds, target.pubkeys, limits);
+      .topUpBufferedEther(target.moduleId, target.keyIndices, target.operatorIds, limits);
   };
 
   it("Should top up real CSM 0x02 validators end to end with exact amounts", async () => {

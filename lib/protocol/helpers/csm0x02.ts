@@ -83,15 +83,10 @@ const csm0x02DropStaleTopUpQueueHead = async (ctx: ProtocolContext, keysCount: b
     if (dropCount === 0) return;
 
     const drop = { operatorIds: head.operatorIds.slice(0, dropCount), keyIndices: head.keyIndices.slice(0, dropCount) };
-    const pubkeys: string[] = await Promise.all(
-      drop.keyIndices.map((keyIndex, i) => module.getSigningKeys(drop.operatorIds[i], keyIndex, 1n)),
-    );
     await topUpEnsureDistancePassed(ctx, moduleId);
     const caller = await getTopUpDepositorSigner(ctx);
     const zeroLimits = drop.keyIndices.map(() => 0n);
-    const tx = await dsm
-      .connect(caller)
-      .topUpBufferedEther(moduleId, drop.keyIndices, drop.operatorIds, pubkeys, zeroLimits);
+    const tx = await dsm.connect(caller).topUpBufferedEther(moduleId, drop.keyIndices, drop.operatorIds, zeroLimits);
     const receipt = (await tx.wait())!;
     expect(ctx.getEvents(receipt, "StakingRouterETHTopUp")[0].args.amount).to.equal(0n);
     expect((await module.getTopUpQueue()).queueLength).to.equal(queueLength - BigInt(dropCount));
