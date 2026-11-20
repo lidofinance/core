@@ -7,7 +7,7 @@ import {GIndex, toGIndex, concat, staticListNodeGIndex, progressiveListNodeGInde
 import {CLGIndices} from "contracts/common/lib/CLGIndices.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
-import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/ValidatorWitness.sol";
+import {BeaconRootData, ValidatorWitness} from "./ValidatorWitness.sol";
 
 /**
  * @title CLValidatorVerifier

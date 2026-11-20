@@ -4,7 +4,7 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.25;
 
-import {TopUpData, BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
+import {TopUpData, BeaconRootData, ValidatorWitness} from "./TopUpWitness.sol";
 import {CLValidatorVerifier} from "./CLValidatorVerifier.sol";
 import {
     AccessControlEnumerableUpgradeable

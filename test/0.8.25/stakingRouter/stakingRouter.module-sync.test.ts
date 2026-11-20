@@ -18,7 +18,6 @@ import {
   ether,
   getNextBlock,
   impersonate,
-  MAX_TOP_UP_PER_BLOCK_GWEI,
   randomString,
   randomWCType1,
   StakingModuleStatus,
@@ -58,7 +57,6 @@ describe("StakingRouter.sol:module-sync", () => {
   const minDepositBlockDistance = 25n;
 
   const withdrawalCredentials = randomWCType1();
-  const topUpGateway = "0x0000000000000000000000000000000000000001";
   const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   let originalState: string;
@@ -73,7 +71,6 @@ describe("StakingRouter.sol:module-sync", () => {
 
     locator = await deployLidoLocator({
       lido: lidoMock,
-      topUpGateway,
       depositSecurityModule,
       accountingOracle,
     });
@@ -84,7 +81,7 @@ describe("StakingRouter.sol:module-sync", () => {
     ));
 
     // initialize staking router with Lido mock
-    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
+    await stakingRouter.initialize(admin, withdrawalCredentials);
 
     // Set staking router address on Lido mock so it can send ETH
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());

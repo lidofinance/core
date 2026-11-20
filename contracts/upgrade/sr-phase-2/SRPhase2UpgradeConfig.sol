@@ -59,6 +59,13 @@ contract SRPhase2UpgradeConfig {
 
     address public immutable VALIDATOR_EXIT_DELAY_VERIFIER;
 
+    address public immutable OLD_DEPOSIT_SECURITY_MODULE;
+    address public immutable NEW_DEPOSIT_SECURITY_MODULE;
+    /// @notice The only address allowed to call `topUpBufferedEther` on the new DSM
+    address public immutable TOP_UP_DEPOSITOR;
+    /// @notice The retired gateway; the vote unregisters its CircuitBreaker pauser
+    address public immutable TOP_UP_GATEWAY;
+
     address public immutable EASY_TRACK;
     address public immutable EASY_TRACK_EVM_SCRIPT_EXECUTOR;
     address public immutable CURATED_SUBMIT_EXIT_REQUEST_HASHES_FACTORY;
@@ -114,6 +121,11 @@ contract SRPhase2UpgradeConfig {
 
         VALIDATOR_EXIT_DELAY_VERIFIER = _nonZero(params.validatorExitDelayVerifier, "validatorExitDelayVerifier");
 
+        OLD_DEPOSIT_SECURITY_MODULE = _nonZero(params.oldDepositSecurityModule, "oldDepositSecurityModule");
+        NEW_DEPOSIT_SECURITY_MODULE = _nonZero(params.newDepositSecurityModule, "newDepositSecurityModule");
+        TOP_UP_DEPOSITOR = _nonZero(params.topUpDepositor, "topUpDepositor");
+        TOP_UP_GATEWAY = _nonZero(params.topUpGateway, "topUpGateway");
+
         EASY_TRACK = _nonZero(params.easyTrack, "easyTrack");
         EASY_TRACK_EVM_SCRIPT_EXECUTOR = _nonZero(params.easyTrackEvmScriptExecutor, "easyTrackEvmScriptExecutor");
         CURATED_SUBMIT_EXIT_REQUEST_HASHES_FACTORY =
@@ -139,6 +151,7 @@ contract SRPhase2UpgradeConfig {
             params.oldTriggerableWithdrawalsGateway,
             params.newTriggerableWithdrawalsGateway
         );
+        _replaced("depositSecurityModule", params.oldDepositSecurityModule, params.newDepositSecurityModule);
     }
 
     /// @notice Limits the vote sets on the new gateway: the bus, then the CSM, CSM 0x02 and CMv2 ejectors.

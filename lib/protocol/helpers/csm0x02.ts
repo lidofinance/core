@@ -15,7 +15,7 @@ import {
 } from "./accounting";
 import { buildModuleAccountingReportParams, depositAndReportValidators } from "./staking";
 import { randomPubkeys, randomSignatures } from "./staking-module";
-import { buildTopUpData, getTopUpRoleSigner, prepareTopUpWitnesses } from "./topup";
+import { getTopUpDepositorSigner, topUpEnsureDistancePassed } from "./topup";
 
 // The module tops up a key to at most the max effective balance minus the 32 ETH activation balance
 const CSM0X02_KEY_BALANCE_CAP = MAX_EFFECTIVE_BALANCE_WC_TYPE_02 - MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
@@ -67,7 +67,7 @@ const csm0x02CanTopUpKey = async (module: Contract, operatorId: bigint, keyIndex
  * Like the depositor bot, send them in a top-up with zero limits: the module allocates nothing and dequeues them.
  */
 const csm0x02DropStaleTopUpQueueHead = async (ctx: ProtocolContext, keysCount: bigint, topUpPerKey: bigint) => {
-  const { topUpGateway } = ctx.contracts;
+  const { depositSecurityModule: dsm } = ctx.contracts;
   const { moduleId, module } = getCSM0x02Module(ctx);
 
   for (;;) {
@@ -83,17 +83,11 @@ const csm0x02DropStaleTopUpQueueHead = async (ctx: ProtocolContext, keysCount: b
     if (dropCount === 0) return;
 
     const drop = { operatorIds: head.operatorIds.slice(0, dropCount), keyIndices: head.keyIndices.slice(0, dropCount) };
-    // A validator at the target balance gets a zero limit from the gateway
-    const targetBalanceGwei = await topUpGateway.getTargetBalanceGwei();
-    const validators = await Promise.all(
-      drop.keyIndices.map(async (keyIndex, i) => ({
-        pubkey: await module.getSigningKeys(drop.operatorIds[i], keyIndex, 1n),
-        effectiveBalanceGwei: targetBalanceGwei,
-      })),
-    );
-    const bundle = await prepareTopUpWitnesses(ctx, validators);
-    const caller = await getTopUpRoleSigner(ctx);
-    const receipt = (await (await topUpGateway.connect(caller).topUp(buildTopUpData(moduleId, drop, bundle))).wait())!;
+    await topUpEnsureDistancePassed(ctx, moduleId);
+    const caller = await getTopUpDepositorSigner(ctx);
+    const zeroLimits = drop.keyIndices.map(() => 0n);
+    const tx = await dsm.connect(caller).topUpBufferedEther(moduleId, drop.keyIndices, drop.operatorIds, zeroLimits);
+    const receipt = (await tx.wait())!;
     expect(ctx.getEvents(receipt, "StakingRouterETHTopUp")[0].args.amount).to.equal(0n);
     expect((await module.getTopUpQueue()).queueLength).to.equal(queueLength - BigInt(dropCount));
   }

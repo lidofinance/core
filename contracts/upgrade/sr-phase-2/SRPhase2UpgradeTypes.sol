@@ -51,6 +51,11 @@ struct SRPhase2UpgradeParameters {
     address triggerableWithdrawalsBus;
     // removed from the protocol
     address validatorExitDelayVerifier;
+    // optimistic top-ups: the new DSM replaces the old one and the TopUpGateway retires
+    address oldDepositSecurityModule;
+    address newDepositSecurityModule;
+    address topUpDepositor;
+    address topUpGateway;
     // exit request hash delivery removed from the WithdrawalsOracle:
     // the role holder and the Easy Track factories using it
     address easyTrack;
@@ -95,6 +100,34 @@ interface IWithdrawalsManagerProxy {
 /// @dev The live locator before the vote still exposes the verifier this upgrade removes.
 interface ILidoLocatorWithVerifier {
     function validatorExitDelayVerifier() external view returns (address);
+}
+
+/// @dev The live locator before the vote still exposes the TopUpGateway this upgrade retires.
+interface ILidoLocatorWithTopUpGateway {
+    function topUpGateway() external view returns (address);
+}
+
+/// @dev Read on both DSM versions, except `VERSION` and `getTopUpDepositor`, which only the new DSM is asked for.
+interface IDepositSecurityModule {
+    function VERSION() external view returns (uint256);
+
+    function STAKING_ROUTER() external view returns (address);
+
+    function DEPOSIT_CONTRACT() external view returns (address);
+
+    function getOwner() external view returns (address);
+
+    function getGuardians() external view returns (address[] memory);
+
+    function getGuardianQuorum() external view returns (uint256);
+
+    function getPauseIntentValidityPeriodBlocks() external view returns (uint256);
+
+    function getMaxOperatorsPerUnvetting() external view returns (uint256);
+
+    function getTopUpDepositor() external view returns (address);
+
+    function isDepositsPaused() external view returns (bool);
 }
 
 interface IWithdrawalVault {

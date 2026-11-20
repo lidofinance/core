@@ -152,7 +152,6 @@ const TopUpGatewaySchema = z.object({
 const StakingRouterSchema = z.object({
   maxEBType1: BigIntStringSchema,
   maxEBType2: BigIntStringSchema,
-  maxTopUpPerBlockGwei: PositiveIntSchema,
 });
 
 // Easy track schema
@@ -433,7 +432,6 @@ export const ScratchParametersSchema = z.object({
   consolidationMigrator: ConsolidationMigratorSchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
-  topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
 });
 
@@ -441,7 +439,8 @@ export const ScratchParametersSchema = z.object({
 export const UpgradeParametersSchema = z.object({
   lido: LidoSchema,
   easyTrack: EasyTrackSchema,
-  depositSecurityModule: DepositSecurityModuleSchema,
+  // The SR phase 2 upgrade deploys a new DSM; only the upgrade sets its top-up depositor
+  depositSecurityModule: DepositSecurityModuleSchema.extend({ topUpDepositor: EthereumAddressSchema }),
   oracleReportSanityChecker: OracleReportSanityCheckerUpgradeScheme,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,

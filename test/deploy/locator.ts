@@ -37,7 +37,6 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     vaultFactory: certainAddress("dummy-locator:vaultFactory"),
     operatorGrid: certainAddress("dummy-locator:operatorGrid"),
     lazyOracle: certainAddress("dummy-locator:lazyOracle"),
-    topUpGateway: certainAddress("dummy-locator:topUpGateway"),
     ...config,
   });
 
@@ -121,7 +120,6 @@ async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.Con
     "vaultFactory",
     "lazyOracle",
     "operatorGrid",
-    "topUpGateway",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

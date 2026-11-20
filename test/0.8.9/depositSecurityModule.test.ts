@@ -35,7 +35,7 @@ const PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS = 10;
 const MAX_OPERATORS_PER_UNVETTING = 20;
 const MODULE_NONCE = 12;
 const DEPOSIT_ROOT = "0xd151867719c94ad8458feaf491809f9bc8096c702a72747403ecaac30c179137";
-const DSM_VERSION = 5;
+const DSM_VERSION = 6;
 
 type Guardian = Addressable & {
   address: string;
@@ -50,6 +50,7 @@ type Params = {
   pauseIntentValidityPeriodBlocks: number;
   unvetIntentValidityPeriodBlocks: number;
   maxOperatorsPerUnvetting: number;
+  topUpDepositor: string;
 };
 
 type Block = {
@@ -63,6 +64,7 @@ function initialParams(): Params {
     stakingRouter: "",
     pauseIntentValidityPeriodBlocks: PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS,
     maxOperatorsPerUnvetting: MAX_OPERATORS_PER_UNVETTING,
+    topUpDepositor: ZeroAddress,
   } as Params;
 }
 
@@ -76,6 +78,7 @@ describe("DepositSecurityModule.sol", () => {
 
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let topUpDepositor: HardhatEthersSigner;
   let guardian1: Guardian;
   let guardian2: Guardian;
   let guardian3: Guardian;
@@ -142,7 +145,7 @@ describe("DepositSecurityModule.sol", () => {
 
   before(async () => {
     ({ provider } = ethers);
-    [admin, stranger] = await ethers.getSigners();
+    [admin, stranger, topUpDepositor] = await ethers.getSigners();
 
     const deployGuardian = async (name: string): Promise<Guardian> => {
       const delegate = new Wallet(streccak(name), provider);
@@ -216,6 +219,20 @@ describe("DepositSecurityModule.sol", () => {
         dsm,
         "ZeroAddress",
       );
+    });
+
+    it("Accepts a zero `topUpDepositor`", async () => {
+      expect(await dsm.getTopUpDepositor()).to.equal(ZeroAddress);
+    });
+
+    it("Sets the `topUpDepositor` and fires `TopUpDepositorChanged` event", async () => {
+      const cfg = { ...config, topUpDepositor: topUpDepositor.address };
+      const deployed = await ethers.deployContract("DepositSecurityModule", Object.values(cfg));
+
+      expect(await deployed.getTopUpDepositor()).to.equal(topUpDepositor.address);
+      await expect(deployed.deploymentTransaction()!)
+        .to.emit(deployed, "TopUpDepositorChanged")
+        .withArgs(topUpDepositor.address);
     });
 
     it("Sets `lastDepositBlock` to deployment block", async () => {
@@ -1249,6 +1266,176 @@ describe("DepositSecurityModule.sol", () => {
         const tx = await deposit([guardian2, guardian3]);
 
         await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, "0x");
+      });
+    });
+  });
+
+  context("Top-up depositor", () => {
+    context("Function `getTopUpDepositor`", () => {
+      it("Returns zero address when the constructor got zero", async () => {
+        expect(await dsm.getTopUpDepositor()).to.equal(ZeroAddress);
+      });
+    });
+
+    context("Function `setTopUpDepositor`", () => {
+      it("Reverts if called by not an owner", async () => {
+        await expect(dsm.connect(stranger).setTopUpDepositor(topUpDepositor))
+          .to.be.revertedWithCustomError(dsm, "NotAnOwner")
+          .withArgs(stranger.address);
+      });
+
+      it("Reverts if the `newValue` is zero address", async () => {
+        await expect(dsm.setTopUpDepositor(ZeroAddress))
+          .to.be.revertedWithCustomError(dsm, "ZeroAddress")
+          .withArgs("_newTopUpDepositor");
+      });
+
+      it("Sets the top-up depositor and fires `TopUpDepositorChanged` event", async () => {
+        const tx = await dsm.setTopUpDepositor(topUpDepositor);
+
+        await expect(tx).to.emit(dsm, "TopUpDepositorChanged").withArgs(topUpDepositor.address);
+        expect(await dsm.getTopUpDepositor()).to.equal(topUpDepositor.address);
+      });
+
+      it("Replaces the top-up depositor", async () => {
+        await dsm.setTopUpDepositor(topUpDepositor);
+        const tx = await dsm.setTopUpDepositor(stranger);
+
+        await expect(tx).to.emit(dsm, "TopUpDepositorChanged").withArgs(stranger.address);
+        expect(await dsm.getTopUpDepositor()).to.equal(stranger.address);
+      });
+    });
+  });
+
+  context("Function `topUpBufferedEther`", () => {
+    const keyIndices = [1n, 2n];
+    const operatorIds = [3n, 4n];
+    const topUpLimits = [ether("10"), ether("20")];
+
+    async function topUp(caller: HardhatEthersSigner = topUpDepositor): Promise<ContractTransactionResponse> {
+      return await dsm.connect(caller).topUpBufferedEther(STAKING_MODULE_ID, keyIndices, operatorIds, topUpLimits);
+    }
+
+    async function pauseByGuardian() {
+      await dsm.addGuardian(guardian1, 1);
+      const pauseData = dsm.interface.encodeFunctionData("pauseDeposits", [
+        await time.latestBlock(),
+        emptyGuardianSignature(),
+      ]);
+      await executeAsGuardian(guardian1, pauseData);
+      expect(await dsm.isDepositsPaused()).to.equal(true);
+    }
+
+    it("Reverts for any caller before the top-up depositor is set", async () => {
+      expect(await dsm.getTopUpDepositor()).to.equal(ZeroAddress);
+
+      for (const caller of [admin, stranger, topUpDepositor]) {
+        await expect(topUp(caller)).to.be.revertedWithCustomError(dsm, "NotATopUpDepositor").withArgs(caller.address);
+      }
+    });
+
+    context("Top-up depositor is set", () => {
+      beforeEach(async () => {
+        await dsm.setTopUpDepositor(topUpDepositor);
+      });
+
+      it("Reverts if called by not the top-up depositor", async () => {
+        for (const caller of [admin, stranger]) {
+          await expect(topUp(caller)).to.be.revertedWithCustomError(dsm, "NotATopUpDepositor").withArgs(caller.address);
+        }
+      });
+
+      it("Reverts if called by the previous top-up depositor after a change", async () => {
+        await dsm.setTopUpDepositor(stranger);
+
+        await expect(topUp(topUpDepositor))
+          .to.be.revertedWithCustomError(dsm, "NotATopUpDepositor")
+          .withArgs(topUpDepositor.address);
+        await expect(topUp(stranger)).to.emit(stakingRouter, "StakingModuleToppedUp");
+      });
+
+      it("Reverts if deposits are paused", async () => {
+        await pauseByGuardian();
+
+        await expect(topUp()).to.be.revertedWithCustomError(dsm, "DepositsArePaused");
+      });
+
+      it("Checks the caller before the pause", async () => {
+        await pauseByGuardian();
+
+        await expect(topUp(stranger))
+          .to.be.revertedWithCustomError(dsm, "NotATopUpDepositor")
+          .withArgs(stranger.address);
+      });
+
+      it("Checks the pause before the distance", async () => {
+        await stakingRouter.setStakingModuleLastDepositBlock(await time.latestBlock());
+        await pauseByGuardian();
+
+        await expect(topUp()).to.be.revertedWithCustomError(dsm, "DepositsArePaused");
+      });
+
+      it("Reverts if the distance has not passed since the module last deposit block", async () => {
+        await stakingRouter.setStakingModuleLastDepositBlock((await time.latestBlock()) - 1);
+
+        await expect(topUp()).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
+      });
+
+      it("Reverts if the distance has not passed since the last seed deposit to any module", async () => {
+        await dsm.addGuardian(guardian1, 1);
+        await deposit([guardian1]);
+
+        await expect(topUp()).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
+      });
+
+      it("Tops up exactly when the distance passes after a seed deposit", async () => {
+        await dsm.addGuardian(guardian1, 1);
+        const seedBlock = (await deposit([guardian1])).blockNumber as number;
+
+        // The reverted transaction is mined in `seedBlock + MIN_DEPOSIT_BLOCK_DISTANCE - 1`
+        await mineUpTo(seedBlock + MIN_DEPOSIT_BLOCK_DISTANCE - 2);
+        await expect(topUp()).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
+        expect(await time.latestBlock()).to.equal(seedBlock + MIN_DEPOSIT_BLOCK_DISTANCE - 1);
+
+        // The next transaction is mined in `seedBlock + MIN_DEPOSIT_BLOCK_DISTANCE`
+        const tx = await topUp();
+
+        expect(tx.blockNumber).to.equal(seedBlock + MIN_DEPOSIT_BLOCK_DISTANCE);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleToppedUp");
+      });
+
+      it("Calls `StakingRouter.topUp` without guardian signatures and sets the last deposit block", async () => {
+        expect(await dsm.getGuardians()).to.have.length(0);
+        expect(await dsm.getGuardianQuorum()).to.equal(0);
+
+        const tx = await topUp();
+        const topUpBlock = tx.blockNumber;
+
+        await expect(tx)
+          .to.emit(stakingRouter, "StakingModuleToppedUp")
+          .withArgs(STAKING_MODULE_ID, keyIndices, operatorIds, topUpLimits);
+        await expect(tx).to.emit(dsm, "LastDepositBlockChanged").withArgs(topUpBlock);
+        expect(await dsm.getLastDepositBlock()).to.equal(topUpBlock);
+      });
+
+      it("Makes a later seed deposit to any module wait for the distance", async () => {
+        await dsm.addGuardian(guardian1, 1);
+        const topUpBlock = (await topUp()).blockNumber as number;
+
+        expect(await dsm.isMinDepositDistancePassed(STAKING_MODULE_ID)).to.equal(false);
+        await expect(deposit([guardian1])).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
+
+        await mineUpTo(topUpBlock + MIN_DEPOSIT_BLOCK_DISTANCE - 1);
+        await expect(deposit([guardian1])).to.emit(stakingRouter, "StakingModuleDeposited");
+      });
+
+      it("Makes a later top-up wait for the distance", async () => {
+        const topUpBlock = (await topUp()).blockNumber as number;
+
+        await expect(topUp()).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
+
+        await mineUpTo(topUpBlock + MIN_DEPOSIT_BLOCK_DISTANCE - 1);
+        await expect(topUp()).to.emit(stakingRouter, "StakingModuleToppedUp");
       });
     });
   });

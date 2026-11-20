@@ -30,7 +30,6 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address vaultFactory;
         address lazyOracle;
         address operatorGrid;
-        address topUpGateway;
     }
 
     error ZeroAddress();
@@ -59,7 +58,6 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable vaultFactory;
     address public immutable lazyOracle;
     address public immutable operatorGrid;
-    address public immutable topUpGateway;
 
     constructor(Config memory _config) {
         accountingOracle = _assertNonZero(_config.accountingOracle);
@@ -86,7 +84,6 @@ contract LidoLocator__MockMutable is ILidoLocator {
         vaultFactory = _assertNonZero(_config.vaultFactory);
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
-        topUpGateway = _assertNonZero(_config.topUpGateway);
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

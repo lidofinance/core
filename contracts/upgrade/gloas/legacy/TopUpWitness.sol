@@ -4,7 +4,7 @@
 // solhint-disable-next-line
 pragma solidity >=0.8.9;
 
-import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/ValidatorWitness.sol";
+import {BeaconRootData, ValidatorWitness} from "./ValidatorWitness.sol";
 
 struct TopUpData {
     uint256 moduleId;
