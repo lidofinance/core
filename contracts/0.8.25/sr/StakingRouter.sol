@@ -612,7 +612,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _keyIndices List of keys' indices
     /// @param _operatorIds List of operator indices
     /// @param _pubkeys List of validator public keys to top up
-    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key based on CL data and TopUpGateway logic
+    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key, set by the top-up caller
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -620,17 +620,25 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         bytes[] calldata _pubkeys,
         uint256[] calldata _topUpLimits
     ) external {
-        _checkAppAuth(_getTopUpGateway());
+        _checkAppAuth(_getDepositSecurityModule());
         _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimits, _pubkeys);
 
-        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
+        (ModuleState storage state, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
         if (stateConfig.status != StakingModuleStatus.Active) revert StakingModuleNotActive();
 
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
-        uint256 maxTopUpPerBlockWei = uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei;
+        uint256 maxDepositsPerBlock = state.deposits.maxDepositsPerBlock;
+        if (_keyIndices.length > maxDepositsPerBlock) {
+            revert TopUpKeysLimitExceeded(_keyIndices.length, maxDepositsPerBlock);
+        }
+
+        uint256 maxTopUpPerBlockWei = Math.min(
+            uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei,
+            maxDepositsPerBlock * MAX_EFFECTIVE_BALANCE_WC_TYPE_01
+        );
         uint256 depositableEther = LIDO.getDepositableEther();
 
         // Get allocation based on target share
@@ -674,6 +682,9 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         if (amount > smDepositableEthAmountRounded) {
             revert ModuleReturnExceedTarget();
         }
+
+        // The DepositSecurityModule reads the module last deposit block for the min deposit distance
+        SRLib._updateModuleLastDepositState(_stakingModuleId);
 
         if (amount > 0) {
             uint256 etherBalanceBeforeDeposits = address(this).balance;
@@ -1101,10 +1112,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             summary.totalDepositedValidators,
             summary.depositableValidatorsCount
         ) = _stakingModule.getNodeOperatorSummary(_nodeOperatorId);
-    }
-
-    function _getTopUpGateway() internal view returns (address) {
-        return LIDO_LOCATOR.topUpGateway();
     }
 
     function _getDepositSecurityModule() internal view returns (address) {

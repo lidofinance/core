@@ -28,7 +28,6 @@ interface ILidoLocator {
     function vaultFactory() external view returns (address);
     function lazyOracle() external view returns (address);
     function operatorGrid() external view returns (address);
-    function topUpGateway() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
     function triggerableWithdrawalsBus() external view returns (address);
     function consolidationGateway() external view returns (address);

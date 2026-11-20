@@ -31,7 +31,6 @@ describe("StakingRouter.sol:module-management", () => {
 
   const withdrawalCredentials = randomWCType1();
   const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
-  const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   beforeEach(async () => {
@@ -39,7 +38,6 @@ describe("StakingRouter.sol:module-management", () => {
 
     locator = await deployLidoLocator({
       lido,
-      topUpGateway,
       depositSecurityModule,
     });
 

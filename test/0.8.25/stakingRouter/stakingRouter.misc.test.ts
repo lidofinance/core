@@ -23,7 +23,6 @@ describe("StakingRouter.sol:misc", () => {
   let originalState: string;
 
   const lido = certainAddress("test:staking-router:lido");
-  const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
   const withdrawalCredentials = randomWCType1();
 
@@ -33,7 +32,6 @@ describe("StakingRouter.sol:misc", () => {
     accountingOracle = await ethers.deployContract("AccountingOracle__MockForStakingRouter", deployer);
     locator = await deployLidoLocator({
       lido,
-      topUpGateway,
       depositSecurityModule,
       accountingOracle,
     });

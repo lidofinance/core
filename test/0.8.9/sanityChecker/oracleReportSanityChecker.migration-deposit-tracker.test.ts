@@ -65,7 +65,6 @@ const deployChecker = async (): Promise<CheckerFixture> => {
       vaultFactory: deployer.address,
       lazyOracle: deployer.address,
       operatorGrid: deployer.address,
-      topUpGateway: deployer.address,
     },
   ]);
 

@@ -1,32 +1,29 @@
 import { expect } from "chai";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, findEventsWithInterfaces, ONE_GWEI } from "lib";
 import {
   buildModuleAccountingReportParams,
-  buildTopUpData,
   csm0x02EnsureDepositedKeys,
   depositEventAmountWei,
   depositEventInterface,
   getCSM0x02Module,
   getProtocolContext,
-  getTopUpRoleSigner,
-  prepareTopUpWitnesses,
+  getTopUpCallerSigner,
   ProtocolContext,
   report,
   topUpEnsureDepositableEther,
+  topUpEnsureDistancePassed,
   topUpEnsureModuleAllocation,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
-describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CSM 0x02)", () => {
+describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CSM 0x02)", () => {
   let ctx: ProtocolContext;
   let target: Awaited<ReturnType<typeof csm0x02EnsureDepositedKeys>>;
   let topUpCaller: HardhatEthersSigner;
-  let effectiveBalanceGwei: bigint;
   let globalSnapshot: string;
   let testSnapshot: string;
 
@@ -36,18 +33,13 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CSM 0x0
     ctx = await getProtocolContext();
     globalSnapshot = await Snapshot.take();
     target = await csm0x02EnsureDepositedKeys(ctx, 2n, TOP_UP_PER_KEY);
-    topUpCaller = await getTopUpRoleSigner(ctx);
-    effectiveBalanceGwei = (await ctx.contracts.topUpGateway.getTargetBalanceGwei()) - TOP_UP_PER_KEY / ONE_GWEI;
+    topUpCaller = await getTopUpCallerSigner(ctx);
 
     const credentials = await ctx.contracts.stakingRouter.getStakingModuleWithdrawalCredentials(target.moduleId);
     expect(credentials.slice(0, 4)).to.equal("0x02");
 
     await topUpEnsureDepositableEther(ctx, 2n * TOP_UP_PER_KEY + ether("32"));
     await topUpEnsureModuleAllocation(ctx, target.moduleId, 2n * TOP_UP_PER_KEY);
-
-    // A live top-up shortly before the fork block makes the gateway reject the next one
-    await mine(await ctx.contracts.topUpGateway.getMinBlockDistance());
-    expect(await ctx.contracts.topUpGateway.isBlockDistancePassed()).to.equal(true);
   });
 
   beforeEach(async () => (testSnapshot = await Snapshot.take()));
@@ -55,11 +47,12 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CSM 0x0
   after(async () => await Snapshot.restore(globalSnapshot));
 
   const topUp = async () => {
-    const bundle = await prepareTopUpWitnesses(
-      ctx,
-      target.pubkeys.map((pubkey) => ({ pubkey, effectiveBalanceGwei })),
-    );
-    return ctx.contracts.topUpGateway.connect(topUpCaller).topUp(buildTopUpData(target.moduleId, target, bundle));
+    // A seed deposit or a top-up shortly before the fork block makes the DSM reject the next one
+    await topUpEnsureDistancePassed(ctx, target.moduleId);
+    const limits = target.keyIndices.map(() => TOP_UP_PER_KEY);
+    return ctx.contracts.depositSecurityModule
+      .connect(topUpCaller)
+      .topUpBufferedEther(target.moduleId, target.keyIndices, target.operatorIds, target.pubkeys, limits);
   };
 
   it("Should top up real CSM 0x02 validators end to end with exact amounts", async () => {

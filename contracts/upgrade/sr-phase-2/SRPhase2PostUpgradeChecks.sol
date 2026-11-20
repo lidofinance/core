@@ -19,6 +19,7 @@ import {
     ACTIVE_REBALANCING_RATE_LIMIT,
     EXIT_ITERATION_CHUNK,
     GatewayConsumerLimits,
+    IDepositSecurityModule,
     IOracleDaemonConfig,
     IOracleReportSanityChecker,
     IStakingRouter,
@@ -112,6 +113,18 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
         );
         _assertUint(
             "sr-exiting-status-members", stakingRouter.getRoleMemberCount(REPORT_VALIDATOR_EXITING_STATUS_ROLE), 0
+        );
+
+        // --- Deposit security module: the new DSM is live and the TopUpGateway is retired ---
+        address newDsm = config.NEW_DEPOSIT_SECURITY_MODULE();
+        _assertAddress("locator-dsm", locator.depositSecurityModule(), newDsm);
+        _assertSingleRoleHolder("sr-unvetting-role", stakingRouter, STAKING_MODULE_UNVETTING_ROLE, newDsm);
+        _assertAddress("new-dsm-owner", IDepositSecurityModule(newDsm).getOwner(), agent);
+        _assertAddress("new-dsm-top-up-caller", IDepositSecurityModule(newDsm).getTopUpCaller(), config.TOP_UP_CALLER());
+        _assertAddress(
+            "top-up-gateway-pauser-cleared",
+            ICircuitBreaker(circuitBreaker).getPauser(config.TOP_UP_GATEWAY()),
+            address(0)
         );
 
         // --- WithdrawalsOracle: the exit request hash delivery role is revoked ---

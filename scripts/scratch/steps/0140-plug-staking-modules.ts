@@ -425,7 +425,7 @@ export async function main() {
     await enableExternalModule(setup, state, deployer, CSM0X02_WITHDRAWAL_TYPE);
   }
 
-  // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.
+  // Set global per-block top-up ETH cap (LIP-35), required for top-ups through the DepositSecurityModule.
   await makeTx(
     stakingRouter,
     "setMaxTopUpPerBlockGwei",

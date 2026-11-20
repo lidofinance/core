@@ -23,7 +23,7 @@ import { CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers";
 describe("StakingRouter.sol:topUp", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
-  let topUpGatewaySigner: HardhatEthersSigner;
+  let dsmSigner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let locator: LidoLocator;
@@ -39,10 +39,9 @@ describe("StakingRouter.sol:topUp", () => {
   const NEW_MEB = wcTypeMaxEB(WithdrawalCredentialsType.WC0x02);
   const WEI_PER_GWEI = 1_000_000_000n;
   const withdrawalCredentials = randomWCType1();
-  const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   before(async () => {
-    [deployer, admin, topUpGatewaySigner, stranger] = await ethers.getSigners();
+    [deployer, admin, dsmSigner, stranger] = await ethers.getSigners();
     // Deploy Lido mock
     lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);
 
@@ -51,8 +50,7 @@ describe("StakingRouter.sol:topUp", () => {
 
     locator = await deployLidoLocator({
       lido: lidoMock,
-      topUpGateway: await topUpGatewaySigner.getAddress(),
-      depositSecurityModule,
+      depositSecurityModule: await dsmSigner.getAddress(),
       accountingOracle,
     });
 
@@ -64,7 +62,7 @@ describe("StakingRouter.sol:topUp", () => {
 
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());
 
-    // initialize staking router with the mock lido and topUpGateway as a signer
+    // initialize staking router with the mock lido; the DepositSecurityModule is a signer
     await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // grant roles
@@ -88,7 +86,7 @@ describe("StakingRouter.sol:topUp", () => {
   context("topUp", () => {
     const KEY_INDEX = 0n;
     const OPERATOR_ID = 1n;
-    const TOP_UP_GWEI = 10n * ONE_GWEI; // 10 ETH in ONE_GWEI, top up value for validator based on cl data and TopUpGateway logic
+    const TOP_UP_GWEI = 10n * ONE_GWEI; // 10 ETH in ONE_GWEI, top-up limit for a validator set by the top-up caller
 
     function makeValidTopUpData() {
       const keyIndices = [KEY_INDEX];
@@ -100,7 +98,7 @@ describe("StakingRouter.sol:topUp", () => {
       return { keyIndices, operatorIds, topUpLimits, pubkeys };
     }
 
-    it("Reverts if caller is not TopUpGateway", async () => {
+    it("Reverts if caller is not the DepositSecurityModule", async () => {
       const config = {
         ...DEFAULT_CONFIG,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
@@ -109,16 +107,110 @@ describe("StakingRouter.sol:topUp", () => {
       const [, id] = await setupModule(ctx, config);
       const { keyIndices, operatorIds, topUpLimits, pubkeys } = makeValidTopUpData();
 
-      await expect(
-        stakingRouter.connect(stranger).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
-      ).to.be.revertedWithCustomError(stakingRouter, "NotAuthorized");
+      for (const caller of [stranger, admin]) {
+        await expect(
+          stakingRouter.connect(caller).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+        ).to.be.revertedWithCustomError(stakingRouter, "NotAuthorized");
+      }
+    });
+
+    it("Reverts if keys count exceeds the module maxDepositsPerBlock", async () => {
+      const [, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        maxDepositsPerBlock: 2n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const keyIndices = [0n, 1n, 2n];
+      const operatorIds = [0n, 0n, 0n];
+      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI, 10n * ONE_GWEI * WEI_PER_GWEI, 10n * ONE_GWEI * WEI_PER_GWEI];
+      const pubkeys = [randomString(48), randomString(48), randomString(48)];
+
+      await expect(stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits))
+        .to.be.revertedWithCustomError(stakingRouter, "TopUpKeysLimitExceeded")
+        .withArgs(3n, 2n);
+    });
+
+    it("Accepts exactly maxDepositsPerBlock keys", async () => {
+      const [stakingModule, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        maxDepositsPerBlock: 3n,
+        deposited: 100n,
+        totalModuleStake: 100n * 32n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const topUpWei = [10n * 10n ** 18n, 20n * 10n ** 18n, 30n * 10n ** 18n];
+      await stakingModule.mock__allocateDeposits(topUpWei);
+      await lidoMock.setDepositableEther(100n * NEW_MEB);
+      await lidoMock.fund({ value: 60n * 10n ** 18n });
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(102n * 10n ** 9n * 2048n);
+
+      const pubkeys = [randomString(48), randomString(48), randomString(48)];
+      const tx = await stakingRouter.connect(dsmSigner).topUp(id, [0n, 1n, 2n], [0n, 0n, 0n], pubkeys, topUpWei);
+
+      await expect(tx)
+        .to.emit(stakingRouter, "StakingRouterETHTopUp")
+        .withArgs(id, 60n * 10n ** 18n);
+    });
+
+    it("Caps the module budget by maxDepositsPerBlock seed deposits when it is below maxTopUpPerBlockGwei", async () => {
+      const [stakingModule, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        maxDepositsPerBlock: 2n,
+        deposited: 100n,
+        totalModuleStake: 100n * 32n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const topUpWei = [10n * 10n ** 18n, 20n * 10n ** 18n];
+      await stakingModule.mock__allocateDeposits(topUpWei);
+      await lidoMock.setDepositableEther(100n * NEW_MEB);
+      await lidoMock.fund({ value: 30n * 10n ** 18n });
+      // The global cap (1,000 ETH) is above the module batch cap (2 * 32 ETH)
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(1_000n * ONE_GWEI);
+
+      const pubkeys = [randomString(48), randomString(48)];
+      const tx = await stakingRouter.connect(dsmSigner).topUp(id, [0n, 1n], [0n, 0n], pubkeys, topUpWei);
+
+      const receipt = await tx.wait();
+      const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
+      expect(topUpEvents[0].args._amount).to.equal(2n * 32n * 10n ** 18n);
+    });
+
+    it("Updates the module last deposit block and time without `StakingRouterETHDeposited`", async () => {
+      const [stakingModule, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 100n,
+        totalModuleStake: 100n * 32n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const topUpWei = [10n * 10n ** 18n];
+      await stakingModule.mock__allocateDeposits(topUpWei);
+      await lidoMock.setDepositableEther(100n * NEW_MEB);
+      await lidoMock.fund({ value: topUpWei[0] });
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(1_000n * ONE_GWEI);
+
+      const lastDepositBlockBefore = await stakingRouter.getStakingModuleLastDepositBlock(id);
+
+      const tx = await stakingRouter.connect(dsmSigner).topUp(id, [0n], [0n], [randomString(48)], topUpWei);
+      const receipt = await tx.wait();
+      const block = await ethers.provider.getBlock(receipt!.blockNumber);
+
+      expect(receipt!.blockNumber).to.be.greaterThan(lastDepositBlockBefore);
+      expect(await stakingRouter.getStakingModuleLastDepositBlock(id)).to.equal(receipt!.blockNumber);
+      expect((await stakingRouter.getStakingModule(id)).lastDepositAt).to.equal(block!.timestamp);
+
+      await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, topUpWei[0]);
+      await expect(tx).not.to.emit(stakingRouter, "StakingRouterETHDeposited");
     });
 
     it("Reverts if the module does not exist", async () => {
       const { keyIndices, operatorIds, topUpLimits, pubkeys } = makeValidTopUpData();
 
       await expect(
-        stakingRouter.connect(topUpGatewaySigner).topUp(1n, keyIndices, operatorIds, pubkeys, topUpLimits),
+        stakingRouter.connect(dsmSigner).topUp(1n, keyIndices, operatorIds, pubkeys, topUpLimits),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleUnregistered");
     });
 
@@ -131,7 +223,7 @@ describe("StakingRouter.sol:topUp", () => {
       const { keyIndices, operatorIds, topUpLimits, pubkeys } = makeValidTopUpData();
 
       await expect(
-        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+        stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
       ).to.be.revertedWithCustomError(stakingRouter, "WrongWithdrawalCredentialsType");
     });
 
@@ -147,7 +239,7 @@ describe("StakingRouter.sol:topUp", () => {
       const pubkeys: string[] = [];
 
       await expect(
-        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+        stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
       ).to.be.revertedWithCustomError(stakingRouter, "EmptyKeysList");
     });
 
@@ -163,7 +255,7 @@ describe("StakingRouter.sol:topUp", () => {
       const pubkeys = [randomString(48)]; // Only 1 key, but 2 expected
 
       await expect(
-        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+        stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
       ).to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch");
     });
 
@@ -199,16 +291,16 @@ describe("StakingRouter.sol:topUp", () => {
 
       await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(102n * 10n ** 9n * 2048n);
 
-      const tx = await stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
+      const tx = await stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
 
       const receipt = await tx.wait();
       const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
       expect(depositEvents.length).to.equal(topUpWei.length);
 
-      // maxTopUpPerBlockGwei is higher than 100 * 2048 - 100 * 32
-      // 100 * 32 - stake before topUp transaction
+      // The module allocation (100 * 2048 - 100 * 32 ETH) and maxTopUpPerBlockGwei are both higher
+      // than the module seed batch, so the budget is maxDepositsPerBlock * 32 ETH
       const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
-      expect(topUpEvents[0].args._amount).to.equal(2016n * 100n * 10n ** 18n);
+      expect(topUpEvents[0].args._amount).to.equal(DEFAULT_CONFIG.maxDepositsPerBlock * 32n * 10n ** 18n);
 
       // StakingRouter emits StakingRouterETHTopUp with the sum of module-returned allocations
       // (i.e. what is actually pulled from Lido and deposited), not the budget passed to allocateDeposits.
@@ -247,15 +339,16 @@ describe("StakingRouter.sol:topUp", () => {
 
       await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(500n * 10n ** 9n);
 
-      const tx = await stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
+      const tx = await stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
 
       const receipt = await tx.wait();
       const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
       expect(depositEvents.length).to.equal(topUpWei.length);
 
-      // Cap is applied to the allocator OUTPUT (StakingRouter.sol:696-700):
-      // raw module allocation = 201_600 ETH; min(201_600, 500) = 500 ETH passes through
-      // to allocateDeposits unchanged (already aligned to 1 gwei).
+      // Cap is applied to the allocator OUTPUT:
+      // raw module allocation = 201_600 ETH, module batch cap = 150 * 32 = 4_800 ETH;
+      // min(201_600, 500, 4_800) = 500 ETH passes through to allocateDeposits unchanged
+      // (already aligned to 1 gwei).
       const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
       expect(topUpEvents[0].args._amount).to.equal(500n * 10n ** 18n);
     });
@@ -280,9 +373,7 @@ describe("StakingRouter.sol:topUp", () => {
       const operatorIds = [0n];
       const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI]; // in wei
 
-      const tx = await stakingRouter
-        .connect(topUpGatewaySigner)
-        .topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits);
+      const tx = await stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits);
 
       const receipt = await tx.wait();
       const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
@@ -297,6 +388,9 @@ describe("StakingRouter.sol:topUp", () => {
       // StakingRouterETHTopUp is emitted unconditionally for off-chain observability,
       // mirroring StakingRouterETHDeposited behavior in deposit().
       await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, 0n);
+
+      // The module last deposit block is updated also for a zero amount
+      expect(await stakingRouter.getStakingModuleLastDepositBlock(id)).to.equal(receipt!.blockNumber);
     });
 
     it("reverts with LidoDepositsPaused when budget is 0 and Lido cannot deposit", async () => {
@@ -318,7 +412,7 @@ describe("StakingRouter.sol:topUp", () => {
       const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI];
 
       await expect(
-        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+        stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
       ).to.be.revertedWithCustomError(stakingRouter, "LidoDepositsPaused");
     });
 
@@ -355,7 +449,7 @@ describe("StakingRouter.sol:topUp", () => {
         const operatorIds = [0n, 0n];
 
         await expect(
-          stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
+          stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
         ).to.be.revertedWithCustomError(stakingRouter, "ModuleReturnExceedTarget");
       });
 
@@ -383,7 +477,7 @@ describe("StakingRouter.sol:topUp", () => {
         const operatorIds = [0n];
 
         await expect(
-          stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+          stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
         ).to.be.revertedWithCustomError(stakingRouter, "AllocationExceedsLimit");
       });
 
@@ -413,7 +507,7 @@ describe("StakingRouter.sol:topUp", () => {
         await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(1600n * 10n ** 9n);
 
         await expect(
-          stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
+          stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
         ).to.be.revertedWithCustomError(beaconChainDepositor, "DepositAmountTooLow");
       });
 
@@ -434,9 +528,7 @@ describe("StakingRouter.sol:topUp", () => {
         const operatorIds = [0n];
         const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI]; // in wei
 
-        const tx = await stakingRouter
-          .connect(topUpGatewaySigner)
-          .topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits);
+        const tx = await stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits);
 
         const receipt = await tx.wait();
         const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);

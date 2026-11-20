@@ -162,7 +162,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         lazyOracle: deployer.address,
         predepositGuarantee: deployer.address,
         operatorGrid: deployer.address,
-        topUpGateway: deployer.address,
       },
     ]);
 

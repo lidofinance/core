@@ -39,8 +39,8 @@ function nonZeroAddress(value: string | undefined, field: string): string {
  * Deploys the pre/post upgrade checks, `SRPhase2UpgradeTemplate` (which builds `SRPhase2UpgradeConfig` in its
  * constructor) and the `SRPhase2UpgradeVoteScript` omnibus on top of it.
  *
- * @dev The outgoing gateway, verifier and locator implementation are read from the live locator, not from
- *      the state file: `0600` has already overwritten those entries with the incoming addresses.
+ * @dev The outgoing gateway, verifier, DSM, TopUpGateway and locator implementation are read from the live
+ *      locator, not from the state file: `0600` has already overwritten those entries with the incoming addresses.
  */
 export async function main() {
   const state = readNetworkState();
@@ -52,10 +52,10 @@ export async function main() {
   const locatorAddress = getAddress(Sk.lidoLocator, state);
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
   const locatorProxy = OssifiableProxy__factory.connect(locatorAddress, await getDeployerSigner());
-  // The live locator still lists the verifier this upgrade removes
+  // The live locator still lists the verifier and the TopUpGateway this upgrade removes
   const liveLocator = new ethers.Contract(
     locatorAddress,
-    ["function validatorExitDelayVerifier() view returns (address)"],
+    ["function validatorExitDelayVerifier() view returns (address)", "function topUpGateway() view returns (address)"],
     ethers.provider,
   );
 
@@ -139,6 +139,11 @@ export async function main() {
     triggerableWithdrawalsBus: triggerableWithdrawalsBusAddress,
 
     validatorExitDelayVerifier: await liveLocator.validatorExitDelayVerifier(),
+
+    oldDepositSecurityModule: await locator.depositSecurityModule(),
+    newDepositSecurityModule: getAddress(Sk.depositSecurityModule, state),
+    topUpCaller: parameters.depositSecurityModule.topUpCaller,
+    topUpGateway: await liveLocator.topUpGateway(),
 
     easyTrack: easyTrackAddress,
     easyTrackEvmScriptExecutor: await easyTrack.evmScriptExecutor(),

@@ -31,7 +31,6 @@ context("StakingRouter.sol:status-control", () => {
 
   const lido = certainAddress("test:staking-router-status:lido");
   const withdrawalCredentials = randomWCType1();
-  const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   before(async () => {
@@ -39,7 +38,6 @@ context("StakingRouter.sol:status-control", () => {
 
     locator = await deployLidoLocator({
       lido,
-      topUpGateway,
       depositSecurityModule,
     });
 

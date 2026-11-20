@@ -5,7 +5,6 @@ import {
   ConsolidationGateway,
   ConsolidationMigrator,
   StakingRouter,
-  TopUpGateway,
   TriggerableWithdrawalsBus,
   TriggerableWithdrawalsGateway,
 } from "typechain-types";
@@ -209,38 +208,6 @@ export async function main() {
       `NB: skipping deployment of DepositSecurityModule - using the predefined address ${depositSecurityModuleAddress} instead`,
     );
   }
-
-  //
-  // Deploy TopUpGateway behind OssifiableProxy (before StakingRouter initialization)
-  //
-
-  const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
-
-  const topUpGateway_ = await deployBehindOssifiableProxy(
-    Sk.topUpGateway,
-    "TopUpGateway",
-    proxyContractsOwner,
-    deployer,
-    [
-      locator.address,
-      topUpGatewayParams.gloasSlot,
-      chainSpec.slotsPerEpoch,
-      chainSpec.secondsPerSlot,
-      chainSpec.genesisTime,
-    ],
-    null, // implementation
-    true, // withStateFile
-    undefined, // factoryOptions
-    await encodeFunctionCall<InitializeArgs<TopUpGateway>>("TopUpGateway", "initialize", [
-      admin,
-      topUpGatewayParams.maxValidatorsPerTopUp,
-      topUpGatewayParams.minBlockDistance,
-      topUpGatewayParams.maxRootAge,
-      topUpGatewayParams.targetBalanceGwei,
-      topUpGatewayParams.minTopUpGwei,
-    ]),
-  );
-  await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
 
   //
   // Deploy Accounting

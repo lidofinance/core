@@ -1,13 +1,15 @@
 import { expect } from "chai";
+import { Contract, Wallet } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, findEventsWithInterfaces, log } from "lib";
+import { DSMAttestMessage, ether, findEventsWithInterfaces } from "lib";
+import { StakingModuleStatus } from "lib/constants";
 import { randomValidatorPubkey } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
-  buildTopUpData,
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
   cmv2HasTopUpAllocationPause,
@@ -15,18 +17,17 @@ import {
   cmv2SuiteEnabled,
   depositEventAmountWei,
   depositEventInterface,
-  expectedTopUpLimitWei,
   getCMv2ModuleId,
-  getTopUpRoleSigner,
-  prepareTopUpWitnesses,
+  getTopUpCallerSigner,
   topUpEnsureDepositableEther,
+  topUpEnsureDistancePassed,
   topUpEnsureModuleAllocation,
 } from "lib/protocol/helpers";
+import { setSingleGuardian } from "lib/protocol/helpers/dsm";
+import { deployDelegationContract } from "lib/protocol/helpers/edf";
+import { getStakingModuleManagerSigner, prepareStakingModuleForTestDeposit } from "lib/protocol/helpers/staking";
 
 import { Snapshot } from "test/suite";
-
-const GWEI = 10n ** 9n;
-const toGwei = (wei: bigint) => wei / GWEI;
 
 /** Minimal interface to match custom errors of the external CMv2 module. */
 const CMV2_ERRORS_ABI = [
@@ -35,19 +36,24 @@ const CMV2_ERRORS_ABI = [
   "error DepositInfoIsNotUpToDate()",
 ];
 
+const DEPOSIT_CONTRACT_ABI = ["function get_deposit_root() view returns (bytes32)"];
+
+/** Maximum ETH a key can receive above its seed deposit (2048 - 32 ETH). */
+const MAX_EXTRA_BALANCE = ether("2016");
+
 /**
  * Integration test for the full top-up flow over the real production topology:
- * TopUpGateway (CL proofs) -> StakingRouter.topUp -> CMv2.allocateDeposits ->
+ * DepositSecurityModule.topUpBufferedEther -> StakingRouter.topUp -> CMv2.allocateDeposits ->
  * Lido.withdrawDepositableEther -> DepositContract top-up deposits.
  *
- * Target keys are real deposited CMv2 (curated-onchain-v2) validators. Witness
- * effective balances are chosen so the expected top-up amounts are exact constants.
+ * Target keys are real deposited CMv2 (curated-onchain-v2) validators of a fresh operator,
+ * so the expected top-up amounts are exact constants.
  *
  * The suite requires a CMv2 module in the StakingRouter. When CMv2 is unavailable the
  * suite fails loudly; skipping is allowed only via the explicit
  * INTEGRATION_WITH_CMv2=off opt-out.
  */
-describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)", () => {
+describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
   let ctx: ProtocolContext;
 
   let topUpCaller: HardhatEthersSigner;
@@ -55,14 +61,7 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
   let moduleId: bigint;
   let target: CMv2OperatorKeys;
 
-  let targetBalanceGwei: bigint;
-  let minBlockDistance: bigint;
-  let maxRootAge: bigint;
-
-  // Witness EB is chosen so each key's expected top-up is exactly this amount
   const TOP_UP_PER_KEY = ether("50");
-
-  let ebForTopUpGwei: bigint;
 
   let globalSnapshot: string;
   let testSnapshot: string;
@@ -76,46 +75,19 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
       return this.skip();
     }
 
-    const { topUpGateway, stakingRouter } = ctx.contracts;
-
-    // =========================================
-    // Pin the topology: the gateway has no on-chain target module id (it comes in
-    // calldata), so the invariant is the module's 0x02 withdrawal credentials type
-    // =========================================
+    const { stakingRouter } = ctx.contracts;
 
     moduleId = getCMv2ModuleId(ctx);
     const moduleWC = await stakingRouter.getStakingModuleWithdrawalCredentials(moduleId);
     expect(moduleWC.slice(0, 4)).to.equal("0x02", "CMv2 withdrawal credentials must be of type 0x02");
 
-    // Production deploys have a single TOP_UP_ROLE holder (a deploy-template
-    // invariant, not a protocol constraint) — worth a heads-up but not a failure
-    const topUpRole = await topUpGateway.TOP_UP_ROLE();
-    const holdersCount = await topUpGateway.getRoleMemberCount(topUpRole);
-    if (holdersCount > 1n) {
-      log.warning(`TOP_UP_ROLE has ${holdersCount} holders (deploy template grants exactly one)`);
-    }
-    topUpCaller = await getTopUpRoleSigner(ctx);
+    topUpCaller = await getTopUpCallerSigner(ctx);
 
-    targetBalanceGwei = await topUpGateway.getTargetBalanceGwei();
-    minBlockDistance = await topUpGateway.getMinBlockDistance();
-    maxRootAge = await topUpGateway.getMaxRootAge();
-
-    ebForTopUpGwei = targetBalanceGwei - toGwei(TOP_UP_PER_KEY);
-
-    // =========================================
-    // Target: real deposited CMv2 keys. forceCreate gives a fresh operator with a known
-    // per-key balance baseline and (via the create path) 100% of the allocation weight,
-    // so expected top-up amounts are exact regardless of the fork state.
-    // =========================================
-
+    // A fresh operator gets 100% of the allocation weight, so the amounts are exact regardless of the fork state
     target = await cmv2EnsureDepositedOperatorKeys(ctx, 2n, { name: "topup_target_operator", forceCreate: true });
 
-    // =========================================
-    // Ether and router allocation for deterministic amounts.
     // The router quantizes allocations in maxEBType1 (32 ETH) validator-equivalents,
-    // so the depositable buffer needs one extra quantum of headroom.
-    // =========================================
-
+    // so the depositable buffer needs one extra quantum of headroom
     await topUpEnsureDepositableEther(ctx, 2n * TOP_UP_PER_KEY + ether("32"));
     await topUpEnsureModuleAllocation(ctx, moduleId, 2n * TOP_UP_PER_KEY);
   });
@@ -131,37 +103,51 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
   const targetKeys = () => ({
     keyIndices: target.keyIndices,
     operatorIds: target.keyIndices.map(() => target.operatorId),
+    pubkeys: target.pubkeys,
   });
 
   const singleKey = (position: number) => ({
     keyIndices: [target.keyIndices[position]],
     operatorIds: [target.operatorId],
+    pubkeys: [target.pubkeys[position]],
   });
+
+  type Keys = ReturnType<typeof targetKeys>;
+
+  const callTopUp = (keys: Keys, limits: bigint[], caller = topUpCaller, id = moduleId) =>
+    ctx.contracts.depositSecurityModule
+      .connect(caller)
+      .topUpBufferedEther(id, keys.keyIndices, keys.operatorIds, keys.pubkeys, limits);
+
+  const topUp = async (keys: Keys, limits: bigint[], caller = topUpCaller) => {
+    await topUpEnsureDistancePassed(ctx, moduleId);
+    return await callTopUp(keys, limits, caller);
+  };
+
+  const setUpGuardian = async () => {
+    const [delegationOwner, delegate] = await ethers.getSigners();
+    const guardian = await deployDelegationContract(delegationOwner, delegate.address);
+    await setSingleGuardian(ctx, guardian.address);
+    return { guardian: guardian.contract.connect(delegate) as Contract, guardianAddress: guardian.address };
+  };
 
   context("Full top-up flow", () => {
     it("Should top up real CMv2 validators end to end with exact amounts", async () => {
-      const { topUpGateway, lido, stakingRouter } = ctx.contracts;
-
-      const expectedPerKey = await expectedTopUpLimitWei(ctx, ebForTopUpGwei);
-      expect(expectedPerKey).to.equal(TOP_UP_PER_KEY);
-      const expectedTotal = 2n * expectedPerKey;
-
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-        { pubkey: target.pubkeys[1], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
+      const { depositSecurityModule: dsm, lido, stakingRouter } = ctx.contracts;
+      const expectedTotal = 2n * TOP_UP_PER_KEY;
 
       const bufferedBefore = await lido.getBufferedEther();
       const nonceBefore = await stakingRouter.getStakingModuleNonce(moduleId);
 
-      const tx = await topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, targetKeys(), bundle));
+      const tx = await topUp(targetKeys(), [TOP_UP_PER_KEY, TOP_UP_PER_KEY]);
       const receipt = await tx.wait();
 
-      // Exact amount reached the router
+      // Exact amount reached the router; a top-up is not reported as a seed deposit
       const topUpEvents = ctx.getEvents(receipt!, "StakingRouterETHTopUp");
       expect(topUpEvents.length).to.equal(1);
       expect(topUpEvents[0].args.stakingModuleId).to.equal(moduleId);
       expect(topUpEvents[0].args.amount).to.equal(expectedTotal);
+      expect(ctx.getEvents(receipt!, "StakingRouterETHDeposited").length).to.equal(0);
 
       // Real DepositContract top-up deposits, one per key, exact per-key amounts
       const depositEvents = findEventsWithInterfaces(receipt!, "DepositEvent", [depositEventInterface]);
@@ -170,7 +156,7 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
         depositEvents.map((e) => [e.args.pubkey.toLowerCase(), depositEventAmountWei(e.args.amount)]),
       );
       for (const pubkey of target.pubkeys) {
-        expect(depositedByPubkey.get(pubkey.toLowerCase())).to.equal(expectedPerKey);
+        expect(depositedByPubkey.get(pubkey.toLowerCase())).to.equal(TOP_UP_PER_KEY);
       }
 
       // All pulled ether is deposited: buffer decreases by exactly the total
@@ -180,57 +166,17 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
       const expectedNonce = (await cmv2HasTopUpAllocationPause(ctx)) ? nonceBefore : nonceBefore + 1n;
       expect(await stakingRouter.getStakingModuleNonce(moduleId)).to.equal(expectedNonce);
 
-      // A successful (non-zero) top-up advances the rate-limit window
-      const gatewayEvents = ctx.getEvents(receipt!, "LastTopUpChanged");
-      expect(gatewayEvents.length).to.equal(1);
-      expect(await topUpGateway.isBlockDistancePassed()).to.equal(false);
+      // Both last deposit blocks move to the top-up block
+      expect(await dsm.getLastDepositBlock()).to.equal(receipt!.blockNumber);
+      expect(await stakingRouter.getStakingModuleLastDepositBlock(moduleId)).to.equal(receipt!.blockNumber);
     });
 
-    it("Should count pending deposits against the top-up limit", async () => {
-      const { topUpGateway, lido } = ctx.contracts;
-
-      // Key 0 is fully covered by a pending deposit, key 1 gets a real top-up
-      const pendingBalanceGwei = [toGwei(TOP_UP_PER_KEY), 0n];
-
-      const expectedPerKey = await expectedTopUpLimitWei(ctx, ebForTopUpGwei);
-      expect(await expectedTopUpLimitWei(ctx, ebForTopUpGwei, pendingBalanceGwei[0])).to.equal(0n);
-
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-        { pubkey: target.pubkeys[1], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
+    it("Should move no ether but reset the deposit distance when all limits are zero", async () => {
+      const { depositSecurityModule: dsm, lido, stakingRouter } = ctx.contracts;
 
       const bufferedBefore = await lido.getBufferedEther();
 
-      const tx = await topUpGateway
-        .connect(topUpCaller)
-        .topUp(buildTopUpData(moduleId, targetKeys(), bundle, { pendingBalanceGwei }));
-      const receipt = await tx.wait();
-
-      const topUpEvents = ctx.getEvents(receipt!, "StakingRouterETHTopUp");
-      expect(topUpEvents[0].args.amount).to.equal(expectedPerKey);
-
-      // Only the uncovered key receives a deposit
-      const depositEvents = findEventsWithInterfaces(receipt!, "DepositEvent", [depositEventInterface]);
-      expect(depositEvents.length).to.equal(1);
-      expect(depositEvents[0].args.pubkey.toLowerCase()).to.equal(target.pubkeys[1].toLowerCase());
-      expect(depositEventAmountWei(depositEvents[0].args.amount)).to.equal(expectedPerKey);
-
-      expect(bufferedBefore - (await lido.getBufferedEther())).to.equal(expectedPerKey);
-    });
-
-    it("Should move no ether and keep the rate-limit window when all limits are zero", async () => {
-      const { topUpGateway, lido } = ctx.contracts;
-
-      // Balance already at target -> zero limits; the router is still called
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: targetBalanceGwei },
-        { pubkey: target.pubkeys[1], effectiveBalanceGwei: targetBalanceGwei },
-      ]);
-
-      const bufferedBefore = await lido.getBufferedEther();
-
-      const tx = await topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, targetKeys(), bundle));
+      const tx = await topUp(targetKeys(), [0n, 0n]);
       const receipt = await tx.wait();
 
       const topUpEvents = ctx.getEvents(receipt!, "StakingRouterETHTopUp");
@@ -240,211 +186,239 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
       expect(findEventsWithInterfaces(receipt!, "DepositEvent", [depositEventInterface]).length).to.equal(0);
       expect(await lido.getBufferedEther()).to.equal(bufferedBefore);
 
-      // Zero top-up must not advance the rate-limit window
-      expect(ctx.getEvents(receipt!, "LastTopUpChanged").length).to.equal(0);
-      expect(await topUpGateway.isBlockDistancePassed()).to.equal(true);
+      expect(await dsm.getLastDepositBlock()).to.equal(receipt!.blockNumber);
+      expect(await stakingRouter.getStakingModuleLastDepositBlock(moduleId)).to.equal(receipt!.blockNumber);
+      expect(await dsm.isMinDepositDistancePassed(moduleId)).to.equal(false);
     });
 
-    it("Should assign zero limits to slashed and exiting validators", async () => {
-      const { topUpGateway, lido } = ctx.contracts;
+    it("Should cap a top-up call at maxDepositsPerBlock seed deposits of the module", async () => {
+      const { stakingRouter } = ctx.contracts;
 
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei, slashed: true },
-        { pubkey: target.pubkeys[1], effectiveBalanceGwei: ebForTopUpGwei, exitEpoch: 50n },
-      ]);
+      // Two seed deposits per block: one top-up call moves at most 2 * 32 ETH, whatever the limits ask
+      const module = await stakingRouter.getStakingModule(moduleId);
+      const manager = await getStakingModuleManagerSigner(ctx);
+      await stakingRouter
+        .connect(manager)
+        .updateStakingModule(
+          moduleId,
+          module.stakeShareLimit,
+          module.priorityExitShareThreshold,
+          module.stakingModuleFee,
+          module.treasuryFee,
+          2n,
+          module.minDepositBlockDistance,
+        );
 
-      const bufferedBefore = await lido.getBufferedEther();
+      const receipt = (await (await topUp(targetKeys(), [TOP_UP_PER_KEY, TOP_UP_PER_KEY])).wait())!;
+      expect(ctx.getEvents(receipt, "StakingRouterETHTopUp")[0].args.amount).to.equal(ether("64"));
+    });
 
-      const tx = await topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, targetKeys(), bundle));
-      const receipt = await tx.wait();
+    it("Should never add more than 2016 ETH to a key above its seed deposit", async () => {
+      const { stakingRouter } = ctx.contracts;
 
-      expect(ctx.getEvents(receipt!, "StakingRouterETHTopUp")[0].args.amount).to.equal(0n);
-      expect(findEventsWithInterfaces(receipt!, "DepositEvent", [depositEventInterface]).length).to.equal(0);
-      expect(await lido.getBufferedEther()).to.equal(bufferedBefore);
-      expect(ctx.getEvents(receipt!, "LastTopUpChanged").length).to.equal(0);
+      await topUpEnsureDepositableEther(ctx, MAX_EXTRA_BALANCE + ether("32"));
+      await topUpEnsureModuleAllocation(ctx, moduleId, MAX_EXTRA_BALANCE);
+
+      // Ask for more than the cap in every call until the module returns zero
+      const limit = MAX_EXTRA_BALANCE + ether("100");
+      const batchCap = ether("32") * (await stakingRouter.getStakingModuleMaxDepositsPerBlock(moduleId));
+      const globalCap = (await stakingRouter.getMaxTopUpPerBlockGwei()) * 10n ** 9n;
+      const perCallCap = batchCap < globalCap ? batchCap : globalCap;
+      const maxCalls = Number(MAX_EXTRA_BALANCE / perCallCap) + 2;
+
+      let total = 0n;
+      for (let call = 0; call < maxCalls; call++) {
+        const receipt = await (await topUp(singleKey(0), [limit])).wait();
+        const amount = ctx.getEvents(receipt!, "StakingRouterETHTopUp")[0].args.amount as bigint;
+        if (amount === 0n) break;
+        total += amount;
+      }
+
+      expect(total).to.equal(MAX_EXTRA_BALANCE);
     });
   });
 
-  context("Rate limiting", () => {
-    it("Should enforce min block distance after a successful top-up and recover after it passes", async () => {
-      const { topUpGateway } = ctx.contracts;
+  context("Deposit distance", () => {
+    it("Should block a top-up until the module distance passes after the previous top-up", async () => {
+      const { depositSecurityModule: dsm, stakingRouter } = ctx.contracts;
 
-      // First top-up: single key, non-zero amount
-      const bundle1 = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
-      await topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(0), bundle1));
-      expect(await topUpGateway.isBlockDistancePassed()).to.equal(false);
+      await topUp(singleKey(0), [TOP_UP_PER_KEY]);
 
-      // Immediate retry with a fresh root: blocked by the distance check
-      const bundle2 = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[1], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
-      await expect(
-        topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(1), bundle2)),
-      ).to.be.revertedWithCustomError(topUpGateway, "MinBlockDistanceNotMet");
+      await expect(callTopUp(singleKey(1), [TOP_UP_PER_KEY])).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
 
-      // After the distance passes the gateway accepts a fresh root again
-      await ethers.provider.send("hardhat_mine", ["0x" + minBlockDistance.toString(16)]);
-      expect(await topUpGateway.isBlockDistancePassed()).to.equal(true);
+      await mine(await stakingRouter.getStakingModuleMinDepositBlockDistance(moduleId));
 
-      const bundle3 = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[1], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
-      const tx = await topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(1), bundle3));
-      const receipt = await tx.wait();
+      const receipt = await (await callTopUp(singleKey(1), [TOP_UP_PER_KEY])).wait();
       expect(ctx.getEvents(receipt!, "StakingRouterETHTopUp")[0].args.amount).to.equal(TOP_UP_PER_KEY);
     });
 
-    it("Should reject a root that precedes the last successful top-up", async () => {
-      const { topUpGateway } = ctx.contracts;
+    it("Should block a top-up after a guardian-signed seed deposit to another module until the distance passes", async () => {
+      const { depositSecurityModule: dsm, stakingRouter } = ctx.contracts;
+      const norId = ctx.modules.nor!.id;
 
-      // The stale root is committed BEFORE the successful top-up
-      const staleBundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[1], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
+      // One guardian with a known delegate key and quorum 1 signs the seed deposit
+      const [delegationOwner] = await ethers.getSigners();
+      const delegate = Wallet.createRandom();
+      const guardian = await deployDelegationContract(delegationOwner, delegate.address);
+      await setSingleGuardian(ctx, guardian.address);
+      DSMAttestMessage.setMessagePrefix(await dsm.ATTEST_MESSAGE_PREFIX());
 
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
-      await topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(0), bundle));
+      // Seed one NOR key through the DSM. The helper pauses the other modules for a deterministic seed.
+      await topUpEnsureDepositableEther(ctx, ether("32") + TOP_UP_PER_KEY + ether("32"));
+      await prepareStakingModuleForTestDeposit(ctx, norId, 1n);
+      await topUpEnsureDistancePassed(ctx, norId);
 
-      // Pass the block distance without letting the root expire
-      await ethers.provider.send("hardhat_mine", ["0x" + minBlockDistance.toString(16)]);
+      const block = await ethers.provider.getBlock("latest");
+      const depositContract = new ethers.Contract(await dsm.DEPOSIT_CONTRACT(), DEPOSIT_CONTRACT_ABI, ethers.provider);
+      const signingArgs = [
+        block!.number,
+        block!.hash!,
+        await depositContract.get_deposit_root(),
+        norId,
+        await stakingRouter.getStakingModuleNonce(norId),
+      ] as const;
+      const signature = new DSMAttestMessage(guardian.address, ...signingArgs).sign(delegate.privateKey);
+      const seedReceipt = (await (await dsm.depositBufferedEther(...signingArgs, [signature])).wait())!;
+      expect(await dsm.getLastDepositBlock()).to.equal(seedReceipt.blockNumber);
 
-      await expect(
-        topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(1), staleBundle)),
-      ).to.be.revertedWithCustomError(topUpGateway, "RootPrecedesLastTopUp");
+      // Bring CMv2 back; the DSM window counts the seed to any module, so the DSM rejects the top-up
+      // before it reaches the router
+      if ((await stakingRouter.getStakingModuleStatus(moduleId)) !== BigInt(StakingModuleStatus.Active)) {
+        const manager = await getStakingModuleManagerSigner(ctx);
+        await stakingRouter.connect(manager).setStakingModuleStatus(moduleId, StakingModuleStatus.Active);
+      }
+      expect(await dsm.isMinDepositDistancePassed(moduleId)).to.equal(false);
+      await expect(callTopUp(singleKey(0), [TOP_UP_PER_KEY])).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
+
+      // A successful top-up after the distance is covered by the top-up after top-up case above
+      await mine(await stakingRouter.getStakingModuleMinDepositBlockDistance(moduleId));
+      expect(await dsm.isMinDepositDistancePassed(moduleId)).to.equal(true);
     });
 
-    it("Should reject a root older than maxRootAge", async () => {
-      const { topUpGateway } = ctx.contracts;
+    it("Should make a seed deposit to another module wait for its distance after a top-up", async () => {
+      const { depositSecurityModule: dsm, stakingRouter } = ctx.contracts;
+      const norId = ctx.modules.nor!.id;
+      const depositContract = new ethers.Contract(await dsm.DEPOSIT_CONTRACT(), DEPOSIT_CONTRACT_ABI, ethers.provider);
 
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
+      // One guardian and quorum 1: the distance check precedes the signature check
+      const { guardianAddress } = await setUpGuardian();
+      await topUpEnsureDistancePassed(ctx, norId);
+      expect(await dsm.isMinDepositDistancePassed(norId)).to.equal(true);
 
-      await ethers.provider.send("evm_increaseTime", [Number(maxRootAge) + 100]);
-      await ethers.provider.send("evm_mine", []);
+      await topUp(singleKey(0), [TOP_UP_PER_KEY]);
+      expect(await dsm.isMinDepositDistancePassed(norId)).to.equal(false);
+
+      const block = await ethers.provider.getBlock("latest");
+      await expect(
+        dsm.depositBufferedEther(
+          block!.number,
+          block!.hash!,
+          await depositContract.get_deposit_root(),
+          norId,
+          await stakingRouter.getStakingModuleNonce(norId),
+          [{ guardian: guardianAddress, signature: "0x" }],
+        ),
+      ).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
+
+      await mine(await stakingRouter.getStakingModuleMinDepositBlockDistance(norId));
+      expect(await dsm.isMinDepositDistancePassed(norId)).to.equal(true);
+    });
+  });
+
+  context("Access and pause", () => {
+    it("Should revert when the caller is not the DSM top-up caller", async () => {
+      const { depositSecurityModule: dsm } = ctx.contracts;
+      const [stranger] = await ethers.getSigners();
+
+      await expect(topUp(singleKey(0), [TOP_UP_PER_KEY], stranger))
+        .to.be.revertedWithCustomError(dsm, "NotTopUpCaller")
+        .withArgs(stranger.address);
+    });
+
+    it("Should revert when a direct StakingRouter call does not come from the DSM", async () => {
+      const { stakingRouter } = ctx.contracts;
+      const keys = singleKey(0);
 
       await expect(
-        topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(0), bundle)),
-      ).to.be.revertedWithCustomError(topUpGateway, "RootIsTooOld");
+        stakingRouter
+          .connect(topUpCaller)
+          .topUp(moduleId, keys.keyIndices, keys.operatorIds, keys.pubkeys, [TOP_UP_PER_KEY]),
+      ).to.be.revertedWithCustomError(stakingRouter, "NotAuthorized");
+    });
+
+    it("Should revert while a guardian keeps the DSM paused", async () => {
+      const { depositSecurityModule: dsm } = ctx.contracts;
+      const { guardian } = await setUpGuardian();
+
+      const pauseData = dsm.interface.encodeFunctionData("pauseDeposits", [
+        await ethers.provider.getBlockNumber(),
+        { guardian: ethers.ZeroAddress, signature: "0x" },
+      ]);
+      await guardian.execute(await dsm.getAddress(), pauseData);
+      expect(await dsm.isDepositsPaused()).to.equal(true);
+
+      await expect(topUp(singleKey(0), [TOP_UP_PER_KEY])).to.be.revertedWithCustomError(dsm, "DepositsArePaused");
     });
   });
 
   context("Key and module validation (real CMv2)", () => {
     it("Should revert for a module with non-0x02 withdrawal credentials", async () => {
-      const { topUpGateway } = ctx.contracts;
+      const { stakingRouter } = ctx.contracts;
+      const norId = ctx.modules.nor!.id;
 
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
+      // Deposit helpers pause other modules; the router checks the status before the credentials type
+      if ((await stakingRouter.getStakingModuleStatus(norId)) !== BigInt(StakingModuleStatus.Active)) {
+        const manager = await getStakingModuleManagerSigner(ctx);
+        await stakingRouter.connect(manager).setStakingModuleStatus(norId, StakingModuleStatus.Active);
+      }
+      await topUpEnsureDistancePassed(ctx, norId);
 
-      await expect(
-        topUpGateway.connect(topUpCaller).topUp(buildTopUpData(ctx.modules.nor!.id, singleKey(0), bundle)),
-      ).to.be.revertedWithCustomError(topUpGateway, "WrongWithdrawalCredentials");
+      await expect(callTopUp(singleKey(0), [TOP_UP_PER_KEY], topUpCaller, norId)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "WrongWithdrawalCredentialsType",
+      );
     });
 
-    it("Should revert in CMv2 when the pubkey does not match the module key", async () => {
-      const { topUpGateway } = ctx.contracts;
-      const cmv2Errors = new ethers.Contract(ctx.modules.cmv2!.stakingModuleAddress, CMV2_ERRORS_ABI, ethers.provider);
+    it("Should revert when the call carries more keys than maxDepositsPerBlock", async () => {
+      const { stakingRouter } = ctx.contracts;
 
-      // The witness proves a foreign pubkey; the module must reject the mismatch
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: randomValidatorPubkey(), effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
-
-      await expect(
-        topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(0), bundle)),
-      ).to.be.revertedWithCustomError(cmv2Errors, "InvalidSigningKey");
-    });
-
-    it("Should revert in CMv2 for a bonded but undeposited target key", async () => {
-      const { topUpGateway } = ctx.contracts;
-      const cmv2Errors = new ethers.Contract(ctx.modules.cmv2!.stakingModuleAddress, CMV2_ERRORS_ABI, ethers.provider);
-
-      const undeposited = await cmv2CreateOperatorWithKeys(ctx, { name: "topup_undeposited_target", keysCount: 1n });
-
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: undeposited.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
-
-      await expect(
-        topUpGateway
-          .connect(topUpCaller)
-          .topUp(
-            buildTopUpData(
-              moduleId,
-              { keyIndices: [undeposited.keyIndices[0]], operatorIds: [undeposited.operatorId] },
-              bundle,
-            ),
-          ),
-      ).to.be.revertedWithCustomError(cmv2Errors, "SigningKeysInvalidOffset");
-    });
-  });
-
-  context("Gateway limits and access", () => {
-    it("Should revert when the batch exceeds maxValidatorsPerTopUp", async () => {
-      const { topUpGateway } = ctx.contracts;
-
-      const maxValidators = await topUpGateway.getMaxValidatorsPerTopUp();
-      const count = Number(maxValidators) + 1;
-
-      // The size check precedes proof verification, so dummy witnesses are enough
-      const indices = Array.from({ length: count }, (_, i) => BigInt(i));
-      const dummyWitness = {
-        proofValidator: [] as string[],
-        pubkey: "0x" + "11".repeat(48),
-        effectiveBalance: 0n,
-        slashed: false,
-        activationEligibilityEpoch: 0n,
-        activationEpoch: 0n,
-        exitEpoch: 0n,
-        withdrawableEpoch: 0n,
+      const maxKeys = await stakingRouter.getStakingModuleMaxDepositsPerBlock(moduleId);
+      const count = maxKeys + 1n;
+      const keys = {
+        keyIndices: Array.from({ length: Number(count) }, (_, i) => BigInt(i)),
+        operatorIds: Array.from({ length: Number(count) }, () => target.operatorId),
+        pubkeys: Array.from({ length: Number(count) }, () => randomValidatorPubkey()),
       };
 
       await expect(
-        topUpGateway.connect(topUpCaller).topUp({
-          moduleId,
-          keyIndices: indices,
-          operatorIds: indices.map(() => target.operatorId),
-          validatorIndices: indices,
-          beaconRootData: { childBlockTimestamp: 0, slot: 0, proposerIndex: 0 },
-          validatorWitness: indices.map(() => dummyWitness),
-          pendingBalanceGwei: indices.map(() => 0n),
-        }),
-      ).to.be.revertedWithCustomError(topUpGateway, "MaxValidatorsPerTopUpExceeded");
+        topUp(
+          keys,
+          keys.keyIndices.map(() => TOP_UP_PER_KEY),
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "TopUpKeysLimitExceeded")
+        .withArgs(count, maxKeys);
     });
 
-    it("Should revert when the caller lacks TOP_UP_ROLE", async () => {
-      const { topUpGateway } = ctx.contracts;
-      const [stranger] = await ethers.getSigners();
+    it("Should revert in CMv2 when the pubkey does not match the module key", async () => {
+      const cmv2Errors = new ethers.Contract(ctx.modules.cmv2!.stakingModuleAddress, CMV2_ERRORS_ABI, ethers.provider);
 
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
+      const keys = { ...singleKey(0), pubkeys: [randomValidatorPubkey()] };
 
-      await expect(
-        topUpGateway.connect(stranger).topUp(buildTopUpData(moduleId, singleKey(0), bundle)),
-      ).to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount");
+      await expect(topUp(keys, [TOP_UP_PER_KEY])).to.be.revertedWithCustomError(cmv2Errors, "InvalidSigningKey");
     });
 
-    it("Should revert while the gateway is paused", async () => {
-      const { topUpGateway } = ctx.contracts;
-      const agentSigner = await ctx.getSigner("agent");
+    it("Should revert in CMv2 for a bonded but undeposited key", async () => {
+      const cmv2Errors = new ethers.Contract(ctx.modules.cmv2!.stakingModuleAddress, CMV2_ERRORS_ABI, ethers.provider);
 
-      const bundle = await prepareTopUpWitnesses(ctx, [
-        { pubkey: target.pubkeys[0], effectiveBalanceGwei: ebForTopUpGwei },
-      ]);
+      const undeposited = await cmv2CreateOperatorWithKeys(ctx, { name: "topup_undeposited_target", keysCount: 1n });
+      const keys = {
+        keyIndices: [undeposited.keyIndices[0]],
+        operatorIds: [undeposited.operatorId],
+        pubkeys: [undeposited.pubkeys[0]],
+      };
 
-      const PAUSE_ROLE = await topUpGateway.PAUSE_ROLE();
-      await topUpGateway.connect(agentSigner).grantRole(PAUSE_ROLE, agentSigner.address);
-      await topUpGateway.connect(agentSigner).pauseFor(3600);
-
-      await expect(
-        topUpGateway.connect(topUpCaller).topUp(buildTopUpData(moduleId, singleKey(0), bundle)),
-      ).to.be.revertedWithCustomError(topUpGateway, "ResumedExpected");
+      await expect(topUp(keys, [TOP_UP_PER_KEY])).to.be.revertedWithCustomError(cmv2Errors, "SigningKeysInvalidOffset");
     });
   });
 });

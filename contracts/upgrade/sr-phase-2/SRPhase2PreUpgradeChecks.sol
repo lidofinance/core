@@ -13,7 +13,9 @@ import {SRPhase2UpgradeChecksBase} from "./SRPhase2UpgradeChecksBase.sol";
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
 import {
     GatewayConsumerLimits,
+    IDepositSecurityModule,
     IEjector,
+    ILidoLocatorWithTopUpGateway,
     ILidoLocatorWithVerifier,
     IStakingRouter,
     ITriggerableWithdrawalsBus,
@@ -49,6 +51,10 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         ILidoLocator locator = ILidoLocator(locatorAddr);
         _assertAddress("locator-gateway", locator.triggerableWithdrawalsGateway(), oldGateway);
         _assertAddress("locator-verifier", ILidoLocatorWithVerifier(locatorAddr).validatorExitDelayVerifier(), verifier);
+        _assertAddress("locator-dsm", locator.depositSecurityModule(), config.OLD_DEPOSIT_SECURITY_MODULE());
+        _assertAddress(
+            "locator-top-up-gateway", ILidoLocatorWithTopUpGateway(locatorAddr).topUpGateway(), config.TOP_UP_GATEWAY()
+        );
         _assertUnchangedLocatorMembers(config, locator);
 
         // The candidate implementation differs from the live one only in the members this upgrade replaces.
@@ -56,6 +62,7 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertAddress("candidate-gateway", candidate.triggerableWithdrawalsGateway(), newGateway);
         _assertAddress("candidate-bus", candidate.triggerableWithdrawalsBus(), bus);
         _assertAddress("candidate-withdrawals-oracle", candidate.withdrawalsOracle(), config.WITHDRAWALS_ORACLE());
+        _assertAddress("candidate-dsm", candidate.depositSecurityModule(), config.NEW_DEPOSIT_SECURITY_MODULE());
         if (_locatorHashOfUnchangedMembers(locator) != _locatorHashOfUnchangedMembers(candidate)) {
             revert LocatorChangedBeyondUpgrade();
         }
@@ -126,6 +133,12 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertSingleRoleHolder("sr-exit-triggered-role", stakingRouter, REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE, oldGateway);
         _assertSingleRoleHolder("sr-exiting-status-role", stakingRouter, REPORT_VALIDATOR_EXITING_STATUS_ROLE, verifier);
 
+        // --- Deposit security module: the vote moves the unvetting role from the old DSM to the new one ---
+        _assertSingleRoleHolder(
+            "sr-unvetting-role", stakingRouter, STAKING_MODULE_UNVETTING_ROLE, config.OLD_DEPOSIT_SECURITY_MODULE()
+        );
+        _assertDepositSecurityModules(config);
+
         // --- Old gateway: the limit manager and the CircuitBreaker pauser move to the new one ---
         _assertSingleRoleHolder(
             "old-gateway-limit-manager", IAccessControlEnumerable(oldGateway), TW_EXIT_LIMIT_MANAGER_ROLE, agent
@@ -174,10 +187,43 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertUint("bus-clear-members", busAcl.getRoleMemberCount(CLEAR_WITHDRAWAL_INTENTS_ROLE), 0);
     }
 
-    /// @dev Every locator member except the gateway, the bus and the verifier this upgrade replaces.
+    /// @dev The new DSM is a copy of the old one: the same guardians, quorum and parameters, the top-up caller
+    ///      of the config, the Agent as its owner, and not paused. A pause of the old DSM must not be lifted by
+    ///      the switch, so the vote reverts while the old DSM is paused.
+    function _assertDepositSecurityModules(SRPhase2UpgradeConfig config) private view {
+        IDepositSecurityModule oldDsm = IDepositSecurityModule(config.OLD_DEPOSIT_SECURITY_MODULE());
+        IDepositSecurityModule newDsm = IDepositSecurityModule(config.NEW_DEPOSIT_SECURITY_MODULE());
+
+        _assertUint("new-dsm-version", newDsm.VERSION(), DEPOSIT_SECURITY_MODULE_VERSION);
+        _assertAddress("new-dsm-owner", newDsm.getOwner(), config.AGENT());
+        _assertAddress("new-dsm-staking-router", newDsm.STAKING_ROUTER(), config.STAKING_ROUTER());
+        _assertAddress("new-dsm-deposit-contract", newDsm.DEPOSIT_CONTRACT(), oldDsm.DEPOSIT_CONTRACT());
+        _assertAddress("new-dsm-top-up-caller", newDsm.getTopUpCaller(), config.TOP_UP_CALLER());
+        _assertUint("new-dsm-quorum", newDsm.getGuardianQuorum(), oldDsm.getGuardianQuorum());
+        _assertUint(
+            "new-dsm-pause-intent",
+            newDsm.getPauseIntentValidityPeriodBlocks(),
+            oldDsm.getPauseIntentValidityPeriodBlocks()
+        );
+        _assertUint(
+            "new-dsm-max-ops-per-unvet", newDsm.getMaxOperatorsPerUnvetting(), oldDsm.getMaxOperatorsPerUnvetting()
+        );
+
+        address[] memory oldGuardians = oldDsm.getGuardians();
+        address[] memory newGuardians = newDsm.getGuardians();
+        _assertUint("new-dsm-guardians-count", newGuardians.length, oldGuardians.length);
+        for (uint256 i = 0; i < oldGuardians.length; ++i) {
+            _assertAddress("new-dsm-guardian", newGuardians[i], oldGuardians[i]);
+        }
+
+        if (oldDsm.isDepositsPaused()) revert InvalidFlag("old-dsm-paused", address(oldDsm));
+        if (newDsm.isDepositsPaused()) revert InvalidFlag("new-dsm-paused", address(newDsm));
+    }
+
+    /// @dev Every locator member except the gateway, the bus, the verifier and the DSM this upgrade replaces,
+    ///      and the TopUpGateway it removes.
     function _locatorHashOfUnchangedMembers(ILidoLocator locator) private view returns (bytes32 hash) {
         hash = _hashAddress(hash, locator.accountingOracle());
-        hash = _hashAddress(hash, locator.depositSecurityModule());
         hash = _hashAddress(hash, locator.elRewardsVault());
         hash = _hashAddress(hash, locator.lido());
         hash = _hashAddress(hash, locator.oracleReportSanityChecker());
@@ -196,7 +242,6 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         hash = _hashAddress(hash, locator.vaultFactory());
         hash = _hashAddress(hash, locator.lazyOracle());
         hash = _hashAddress(hash, locator.operatorGrid());
-        hash = _hashAddress(hash, locator.topUpGateway());
         hash = _hashAddress(hash, locator.consolidationGateway());
     }
 

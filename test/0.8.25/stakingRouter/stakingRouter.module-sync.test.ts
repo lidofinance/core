@@ -58,7 +58,6 @@ describe("StakingRouter.sol:module-sync", () => {
   const minDepositBlockDistance = 25n;
 
   const withdrawalCredentials = randomWCType1();
-  const topUpGateway = "0x0000000000000000000000000000000000000001";
   const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   let originalState: string;
@@ -73,7 +72,6 @@ describe("StakingRouter.sol:module-sync", () => {
 
     locator = await deployLidoLocator({
       lido: lidoMock,
-      topUpGateway,
       depositSecurityModule,
       accountingOracle,
     });

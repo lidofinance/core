@@ -18,6 +18,13 @@ interface IStakingRouter {
         bytes calldata _vettedSigningKeysCounts
     ) external;
     function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function topUp(
+        uint256 _stakingModuleId,
+        uint256[] calldata _keyIndices,
+        uint256[] calldata _operatorIds,
+        bytes[] calldata _pubkeys,
+        uint256[] calldata _topUpLimits
+    ) external;
 }
 
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
@@ -29,6 +36,13 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         bytes vettedSigningKeysCounts
     );
     event StakingModuleDeposited(uint24 stakingModuleId, bytes depositCalldata);
+    event StakingModuleToppedUp(
+        uint24 stakingModuleId,
+        uint256[] keyIndices,
+        uint256[] operatorIds,
+        bytes[] pubkeys,
+        uint256[] topUpLimits
+    );
     event StakingModuleStatusSet(uint24 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
     StakingModuleStatus private status;
@@ -52,6 +66,16 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         bytes calldata depositCalldata
     ) external whenModuleIsRegistered(stakingModuleId) {
         emit StakingModuleDeposited(uint24(stakingModuleId), depositCalldata);
+    }
+
+    function topUp(
+        uint256 stakingModuleId,
+        uint256[] calldata keyIndices,
+        uint256[] calldata operatorIds,
+        bytes[] calldata pubkeys,
+        uint256[] calldata topUpLimits
+    ) external whenModuleIsRegistered(stakingModuleId) {
+        emit StakingModuleToppedUp(uint24(stakingModuleId), keyIndices, operatorIds, pubkeys, topUpLimits);
     }
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(

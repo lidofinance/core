@@ -36,7 +36,8 @@ import {
 /// @title SRPhase2UpgradeVoteScript
 /// @notice Omnibus for the SR phase 2 (LIP-38) upgrade: replaces the TriggerableWithdrawalsGateway,
 ///         plugs in the TriggerableWithdrawalsBus, moves the WithdrawalsOracle onto it and removes
-///         the exit delay penalties.
+///         the exit delay penalties. It also switches to the DepositSecurityModule with optimistic top-ups
+///         and retires the TopUpGateway.
 /// @dev The Dual Governance proposal has four calls. The first runs the upgrade through the Agent, starting
 ///      with `startUpgrade`. The next two replace the gateway among the tiebreaker sealable withdrawal blockers:
 ///      only the Dual Governance admin executor may change them, so they cannot go through the Agent.
@@ -53,7 +54,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
     uint256 public constant DG_ITEMS_COUNT = 4;
     uint256 public constant VOTING_ITEMS_COUNT = 2;
     /// @notice Agent actions of the first Dual Governance call
-    uint256 public constant RAW_ACTIONS_COUNT = 32;
+    uint256 public constant RAW_ACTIONS_COUNT = 35;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -67,6 +68,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
         keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
     bytes32 internal constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+    bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
 
     address public immutable TEMPLATE;
     address public immutable CONFIG;
@@ -183,16 +185,28 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (config.NEW_STAKING_ROUTER_IMPL()))
         );
 
+        // --- DepositSecurityModule: the locator lists the new DSM since 1.1.2, so it takes the unvetting role ---
+        items[i++] = _item(
+            "1.1.4. Revoke STAKING_MODULE_UNVETTING_ROLE on the StakingRouter from the old DepositSecurityModule",
+            config.STAKING_ROUTER(),
+            abi.encodeCall(IAccessControl.revokeRole, (STAKING_MODULE_UNVETTING_ROLE, config.OLD_DEPOSIT_SECURITY_MODULE()))
+        );
+        items[i++] = _item(
+            "1.1.5. Grant STAKING_MODULE_UNVETTING_ROLE on the StakingRouter to the new DepositSecurityModule",
+            config.STAKING_ROUTER(),
+            abi.encodeCall(IAccessControl.grantRole, (STAKING_MODULE_UNVETTING_ROLE, config.NEW_DEPOSIT_SECURITY_MODULE()))
+        );
+
         // LIP-38 allows partial withdrawals for CMv2 only; the upgrade leaves the flag false for every module.
         items[i++] = _item(
-            "1.1.4. Allow partial withdrawals for the CMv2 staking module",
+            "1.1.6. Allow partial withdrawals for the CMv2 staking module",
             config.STAKING_ROUTER(),
             abi.encodeCall(IStakingRouter.setStakingModulePartialWithdrawalsAllowed, (config.CMV2_STAKING_MODULE_ID(), true))
         );
 
         // Empty setupCalldata: only the TRIGGERABLE_WITHDRAWALS_GATEWAY immutable changes, nothing to finalize.
         items[i++] = _item(
-            "1.1.5. Upgrade WithdrawalVault implementation",
+            "1.1.7. Upgrade WithdrawalVault implementation",
             config.WITHDRAWAL_VAULT(),
             abi.encodeCall(IWithdrawalsManagerProxy.proxy_upgradeTo, (config.NEW_WITHDRAWAL_VAULT_IMPL(), ""))
         );
@@ -200,7 +214,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         // The v4 finalizer switches the report format, so it sets the new consensus version in the same call.
         // The new implementation publishes to the bus through the locator upgraded in 1.1.2.
         items[i++] = _item(
-            "1.1.6. Upgrade WithdrawalsOracle (former ValidatorsExitBusOracle) implementation and finalize it to version 4",
+            "1.1.8. Upgrade WithdrawalsOracle (former ValidatorsExitBusOracle) implementation and finalize it to version 4",
             config.WITHDRAWALS_ORACLE(),
             abi.encodeCall(
                 IOssifiableProxy.proxy__upgradeToAndCall,
@@ -217,7 +231,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
 
         // --- StakingRouter roles of the removed exit hooks ---
         items[i++] = _item(
-            "1.1.7. Revoke REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE from the old TriggerableWithdrawalsGateway",
+            "1.1.9. Revoke REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE from the old TriggerableWithdrawalsGateway",
             config.STAKING_ROUTER(),
             abi.encodeCall(
                 IAccessControl.revokeRole,
@@ -225,7 +239,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.8. Revoke REPORT_VALIDATOR_EXITING_STATUS_ROLE from the ValidatorExitDelayVerifier",
+            "1.1.10. Revoke REPORT_VALIDATOR_EXITING_STATUS_ROLE from the ValidatorExitDelayVerifier",
             config.STAKING_ROUTER(),
             abi.encodeCall(
                 IAccessControl.revokeRole,
@@ -236,29 +250,29 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         // --- New TriggerableWithdrawalsGateway ---
         // DEFAULT_ADMIN_ROLE needs no item because the gateway is deployed with the Agent as its admin.
         items[i++] = _item(
-            "1.1.9. Grant PAUSE_ROLE on the new TriggerableWithdrawalsGateway to the CircuitBreaker",
+            "1.1.11. Grant PAUSE_ROLE on the new TriggerableWithdrawalsGateway to the CircuitBreaker",
             newGateway,
             abi.encodeCall(IAccessControl.grantRole, (PAUSE_ROLE, config.CIRCUIT_BREAKER()))
         );
         items[i++] = _item(
-            "1.1.10. Grant PAUSE_ROLE on the new TriggerableWithdrawalsGateway to the ResealManager",
+            "1.1.12. Grant PAUSE_ROLE on the new TriggerableWithdrawalsGateway to the ResealManager",
             newGateway,
             abi.encodeCall(IAccessControl.grantRole, (PAUSE_ROLE, config.RESEAL_MANAGER()))
         );
         items[i++] = _item(
-            "1.1.11. Grant RESUME_ROLE on the new TriggerableWithdrawalsGateway to the ResealManager",
+            "1.1.13. Grant RESUME_ROLE on the new TriggerableWithdrawalsGateway to the ResealManager",
             newGateway,
             abi.encodeCall(IAccessControl.grantRole, (RESUME_ROLE, config.RESEAL_MANAGER()))
         );
         items[i++] = _item(
-            "1.1.12. Grant TW_EXIT_LIMIT_MANAGER_ROLE on the new TriggerableWithdrawalsGateway to the Agent",
+            "1.1.14. Grant TW_EXIT_LIMIT_MANAGER_ROLE on the new TriggerableWithdrawalsGateway to the Agent",
             newGateway,
             abi.encodeCall(IAccessControl.grantRole, (TW_EXIT_LIMIT_MANAGER_ROLE, AGENT))
         );
         // A consumer without limits cannot submit requests, so these items also decide who may call the gateway.
         // The config holds exactly these four consumers in this order.
         items[i++] = _item(
-            "1.1.13. Set the limits of the TriggerableWithdrawalsBus on the new TriggerableWithdrawalsGateway",
+            "1.1.15. Set the limits of the TriggerableWithdrawalsBus on the new TriggerableWithdrawalsGateway",
             newGateway,
             abi.encodeCall(
                 ITriggerableWithdrawalsGateway.setConsumerLimits,
@@ -268,7 +282,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         // TODO replace the CSM, CSM 0x02 and CMv2 ejectors with the CSM release ones that call triggerWithdrawals,
         // and wire them into their modules. The live ejectors call triggerFullWithdrawals, which the new gateway lacks.
         items[i++] = _item(
-            "1.1.14. Set the limits of the CSM ejector on the new TriggerableWithdrawalsGateway",
+            "1.1.16. Set the limits of the CSM ejector on the new TriggerableWithdrawalsGateway",
             newGateway,
             abi.encodeCall(
                 ITriggerableWithdrawalsGateway.setConsumerLimits,
@@ -276,7 +290,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.15. Set the limits of the CSM 0x02 ejector on the new TriggerableWithdrawalsGateway",
+            "1.1.17. Set the limits of the CSM 0x02 ejector on the new TriggerableWithdrawalsGateway",
             newGateway,
             abi.encodeCall(
                 ITriggerableWithdrawalsGateway.setConsumerLimits,
@@ -284,7 +298,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.16. Set the limits of the CMv2 ejector on the new TriggerableWithdrawalsGateway",
+            "1.1.18. Set the limits of the CMv2 ejector on the new TriggerableWithdrawalsGateway",
             newGateway,
             abi.encodeCall(
                 ITriggerableWithdrawalsGateway.setConsumerLimits,
@@ -292,19 +306,26 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.17. Register CircuitBreaker pauser for the new TriggerableWithdrawalsGateway",
+            "1.1.19. Register CircuitBreaker pauser for the new TriggerableWithdrawalsGateway",
             config.CIRCUIT_BREAKER(),
             abi.encodeCall(ICircuitBreaker.registerPauser, (newGateway, config.CIRCUIT_BREAKER_COMMITTEE()))
         );
         items[i++] = _item(
-            "1.1.18. Unregister CircuitBreaker pauser for the old TriggerableWithdrawalsGateway",
+            "1.1.20. Unregister CircuitBreaker pauser for the old TriggerableWithdrawalsGateway",
             config.CIRCUIT_BREAKER(),
             abi.encodeCall(ICircuitBreaker.registerPauser, (config.OLD_TRIGGERABLE_WITHDRAWALS_GATEWAY(), address(0)))
+        );
+        // The StakingRouter accepts top-ups only from the DSM since 1.1.3. Unregistering a pausable that has no
+        // pauser does not revert, so the same item works where the TopUpGateway was never registered.
+        items[i++] = _item(
+            "1.1.21. Unregister CircuitBreaker pauser for the TopUpGateway",
+            config.CIRCUIT_BREAKER(),
+            abi.encodeCall(ICircuitBreaker.registerPauser, (config.TOP_UP_GATEWAY(), address(0)))
         );
 
         // --- TriggerableWithdrawalsBus ---
         items[i++] = _item(
-            "1.1.19. Grant ADD_WITHDRAWAL_INTENTS_ROLE on the TriggerableWithdrawalsBus to the WithdrawalsOracle",
+            "1.1.22. Grant ADD_WITHDRAWAL_INTENTS_ROLE on the TriggerableWithdrawalsBus to the WithdrawalsOracle",
             config.TRIGGERABLE_WITHDRAWALS_BUS(),
             abi.encodeCall(IAccessControl.grantRole, (ADD_WITHDRAWAL_INTENTS_ROLE, config.WITHDRAWALS_ORACLE()))
         );
@@ -312,7 +333,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         // --- WithdrawalsOracle: the exit request hash delivery is removed ---
         // The grant stays in the proxy storage, so the revoke does not depend on the WithdrawalsOracle implementation.
         items[i++] = _item(
-            "1.1.20. Revoke SUBMIT_REPORT_HASH_ROLE on the WithdrawalsOracle from the Easy Track EVMScriptExecutor",
+            "1.1.23. Revoke SUBMIT_REPORT_HASH_ROLE on the WithdrawalsOracle from the Easy Track EVMScriptExecutor",
             config.WITHDRAWALS_ORACLE(),
             abi.encodeCall(IAccessControl.revokeRole, (SUBMIT_REPORT_HASH_ROLE, config.EASY_TRACK_EVM_SCRIPT_EXECUTOR()))
         );
@@ -321,12 +342,12 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         // Nobody holds the setter role, so the Agent holds it only within this vote.
         address sanityChecker = config.ORACLE_REPORT_SANITY_CHECKER();
         items[i++] = _item(
-            "1.1.21. Grant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE on the OracleReportSanityChecker to the Agent",
+            "1.1.24. Grant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE on the OracleReportSanityChecker to the Agent",
             sanityChecker,
             abi.encodeCall(IAccessControl.grantRole, (MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE, AGENT))
         );
         items[i++] = _item(
-            "1.1.22. Set maxBalanceExitRequestedPerReportInEth on the OracleReportSanityChecker to the PWR maxLimit of the TriggerableWithdrawalsBus",
+            "1.1.25. Set maxBalanceExitRequestedPerReportInEth on the OracleReportSanityChecker to the PWR maxLimit of the TriggerableWithdrawalsBus",
             sanityChecker,
             abi.encodeCall(
                 IOracleReportSanityChecker.setMaxBalanceExitRequestedPerReportInEth,
@@ -334,7 +355,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.23. Revoke MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE on the OracleReportSanityChecker from the Agent",
+            "1.1.26. Revoke MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE on the OracleReportSanityChecker from the Agent",
             sanityChecker,
             abi.encodeCall(IAccessControl.revokeRole, (MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE, AGENT))
         );
@@ -344,22 +365,22 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
         address daemonConfig = config.ORACLE_DAEMON_CONFIG();
         OracleDaemonConfigValues memory daemonConfigValues = config.getOracleDaemonConfigValues();
         items[i++] = _item(
-            "1.1.24. Grant CONFIG_MANAGER_ROLE on the OracleDaemonConfig to the Agent",
+            "1.1.27. Grant CONFIG_MANAGER_ROLE on the OracleDaemonConfig to the Agent",
             daemonConfig,
             abi.encodeCall(IAccessControl.grantRole, (CONFIG_MANAGER_ROLE, AGENT))
         );
         items[i++] = _item(
-            "1.1.25. Set EXIT_ITERATION_CHUNK on the OracleDaemonConfig",
+            "1.1.28. Set EXIT_ITERATION_CHUNK on the OracleDaemonConfig",
             daemonConfig,
             abi.encodeCall(IOracleDaemonConfig.set, (EXIT_ITERATION_CHUNK, daemonConfigValues.exitIterationChunk))
         );
         items[i++] = _item(
-            "1.1.26. Set ACTIVE_REBALANCING_ENABLED on the OracleDaemonConfig",
+            "1.1.29. Set ACTIVE_REBALANCING_ENABLED on the OracleDaemonConfig",
             daemonConfig,
             abi.encodeCall(IOracleDaemonConfig.set, (ACTIVE_REBALANCING_ENABLED, daemonConfigValues.activeRebalancingEnabled))
         );
         items[i++] = _item(
-            "1.1.27. Set ACTIVE_REBALANCING_RATE_LIMIT on the OracleDaemonConfig",
+            "1.1.30. Set ACTIVE_REBALANCING_RATE_LIMIT on the OracleDaemonConfig",
             daemonConfig,
             abi.encodeCall(
                 IOracleDaemonConfig.set,
@@ -367,7 +388,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.28. Set ACTIVE_REBALANCING_OPERATOR_EXCESS_BP on the OracleDaemonConfig",
+            "1.1.31. Set ACTIVE_REBALANCING_OPERATOR_EXCESS_BP on the OracleDaemonConfig",
             daemonConfig,
             abi.encodeCall(
                 IOracleDaemonConfig.set,
@@ -375,7 +396,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.29. Set ACTIVE_REBALANCING_MODULE_EXCESS_BP on the OracleDaemonConfig",
+            "1.1.32. Set ACTIVE_REBALANCING_MODULE_EXCESS_BP on the OracleDaemonConfig",
             daemonConfig,
             abi.encodeCall(
                 IOracleDaemonConfig.set,
@@ -383,7 +404,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.30. Set ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS on the OracleDaemonConfig",
+            "1.1.33. Set ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS on the OracleDaemonConfig",
             daemonConfig,
             abi.encodeCall(
                 IOracleDaemonConfig.set,
@@ -391,13 +412,13 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             )
         );
         items[i++] = _item(
-            "1.1.31. Revoke CONFIG_MANAGER_ROLE on the OracleDaemonConfig from the Agent",
+            "1.1.34. Revoke CONFIG_MANAGER_ROLE on the OracleDaemonConfig from the Agent",
             daemonConfig,
             abi.encodeCall(IAccessControl.revokeRole, (CONFIG_MANAGER_ROLE, AGENT))
         );
         // For the ACTIVE_REBALANCING_* Easy Track factory.
         items[i++] = _item(
-            "1.1.32. Grant CONFIG_MANAGER_ROLE on the OracleDaemonConfig to the Easy Track EVMScriptExecutor",
+            "1.1.35. Grant CONFIG_MANAGER_ROLE on the OracleDaemonConfig to the Easy Track EVMScriptExecutor",
             daemonConfig,
             abi.encodeCall(IAccessControl.grantRole, (CONFIG_MANAGER_ROLE, config.EASY_TRACK_EVM_SCRIPT_EXECUTOR()))
         );
