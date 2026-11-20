@@ -114,27 +114,10 @@ describe("StakingRouter.sol:topUp", () => {
       }
     });
 
-    it("Reverts if keys count exceeds the module maxDepositsPerBlock", async () => {
-      const [, id] = await setupModule(ctx, {
-        ...DEFAULT_CONFIG,
-        maxDepositsPerBlock: 2n,
-        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-      });
-
-      const keyIndices = [0n, 1n, 2n];
-      const operatorIds = [0n, 0n, 0n];
-      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI, 10n * ONE_GWEI * WEI_PER_GWEI, 10n * ONE_GWEI * WEI_PER_GWEI];
-      const pubkeys = [randomString(48), randomString(48), randomString(48)];
-
-      await expect(stakingRouter.connect(dsmSigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits))
-        .to.be.revertedWithCustomError(stakingRouter, "TopUpKeysLimitExceeded")
-        .withArgs(3n, 2n);
-    });
-
-    it("Accepts exactly maxDepositsPerBlock keys", async () => {
+    it("Accepts more keys than maxDepositsPerBlock", async () => {
       const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
-        maxDepositsPerBlock: 3n,
+        maxDepositsPerBlock: 2n,
         deposited: 100n,
         totalModuleStake: 100n * 32n * 10n ** 18n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,

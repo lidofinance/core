@@ -77,7 +77,6 @@ interface ISRBase {
     error AmountNotAlignedToGwei();
     error AllocationExceedsLimit();
     error ZeroDeposits();
-    error TopUpKeysLimitExceeded(uint256 keysCount, uint256 maxKeysCount);
 
     // Staking module
     error StakingModuleAddressExists();

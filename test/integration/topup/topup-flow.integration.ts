@@ -379,27 +379,6 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
       );
     });
 
-    it("Should revert when the call carries more keys than maxDepositsPerBlock", async () => {
-      const { stakingRouter } = ctx.contracts;
-
-      const maxKeys = await stakingRouter.getStakingModuleMaxDepositsPerBlock(moduleId);
-      const count = maxKeys + 1n;
-      const keys = {
-        keyIndices: Array.from({ length: Number(count) }, (_, i) => BigInt(i)),
-        operatorIds: Array.from({ length: Number(count) }, () => target.operatorId),
-        pubkeys: Array.from({ length: Number(count) }, () => randomValidatorPubkey()),
-      };
-
-      await expect(
-        topUp(
-          keys,
-          keys.keyIndices.map(() => TOP_UP_PER_KEY),
-        ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "TopUpKeysLimitExceeded")
-        .withArgs(count, maxKeys);
-    });
-
     it("Should revert in CMv2 when the pubkey does not match the module key", async () => {
       const cmv2Errors = new ethers.Contract(ctx.modules.cmv2!.stakingModuleAddress, CMV2_ERRORS_ABI, ethers.provider);
 

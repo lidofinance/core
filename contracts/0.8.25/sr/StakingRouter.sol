@@ -630,14 +630,9 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
-        uint256 maxDepositsPerBlock = state.deposits.maxDepositsPerBlock;
-        if (_keyIndices.length > maxDepositsPerBlock) {
-            revert TopUpKeysLimitExceeded(_keyIndices.length, maxDepositsPerBlock);
-        }
-
         uint256 maxTopUpPerBlockWei = Math.min(
             uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei,
-            maxDepositsPerBlock * MAX_EFFECTIVE_BALANCE_WC_TYPE_01
+            state.deposits.maxDepositsPerBlock * MAX_EFFECTIVE_BALANCE_WC_TYPE_01
         );
         uint256 depositableEther = LIDO.getDepositableEther();
 
