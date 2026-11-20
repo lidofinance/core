@@ -152,7 +152,6 @@ const TopUpGatewaySchema = z.object({
 const StakingRouterSchema = z.object({
   maxEBType1: BigIntStringSchema,
   maxEBType2: BigIntStringSchema,
-  maxTopUpPerBlockGwei: PositiveIntSchema,
 });
 
 // Easy track schema

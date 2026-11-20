@@ -221,9 +221,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
 
       // Ask for more than the cap in every call until the module returns zero
       const limit = MAX_EXTRA_BALANCE + ether("100");
-      const batchCap = ether("32") * (await stakingRouter.getStakingModuleMaxDepositsPerBlock(moduleId));
-      const globalCap = (await stakingRouter.getMaxTopUpPerBlockGwei()) * 10n ** 9n;
-      const perCallCap = batchCap < globalCap ? batchCap : globalCap;
+      const perCallCap = ether("32") * (await stakingRouter.getStakingModuleMaxDepositsPerBlock(moduleId));
       const maxCalls = Number(MAX_EXTRA_BALANCE / perCallCap) + 2;
 
       let total = 0n;

@@ -104,14 +104,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice Initializes the contract.
     /// @param _admin Lido DAO Aragon agent contract address.
     /// @param _withdrawalCredentials credentials to withdraw ETH on Consensus Layer side.
-    /// @param _maxTopUpPerBlockGwei  Initial value for the global per-block top-up cap (in Gwei).
     /// @dev Proxy initialization method.
-    function initialize(address _admin, bytes32 _withdrawalCredentials, uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
+    function initialize(address _admin, bytes32 _withdrawalCredentials) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddress();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setWithdrawalCredentials(_withdrawalCredentials);
-        _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
     }
 
     /// @dev Prohibit direct transfer to contract.
@@ -630,14 +628,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
-        uint256 maxTopUpPerBlockWei = Math.min(
-            uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei,
-            state.deposits.maxDepositsPerBlock * MAX_EFFECTIVE_BALANCE_WC_TYPE_01
-        );
+        // The ETH limit of a seed deposit call to this module
+        uint256 maxTopUpWei = state.deposits.maxDepositsPerBlock * MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
         uint256 depositableEther = LIDO.getDepositableEther();
 
         // Get allocation based on target share
-        uint256 smDepositableEthAmount = Math.min(_getModuleDepositAllocation(_stakingModuleId, depositableEther, true), maxTopUpPerBlockWei);
+        uint256 smDepositableEthAmount = Math.min(_getModuleDepositAllocation(_stakingModuleId, depositableEther, true), maxTopUpWei);
 
         // Call allocateDeposits on the staking module to determine for what amount deposit each key
         // The module verifies keys belong to it and reverts if invalid.
@@ -954,26 +950,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @return Withdrawal credentials.
     function getWithdrawalCredentials() public view returns (bytes32) {
         return SRStorage.getRouterState().withdrawalCredentials;
-    }
-
-    /// @notice Set per-block top up limit for top-ups (in Gwei).
-    /// @param _newValue top-up limit value in Gwei (must be > 0 and fit into uint64).
-    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
-    function setMaxTopUpPerBlockGwei(uint256 _newValue) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        _setMaxTopUpPerBlockGwei(_newValue);
-    }
-
-    function _setMaxTopUpPerBlockGwei(uint256 _newValue) internal {
-        if (_newValue == 0 || _newValue > type(uint64).max) {
-            revert InvalidMaxTopUpPerBlockGwei();
-        }
-        SRStorage.getRouterState().maxTopUpPerBlockGwei = uint64(_newValue);
-        emit MaxTopUpPerBlockGweiSet(_newValue, _msgSender());
-    }
-
-    /// @notice Returns the top up limit for top-ups (in Gwei).
-    function getMaxTopUpPerBlockGwei() external view returns (uint64) {
-        return SRStorage.getRouterState().maxTopUpPerBlockGwei;
     }
 
     function _setWithdrawalCredentials(bytes32 wc) internal {

@@ -119,7 +119,6 @@ depositor = "0xF82aC5937A20dC862F9bc0668779031E06000f17"
 [stakingRouter]
 maxEBType1 = "32000000000000000000"
 maxEBType2 = "2048000000000000000000"
-maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-up cap
 
 [csmUpgrade]
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"

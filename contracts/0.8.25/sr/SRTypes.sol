@@ -190,7 +190,7 @@ struct RouterState {
     RouterStateAccounting accounting; // slot 3
     bytes32 withdrawalCredentials; // slot 4
     uint24 lastModuleId; // slot 5
-    uint64 maxTopUpPerBlockGwei; // slot 5
+    // uint64 _reserved; // slot 5, was maxTopUpPerBlockGwei, keeps its old value
 }
 
 /// @notice A summary of the staking module's validators.

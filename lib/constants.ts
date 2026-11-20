@@ -45,9 +45,6 @@ export const WITHDRAWAL_MAX_BATCHES_LENGTH = 36n;
 export const WITHDRAWAL_MIN_STETH_WITHDRAWAL_AMOUNT = 100n;
 export const WITHDRAWAL_MAX_STETH_WITHDRAWAL_AMOUNT = 10n ** 21n; // 1000 * 1e18
 
-// StakingRouter
-export const MAX_TOP_UP_PER_BLOCK_GWEI = 3200n * 10n ** 9n; // 3200 ETH in gwei
-
 //Lido
 export const DEPOSITS_RESERVE_TARGET = 1500n * 10n ** 18n; // 1500 ETH
 
