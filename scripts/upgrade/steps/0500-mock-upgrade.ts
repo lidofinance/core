@@ -100,6 +100,12 @@ async function isProposalEnacted(state: DeploymentState, proposalId: bigint): Pr
   return status === PROPOSAL_STATUS_EXECUTED;
 }
 
+// A fixed limit rather than the node's estimate: the estimate leaves no headroom, and the upgrade checks
+// read time-dependent state (e.g. the consolidation rate limit), so the mined block can cost slightly
+// more and run out of gas deep in the nested calls. 16M matches the deployments (`GAS_LIMIT` in
+// migration-env.sh) and stays under both Hardhat's 30M block limit and the EIP-7825 per-tx cap.
+const VOTE_ITEM_GAS_LIMIT = BigInt(process.env.GAS_LIMIT || 16_000_000);
+
 async function execVoteItems(voteItems: VoteItem[], executor: HardhatEthersSigner) {
   for (const item of voteItems) {
     log(`Execute vote item: ${or(item.description)}`);
@@ -107,6 +113,7 @@ async function execVoteItems(voteItems: VoteItem[], executor: HardhatEthersSigne
       to: item.call.to,
       data: ethers.hexlify(item.call.data),
       value: 0n,
+      gasLimit: VOTE_ITEM_GAS_LIMIT,
     });
     await tx.wait();
   }
