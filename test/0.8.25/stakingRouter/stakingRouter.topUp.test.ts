@@ -86,7 +86,7 @@ describe("StakingRouter.sol:topUp", () => {
   context("topUp", () => {
     const KEY_INDEX = 0n;
     const OPERATOR_ID = 1n;
-    const TOP_UP_GWEI = 10n * ONE_GWEI; // 10 ETH in ONE_GWEI, top-up limit for a validator set by the top-up caller
+    const TOP_UP_GWEI = 10n * ONE_GWEI; // 10 ETH in ONE_GWEI, top-up limit for a validator set by the top-up depositor
 
     function makeValidTopUpData() {
       const keyIndices = [KEY_INDEX];
@@ -204,6 +204,27 @@ describe("StakingRouter.sol:topUp", () => {
 
       await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, topUpWei[0]);
       await expect(tx).not.to.emit(stakingRouter, "StakingRouterETHDeposited");
+    });
+
+    it("Writes the module last deposit block before it calls the module", async () => {
+      const [stakingModule, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 100n,
+        totalModuleStake: 100n * 32n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const topUpWei = [10n * 10n ** 18n];
+      await stakingModule.mock__allocateDeposits(topUpWei);
+      await stakingModule.mock__probeLastDepositBlock(id);
+      await lidoMock.setDepositableEther(100n * NEW_MEB);
+      await lidoMock.fund({ value: topUpWei[0] });
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(1_000n * ONE_GWEI);
+
+      const tx = await stakingRouter.connect(dsmSigner).topUp(id, [0n], [0n], [randomString(48)], topUpWei);
+      const receipt = await tx.wait();
+
+      await expect(tx).to.emit(stakingModule, "Mock__LastDepositBlockSeen").withArgs(receipt!.blockNumber);
     });
 
     it("Reverts if the module does not exist", async () => {

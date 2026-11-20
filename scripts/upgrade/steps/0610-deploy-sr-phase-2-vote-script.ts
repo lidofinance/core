@@ -142,7 +142,7 @@ export async function main() {
 
     oldDepositSecurityModule: await locator.depositSecurityModule(),
     newDepositSecurityModule: getAddress(Sk.depositSecurityModule, state),
-    topUpCaller: parameters.depositSecurityModule.topUpCaller,
+    topUpDepositor: parameters.depositSecurityModule.topUpDepositor,
     topUpGateway: await liveLocator.topUpGateway(),
 
     easyTrack: easyTrackAddress,

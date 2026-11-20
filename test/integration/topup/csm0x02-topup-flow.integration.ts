@@ -10,7 +10,7 @@ import {
   depositEventInterface,
   getCSM0x02Module,
   getProtocolContext,
-  getTopUpCallerSigner,
+  getTopUpDepositorSigner,
   ProtocolContext,
   report,
   topUpEnsureDepositableEther,
@@ -23,7 +23,7 @@ import { Snapshot } from "test/suite";
 describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CSM 0x02)", () => {
   let ctx: ProtocolContext;
   let target: Awaited<ReturnType<typeof csm0x02EnsureDepositedKeys>>;
-  let topUpCaller: HardhatEthersSigner;
+  let topUpDepositor: HardhatEthersSigner;
   let globalSnapshot: string;
   let testSnapshot: string;
 
@@ -33,7 +33,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CSM 0x02)", () =
     ctx = await getProtocolContext();
     globalSnapshot = await Snapshot.take();
     target = await csm0x02EnsureDepositedKeys(ctx, 2n, TOP_UP_PER_KEY);
-    topUpCaller = await getTopUpCallerSigner(ctx);
+    topUpDepositor = await getTopUpDepositorSigner(ctx);
 
     const credentials = await ctx.contracts.stakingRouter.getStakingModuleWithdrawalCredentials(target.moduleId);
     expect(credentials.slice(0, 4)).to.equal("0x02");
@@ -51,7 +51,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CSM 0x02)", () =
     await topUpEnsureDistancePassed(ctx, target.moduleId);
     const limits = target.keyIndices.map(() => TOP_UP_PER_KEY);
     return ctx.contracts.depositSecurityModule
-      .connect(topUpCaller)
+      .connect(topUpDepositor)
       .topUpBufferedEther(target.moduleId, target.keyIndices, target.operatorIds, target.pubkeys, limits);
   };
 

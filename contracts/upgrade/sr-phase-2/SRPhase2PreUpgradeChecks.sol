@@ -187,7 +187,7 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertUint("bus-clear-members", busAcl.getRoleMemberCount(CLEAR_WITHDRAWAL_INTENTS_ROLE), 0);
     }
 
-    /// @dev The new DSM is a copy of the old one: the same guardians, quorum and parameters, the top-up caller
+    /// @dev The new DSM is a copy of the old one: the same guardians, quorum and parameters, the top-up depositor
     ///      of the config, the Agent as its owner, and not paused. A pause of the old DSM must not be lifted by
     ///      the switch, so the vote reverts while the old DSM is paused.
     function _assertDepositSecurityModules(SRPhase2UpgradeConfig config) private view {
@@ -198,7 +198,7 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertAddress("new-dsm-owner", newDsm.getOwner(), config.AGENT());
         _assertAddress("new-dsm-staking-router", newDsm.STAKING_ROUTER(), config.STAKING_ROUTER());
         _assertAddress("new-dsm-deposit-contract", newDsm.DEPOSIT_CONTRACT(), oldDsm.DEPOSIT_CONTRACT());
-        _assertAddress("new-dsm-top-up-caller", newDsm.getTopUpCaller(), config.TOP_UP_CALLER());
+        _assertAddress("new-dsm-top-up-depositor", newDsm.getTopUpDepositor(), config.TOP_UP_DEPOSITOR());
         _assertUint("new-dsm-quorum", newDsm.getGuardianQuorum(), oldDsm.getGuardianQuorum());
         _assertUint(
             "new-dsm-pause-intent",

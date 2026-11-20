@@ -18,7 +18,7 @@ import {
   depositEventAmountWei,
   depositEventInterface,
   getCMv2ModuleId,
-  getTopUpCallerSigner,
+  getTopUpDepositorSigner,
   topUpEnsureDepositableEther,
   topUpEnsureDistancePassed,
   topUpEnsureModuleAllocation,
@@ -56,7 +56,7 @@ const MAX_EXTRA_BALANCE = ether("2016");
 describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
   let ctx: ProtocolContext;
 
-  let topUpCaller: HardhatEthersSigner;
+  let topUpDepositor: HardhatEthersSigner;
 
   let moduleId: bigint;
   let target: CMv2OperatorKeys;
@@ -81,7 +81,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
     const moduleWC = await stakingRouter.getStakingModuleWithdrawalCredentials(moduleId);
     expect(moduleWC.slice(0, 4)).to.equal("0x02", "CMv2 withdrawal credentials must be of type 0x02");
 
-    topUpCaller = await getTopUpCallerSigner(ctx);
+    topUpDepositor = await getTopUpDepositorSigner(ctx);
 
     // A fresh operator gets 100% of the allocation weight, so the amounts are exact regardless of the fork state
     target = await cmv2EnsureDepositedOperatorKeys(ctx, 2n, { name: "topup_target_operator", forceCreate: true });
@@ -114,12 +114,12 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
 
   type Keys = ReturnType<typeof targetKeys>;
 
-  const callTopUp = (keys: Keys, limits: bigint[], caller = topUpCaller, id = moduleId) =>
+  const callTopUp = (keys: Keys, limits: bigint[], caller = topUpDepositor, id = moduleId) =>
     ctx.contracts.depositSecurityModule
       .connect(caller)
       .topUpBufferedEther(id, keys.keyIndices, keys.operatorIds, keys.pubkeys, limits);
 
-  const topUp = async (keys: Keys, limits: bigint[], caller = topUpCaller) => {
+  const topUp = async (keys: Keys, limits: bigint[], caller = topUpDepositor) => {
     await topUpEnsureDistancePassed(ctx, moduleId);
     return await callTopUp(keys, limits, caller);
   };
@@ -326,12 +326,12 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
   });
 
   context("Access and pause", () => {
-    it("Should revert when the caller is not the DSM top-up caller", async () => {
+    it("Should revert when the caller is not the DSM top-up depositor", async () => {
       const { depositSecurityModule: dsm } = ctx.contracts;
       const [stranger] = await ethers.getSigners();
 
       await expect(topUp(singleKey(0), [TOP_UP_PER_KEY], stranger))
-        .to.be.revertedWithCustomError(dsm, "NotTopUpCaller")
+        .to.be.revertedWithCustomError(dsm, "NotATopUpDepositor")
         .withArgs(stranger.address);
     });
 
@@ -341,7 +341,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
 
       await expect(
         stakingRouter
-          .connect(topUpCaller)
+          .connect(topUpDepositor)
           .topUp(moduleId, keys.keyIndices, keys.operatorIds, keys.pubkeys, [TOP_UP_PER_KEY]),
       ).to.be.revertedWithCustomError(stakingRouter, "NotAuthorized");
     });
@@ -373,7 +373,7 @@ describe("Integration: TopUp Flow (DSM -> StakingRouter -> Real CMv2)", () => {
       }
       await topUpEnsureDistancePassed(ctx, norId);
 
-      await expect(callTopUp(singleKey(0), [TOP_UP_PER_KEY], topUpCaller, norId)).to.be.revertedWithCustomError(
+      await expect(callTopUp(singleKey(0), [TOP_UP_PER_KEY], topUpDepositor, norId)).to.be.revertedWithCustomError(
         stakingRouter,
         "WrongWithdrawalCredentialsType",
       );

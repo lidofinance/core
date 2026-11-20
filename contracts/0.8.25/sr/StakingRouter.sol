@@ -612,7 +612,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _keyIndices List of keys' indices
     /// @param _operatorIds List of operator indices
     /// @param _pubkeys List of validator public keys to top up
-    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key, set by the top-up caller
+    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key, set by the top-up depositor
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -659,6 +659,9 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             revert LidoDepositsPaused();
         }
 
+        // The DepositSecurityModule reads the module last deposit block for the min deposit distance
+        SRLib._updateModuleLastDepositState(_stakingModuleId);
+
         uint256[] memory allocations = IStakingModuleV2(stateConfig.moduleAddress)
             .allocateDeposits(smDepositableEthAmountRounded, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
 
@@ -682,9 +685,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         if (amount > smDepositableEthAmountRounded) {
             revert ModuleReturnExceedTarget();
         }
-
-        // The DepositSecurityModule reads the module last deposit block for the min deposit distance
-        SRLib._updateModuleLastDepositState(_stakingModuleId);
 
         if (amount > 0) {
             uint256 etherBalanceBeforeDeposits = address(this).balance;

@@ -201,6 +201,8 @@ export async function main() {
         stakingRouter_.address,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,
         depositSecurityModuleParams.maxOperatorsPerUnvetting,
+        // Devnet activation sets the top-up depositor, as it sets the guardians
+        ethers.ZeroAddress,
       ])
     ).address;
   } else {

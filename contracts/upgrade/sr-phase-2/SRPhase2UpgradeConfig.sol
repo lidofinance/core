@@ -62,7 +62,7 @@ contract SRPhase2UpgradeConfig {
     address public immutable OLD_DEPOSIT_SECURITY_MODULE;
     address public immutable NEW_DEPOSIT_SECURITY_MODULE;
     /// @notice The only address allowed to call `topUpBufferedEther` on the new DSM
-    address public immutable TOP_UP_CALLER;
+    address public immutable TOP_UP_DEPOSITOR;
     /// @notice The retired gateway; the vote unregisters its CircuitBreaker pauser
     address public immutable TOP_UP_GATEWAY;
 
@@ -123,7 +123,7 @@ contract SRPhase2UpgradeConfig {
 
         OLD_DEPOSIT_SECURITY_MODULE = _nonZero(params.oldDepositSecurityModule, "oldDepositSecurityModule");
         NEW_DEPOSIT_SECURITY_MODULE = _nonZero(params.newDepositSecurityModule, "newDepositSecurityModule");
-        TOP_UP_CALLER = _nonZero(params.topUpCaller, "topUpCaller");
+        TOP_UP_DEPOSITOR = _nonZero(params.topUpDepositor, "topUpDepositor");
         TOP_UP_GATEWAY = _nonZero(params.topUpGateway, "topUpGateway");
 
         EASY_TRACK = _nonZero(params.easyTrack, "easyTrack");

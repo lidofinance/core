@@ -15,7 +15,7 @@ import {
 } from "./accounting";
 import { buildModuleAccountingReportParams, depositAndReportValidators } from "./staking";
 import { randomPubkeys, randomSignatures } from "./staking-module";
-import { getTopUpCallerSigner, topUpEnsureDistancePassed } from "./topup";
+import { getTopUpDepositorSigner, topUpEnsureDistancePassed } from "./topup";
 
 // The module tops up a key to at most the max effective balance minus the 32 ETH activation balance
 const CSM0X02_KEY_BALANCE_CAP = MAX_EFFECTIVE_BALANCE_WC_TYPE_02 - MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
@@ -87,7 +87,7 @@ const csm0x02DropStaleTopUpQueueHead = async (ctx: ProtocolContext, keysCount: b
       drop.keyIndices.map((keyIndex, i) => module.getSigningKeys(drop.operatorIds[i], keyIndex, 1n)),
     );
     await topUpEnsureDistancePassed(ctx, moduleId);
-    const caller = await getTopUpCallerSigner(ctx);
+    const caller = await getTopUpDepositorSigner(ctx);
     const zeroLimits = drop.keyIndices.map(() => 0n);
     const tx = await dsm
       .connect(caller)

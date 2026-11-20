@@ -71,7 +71,7 @@ export { ensurePredepositGuaranteeUnpaused } from "./pdg";
 export {
   depositEventAmountWei,
   depositEventInterface,
-  getTopUpCallerSigner,
+  getTopUpDepositorSigner,
   topUpEnsureBatchCap,
   topUpEnsureDepositableEther,
   topUpEnsureDistancePassed,

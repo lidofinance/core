@@ -19,24 +19,24 @@ import { ensureSubmitFitsStakeLimit, getStakingModuleManagerSigner, setModuleSta
 const TOTAL_BASIS_POINTS = 100_00n;
 
 /**
- * Return a signer for the DSM top-up caller.
+ * Return a signer for the DSM top-up depositor.
  *
- * Production deploys set the caller before the ownership handoff, so impersonate it.
+ * Production deploys pass the depositor to the DSM constructor, so impersonate it.
  * Only when it is not set (fresh scratch state) the DSM owner (agent) sets a dedicated test address.
  */
-export const getTopUpCallerSigner = async (ctx: ProtocolContext): Promise<HardhatEthersSigner> => {
+export const getTopUpDepositorSigner = async (ctx: ProtocolContext): Promise<HardhatEthersSigner> => {
   const { depositSecurityModule: dsm } = ctx.contracts;
 
-  const current = await dsm.getTopUpCaller();
+  const current = await dsm.getTopUpDepositor();
   if (current !== ZeroAddress) {
-    log.debug("Impersonating the DSM top-up caller", { Caller: current });
+    log.debug("Impersonating the DSM top-up depositor", { Depositor: current });
     return impersonate(current, ether("100"));
   }
 
-  const caller = await impersonate(certainAddress("topup:caller"), ether("100"));
+  const depositor = await impersonate(certainAddress("topup:depositor"), ether("100"));
   const owner = await impersonate(await dsm.getOwner(), ether("1"));
-  await dsm.connect(owner).setTopUpCaller(caller.address);
-  return caller;
+  await dsm.connect(owner).setTopUpDepositor(depositor.address);
+  return depositor;
 };
 
 /**

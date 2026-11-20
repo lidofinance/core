@@ -440,8 +440,8 @@ export const ScratchParametersSchema = z.object({
 export const UpgradeParametersSchema = z.object({
   lido: LidoSchema,
   easyTrack: EasyTrackSchema,
-  // The SR phase 2 upgrade deploys a new DSM; only the upgrade sets its top-up caller
-  depositSecurityModule: DepositSecurityModuleSchema.extend({ topUpCaller: EthereumAddressSchema }),
+  // The SR phase 2 upgrade deploys a new DSM; only the upgrade sets its top-up depositor
+  depositSecurityModule: DepositSecurityModuleSchema.extend({ topUpDepositor: EthereumAddressSchema }),
   oracleReportSanityChecker: OracleReportSanityCheckerUpgradeScheme,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,

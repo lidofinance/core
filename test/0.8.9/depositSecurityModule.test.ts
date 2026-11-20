@@ -50,6 +50,7 @@ type Params = {
   pauseIntentValidityPeriodBlocks: number;
   unvetIntentValidityPeriodBlocks: number;
   maxOperatorsPerUnvetting: number;
+  topUpDepositor: string;
 };
 
 type Block = {
@@ -63,6 +64,7 @@ function initialParams(): Params {
     stakingRouter: "",
     pauseIntentValidityPeriodBlocks: PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS,
     maxOperatorsPerUnvetting: MAX_OPERATORS_PER_UNVETTING,
+    topUpDepositor: ZeroAddress,
   } as Params;
 }
 
@@ -76,7 +78,7 @@ describe("DepositSecurityModule.sol", () => {
 
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let topUpCaller: HardhatEthersSigner;
+  let topUpDepositor: HardhatEthersSigner;
   let guardian1: Guardian;
   let guardian2: Guardian;
   let guardian3: Guardian;
@@ -143,7 +145,7 @@ describe("DepositSecurityModule.sol", () => {
 
   before(async () => {
     ({ provider } = ethers);
-    [admin, stranger, topUpCaller] = await ethers.getSigners();
+    [admin, stranger, topUpDepositor] = await ethers.getSigners();
 
     const deployGuardian = async (name: string): Promise<Guardian> => {
       const delegate = new Wallet(streccak(name), provider);
@@ -217,6 +219,20 @@ describe("DepositSecurityModule.sol", () => {
         dsm,
         "ZeroAddress",
       );
+    });
+
+    it("Accepts a zero `topUpDepositor`", async () => {
+      expect(await dsm.getTopUpDepositor()).to.equal(ZeroAddress);
+    });
+
+    it("Sets the `topUpDepositor` and fires `TopUpDepositorChanged` event", async () => {
+      const cfg = { ...config, topUpDepositor: topUpDepositor.address };
+      const deployed = await ethers.deployContract("DepositSecurityModule", Object.values(cfg));
+
+      expect(await deployed.getTopUpDepositor()).to.equal(topUpDepositor.address);
+      await expect(deployed.deploymentTransaction()!)
+        .to.emit(deployed, "TopUpDepositorChanged")
+        .withArgs(topUpDepositor.address);
     });
 
     it("Sets `lastDepositBlock` to deployment block", async () => {
@@ -1254,39 +1270,39 @@ describe("DepositSecurityModule.sol", () => {
     });
   });
 
-  context("Top-up caller", () => {
-    context("Function `getTopUpCaller`", () => {
-      it("Returns zero address initially", async () => {
-        expect(await dsm.getTopUpCaller()).to.equal(ZeroAddress);
+  context("Top-up depositor", () => {
+    context("Function `getTopUpDepositor`", () => {
+      it("Returns zero address when the constructor got zero", async () => {
+        expect(await dsm.getTopUpDepositor()).to.equal(ZeroAddress);
       });
     });
 
-    context("Function `setTopUpCaller`", () => {
+    context("Function `setTopUpDepositor`", () => {
       it("Reverts if called by not an owner", async () => {
-        await expect(dsm.connect(stranger).setTopUpCaller(topUpCaller))
+        await expect(dsm.connect(stranger).setTopUpDepositor(topUpDepositor))
           .to.be.revertedWithCustomError(dsm, "NotAnOwner")
           .withArgs(stranger.address);
       });
 
       it("Reverts if the `newValue` is zero address", async () => {
-        await expect(dsm.setTopUpCaller(ZeroAddress))
+        await expect(dsm.setTopUpDepositor(ZeroAddress))
           .to.be.revertedWithCustomError(dsm, "ZeroAddress")
-          .withArgs("_newTopUpCaller");
+          .withArgs("_newTopUpDepositor");
       });
 
-      it("Sets the top-up caller and fires `TopUpCallerChanged` event", async () => {
-        const tx = await dsm.setTopUpCaller(topUpCaller);
+      it("Sets the top-up depositor and fires `TopUpDepositorChanged` event", async () => {
+        const tx = await dsm.setTopUpDepositor(topUpDepositor);
 
-        await expect(tx).to.emit(dsm, "TopUpCallerChanged").withArgs(topUpCaller.address);
-        expect(await dsm.getTopUpCaller()).to.equal(topUpCaller.address);
+        await expect(tx).to.emit(dsm, "TopUpDepositorChanged").withArgs(topUpDepositor.address);
+        expect(await dsm.getTopUpDepositor()).to.equal(topUpDepositor.address);
       });
 
-      it("Replaces the top-up caller", async () => {
-        await dsm.setTopUpCaller(topUpCaller);
-        const tx = await dsm.setTopUpCaller(stranger);
+      it("Replaces the top-up depositor", async () => {
+        await dsm.setTopUpDepositor(topUpDepositor);
+        const tx = await dsm.setTopUpDepositor(stranger);
 
-        await expect(tx).to.emit(dsm, "TopUpCallerChanged").withArgs(stranger.address);
-        expect(await dsm.getTopUpCaller()).to.equal(stranger.address);
+        await expect(tx).to.emit(dsm, "TopUpDepositorChanged").withArgs(stranger.address);
+        expect(await dsm.getTopUpDepositor()).to.equal(stranger.address);
       });
     });
   });
@@ -1297,7 +1313,7 @@ describe("DepositSecurityModule.sol", () => {
     const pubkeys = ["0x" + "11".repeat(48), "0x" + "22".repeat(48)];
     const topUpLimits = [ether("10"), ether("20")];
 
-    async function topUp(caller: HardhatEthersSigner = topUpCaller): Promise<ContractTransactionResponse> {
+    async function topUp(caller: HardhatEthersSigner = topUpDepositor): Promise<ContractTransactionResponse> {
       return await dsm
         .connect(caller)
         .topUpBufferedEther(STAKING_MODULE_ID, keyIndices, operatorIds, pubkeys, topUpLimits);
@@ -1313,31 +1329,31 @@ describe("DepositSecurityModule.sol", () => {
       expect(await dsm.isDepositsPaused()).to.equal(true);
     }
 
-    it("Reverts for any caller before the top-up caller is set", async () => {
-      expect(await dsm.getTopUpCaller()).to.equal(ZeroAddress);
+    it("Reverts for any caller before the top-up depositor is set", async () => {
+      expect(await dsm.getTopUpDepositor()).to.equal(ZeroAddress);
 
-      for (const caller of [admin, stranger, topUpCaller]) {
-        await expect(topUp(caller)).to.be.revertedWithCustomError(dsm, "NotTopUpCaller").withArgs(caller.address);
+      for (const caller of [admin, stranger, topUpDepositor]) {
+        await expect(topUp(caller)).to.be.revertedWithCustomError(dsm, "NotATopUpDepositor").withArgs(caller.address);
       }
     });
 
-    context("Top-up caller is set", () => {
+    context("Top-up depositor is set", () => {
       beforeEach(async () => {
-        await dsm.setTopUpCaller(topUpCaller);
+        await dsm.setTopUpDepositor(topUpDepositor);
       });
 
-      it("Reverts if called by not the top-up caller", async () => {
+      it("Reverts if called by not the top-up depositor", async () => {
         for (const caller of [admin, stranger]) {
-          await expect(topUp(caller)).to.be.revertedWithCustomError(dsm, "NotTopUpCaller").withArgs(caller.address);
+          await expect(topUp(caller)).to.be.revertedWithCustomError(dsm, "NotATopUpDepositor").withArgs(caller.address);
         }
       });
 
-      it("Reverts if called by the previous top-up caller after a change", async () => {
-        await dsm.setTopUpCaller(stranger);
+      it("Reverts if called by the previous top-up depositor after a change", async () => {
+        await dsm.setTopUpDepositor(stranger);
 
-        await expect(topUp(topUpCaller))
-          .to.be.revertedWithCustomError(dsm, "NotTopUpCaller")
-          .withArgs(topUpCaller.address);
+        await expect(topUp(topUpDepositor))
+          .to.be.revertedWithCustomError(dsm, "NotATopUpDepositor")
+          .withArgs(topUpDepositor.address);
         await expect(topUp(stranger)).to.emit(stakingRouter, "StakingModuleToppedUp");
       });
 
@@ -1350,7 +1366,9 @@ describe("DepositSecurityModule.sol", () => {
       it("Checks the caller before the pause", async () => {
         await pauseByGuardian();
 
-        await expect(topUp(stranger)).to.be.revertedWithCustomError(dsm, "NotTopUpCaller").withArgs(stranger.address);
+        await expect(topUp(stranger))
+          .to.be.revertedWithCustomError(dsm, "NotATopUpDepositor")
+          .withArgs(stranger.address);
       });
 
       it("Checks the pause before the distance", async () => {

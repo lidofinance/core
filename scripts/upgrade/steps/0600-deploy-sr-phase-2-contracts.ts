@@ -78,20 +78,20 @@ export async function main() {
   // A plain copy: ethers rejects its read-only `Result` as a call argument
   const guardians = [...(await liveDsm.getGuardians())];
   const quorum = await liveDsm.getGuardianQuorum();
-  const { topUpCaller } = parameters.depositSecurityModule;
+  const { topUpDepositor } = parameters.depositSecurityModule;
 
   const dsmConstructorArgs: ConstructorArgs<DepositSecurityModule__factory> = [
     await liveDsm.DEPOSIT_CONTRACT(),
     await locator.stakingRouter(),
     parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
     parameters.depositSecurityModule.maxOperatorsPerUnvetting,
+    topUpDepositor,
   ];
 
   logStartReview();
   await logArgs("DepositSecurityModule", dsmConstructorArgs);
   log("DepositSecurityModule guardians, copied from the live DSM:", guardians.join(", "));
   log("DepositSecurityModule quorum, copied from the live DSM:", quorum.toString());
-  log("DepositSecurityModule top-up caller:", topUpCaller);
   log("DepositSecurityModule owner after the setup:", agentAddress);
   await logConfirmReview();
 
@@ -103,7 +103,6 @@ export async function main() {
   );
   const dsm = await loadContract<DepositSecurityModule>("DepositSecurityModule", dsmDeployment.address);
   await makeTx(dsm, "addGuardians", [guardians, quorum], { from: deployer });
-  await makeTx(dsm, "setTopUpCaller", [topUpCaller], { from: deployer });
   await makeTx(dsm, "setOwner", [agentAddress], { from: deployer });
 
   //

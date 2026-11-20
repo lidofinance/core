@@ -36,7 +36,7 @@ interface IStakingRouter {
  * @dev The contract represents a security module for handling deposits.
  *
  * Seed deposits need a quorum of guardian signatures. Top-ups of keys that already
- * received a seed deposit need no signatures: only the top-up caller can send them,
+ * received a seed deposit need no signatures: only the top-up depositor can send them,
  * and the staking module checks the keys. Both kinds share one pause and one
  * minimum deposit distance.
  */
@@ -55,7 +55,7 @@ contract DepositSecurityModule {
     event DepositsPaused(address indexed guardian);
     event DepositsUnpaused();
     event LastDepositBlockChanged(uint256 newValue);
-    event TopUpCallerChanged(address newValue);
+    event TopUpDepositorChanged(address newValue);
 
     error ZeroAddress(string field);
     error DuplicateAddress(address addr);
@@ -75,7 +75,7 @@ contract DepositSecurityModule {
     error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
     error ZeroParameter(string parameter);
-    error NotTopUpCaller(address caller);
+    error NotATopUpDepositor(address caller);
 
     /// @notice Represents the code version to help distinguish contract interfaces.
     uint256 public constant VERSION = 6;
@@ -112,11 +112,12 @@ contract DepositSecurityModule {
     address[] internal guardians;
     mapping(address => uint256) internal guardianIndicesOneBased; // 1-based
 
-    address internal topUpCaller;
+    address internal topUpDepositor;
 
     /**
      * @notice Initializes the contract with the given parameters.
-     * @dev Reverts if any of the addresses is zero.
+     * @dev Reverts if the deposit contract or the staking router address is zero.
+     * A zero top-up depositor blocks top-ups until the owner sets one.
      *
      * Sets the last deposit block to the current block number.
      */
@@ -124,7 +125,8 @@ contract DepositSecurityModule {
         address _depositContract,
         address _stakingRouter,
         uint256 _pauseIntentValidityPeriodBlocks,
-        uint256 _maxOperatorsPerUnvetting
+        uint256 _maxOperatorsPerUnvetting,
+        address _topUpDepositor
     ) {
         if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
         if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
@@ -163,6 +165,7 @@ contract DepositSecurityModule {
         _setLastDepositBlock(block.number);
         _setPauseIntentValidityPeriodBlocks(_pauseIntentValidityPeriodBlocks);
         _setMaxOperatorsPerUnvetting(_maxOperatorsPerUnvetting);
+        _setTopUpDepositor(_topUpDepositor);
     }
 
     /**
@@ -371,22 +374,26 @@ contract DepositSecurityModule {
 
     /**
      * @notice Returns the address allowed to call `topUpBufferedEther`.
-     * @return topUpCaller The top-up caller address, or zero if it was never set.
+     * @return topUpDepositor The top-up depositor address, or zero if it is not set.
      */
-    function getTopUpCaller() external view returns (address) {
-        return topUpCaller;
+    function getTopUpDepositor() external view returns (address) {
+        return topUpDepositor;
     }
 
     /**
      * @notice Sets the address allowed to call `topUpBufferedEther`.
-     * @param newValue The new top-up caller address.
+     * @param newValue The new top-up depositor address.
      * @dev Only callable by the owner.
      * Reverts if the address is zero.
      */
-    function setTopUpCaller(address newValue) external onlyOwner {
-        if (newValue == address(0)) revert ZeroAddress("_newTopUpCaller");
-        topUpCaller = newValue;
-        emit TopUpCallerChanged(newValue);
+    function setTopUpDepositor(address newValue) external onlyOwner {
+        if (newValue == address(0)) revert ZeroAddress("_newTopUpDepositor");
+        _setTopUpDepositor(newValue);
+    }
+
+    function _setTopUpDepositor(address newValue) internal {
+        topUpDepositor = newValue;
+        emit TopUpDepositorChanged(newValue);
     }
 
     /**
@@ -531,7 +538,7 @@ contract DepositSecurityModule {
      * @param pubkeys The public keys of the validators to top up.
      * @param topUpLimits The maximum amount in wei to top up per key.
      * @dev Reverts if any of the following is true:
-     *   - the caller is not the top-up caller;
+     *   - the caller is not the top-up depositor;
      *   - deposits are paused;
      *   - min deposit distance is not passed.
      *
@@ -546,7 +553,7 @@ contract DepositSecurityModule {
         bytes[] calldata pubkeys,
         uint256[] calldata topUpLimits
     ) external {
-        if (msg.sender != topUpCaller) revert NotTopUpCaller(msg.sender);
+        if (msg.sender != topUpDepositor) revert NotATopUpDepositor(msg.sender);
         if (isDepositsPaused) revert DepositsArePaused();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
 

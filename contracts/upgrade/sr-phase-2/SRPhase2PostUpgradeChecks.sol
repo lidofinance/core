@@ -120,7 +120,7 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertAddress("locator-dsm", locator.depositSecurityModule(), newDsm);
         _assertSingleRoleHolder("sr-unvetting-role", stakingRouter, STAKING_MODULE_UNVETTING_ROLE, newDsm);
         _assertAddress("new-dsm-owner", IDepositSecurityModule(newDsm).getOwner(), agent);
-        _assertAddress("new-dsm-top-up-caller", IDepositSecurityModule(newDsm).getTopUpCaller(), config.TOP_UP_CALLER());
+        _assertAddress("new-dsm-top-up-depositor", IDepositSecurityModule(newDsm).getTopUpDepositor(), config.TOP_UP_DEPOSITOR());
         _assertAddress(
             "top-up-gateway-pauser-cleared",
             ICircuitBreaker(circuitBreaker).getPauser(config.TOP_UP_GATEWAY()),

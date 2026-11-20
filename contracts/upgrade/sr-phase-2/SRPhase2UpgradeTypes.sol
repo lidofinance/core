@@ -54,7 +54,7 @@ struct SRPhase2UpgradeParameters {
     // optimistic top-ups: the new DSM replaces the old one and the TopUpGateway retires
     address oldDepositSecurityModule;
     address newDepositSecurityModule;
-    address topUpCaller;
+    address topUpDepositor;
     address topUpGateway;
     // exit request hash delivery removed from the WithdrawalsOracle:
     // the role holder and the Easy Track factories using it
@@ -107,7 +107,7 @@ interface ILidoLocatorWithTopUpGateway {
     function topUpGateway() external view returns (address);
 }
 
-/// @dev Read on both DSM versions, except `VERSION` and `getTopUpCaller`, which only the new DSM is asked for.
+/// @dev Read on both DSM versions, except `VERSION` and `getTopUpDepositor`, which only the new DSM is asked for.
 interface IDepositSecurityModule {
     function VERSION() external view returns (uint256);
 
@@ -125,7 +125,7 @@ interface IDepositSecurityModule {
 
     function getMaxOperatorsPerUnvetting() external view returns (uint256);
 
-    function getTopUpCaller() external view returns (address);
+    function getTopUpDepositor() external view returns (address);
 
     function isDepositsPaused() external view returns (bool);
 }

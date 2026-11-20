@@ -88,7 +88,7 @@ gloasSlot = "18446744073709551615" # Disabled until the Gloas fork slot is known
 maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
 pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 # The only caller of topUpBufferedEther on the new DSM (optimistic top-ups): the depositor EDF DelegationContract
-topUpCaller = "0x6Aa249bA53A3abcaC52F91146583B3eE2Ee4C7F5"
+topUpDepositor = "0x6Aa249bA53A3abcaC52F91146583B3eE2Ee4C7F5"
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
