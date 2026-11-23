@@ -218,6 +218,19 @@ const config: HardhatUserConfig = {
       },
     ],
     overrides: {
+      // NB: Decreasing optimizer "runs" parameter to keep Dashboard below the EIP-170 contract size limit.
+      // TODO: Reconsider this override after Dashboard's source code is settled.
+      "contracts/0.8.25/vaults/dashboard/Dashboard.sol": {
+        version: "0.8.25",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 100,
+          },
+          viaIR: true,
+          evmVersion: "cancun",
+        },
+      },
       // NB: Decreasing optimizer "runs" parameter to reduce VaultHub contract size.
       // TODO: Reconsider this override after VaultHub's source code is settled.
       "contracts/0.8.25/vaults/VaultHub.sol": {

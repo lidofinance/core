@@ -56,6 +56,14 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         _registeredModuleIds.push(moduleId);
     }
 
+    function mock__setStakingModuleExitedValidators(uint256 moduleId, uint64 exitedValidatorsCount) external {
+        _exitedKeysCountsByModuleId[moduleId] = exitedValidatorsCount;
+        if (!_moduleExistsById[moduleId]) {
+            _moduleExistsById[moduleId] = true;
+            _registeredModuleIds.push(moduleId);
+        }
+    }
+
     function updateExitedValidatorsCountByStakingModule(
         uint256[] calldata moduleIds,
         uint256[] calldata exitedKeysCounts

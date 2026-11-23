@@ -15,12 +15,12 @@ const services = [
   "burner",
   "stakingRouter",
   "treasury",
-  "validatorsExitBusOracle",
+  "withdrawalsOracle",
   "withdrawalQueue",
   "withdrawalVault",
   "oracleDaemonConfig",
-  "validatorExitDelayVerifier",
   "triggerableWithdrawalsGateway",
+  "triggerableWithdrawalsBus",
   "consolidationGateway",
   "accounting",
   "predepositGuarantee",
@@ -72,6 +72,13 @@ describe("LidoLocator.sol", () => {
     it("Does not revert if `postTokenRebaseReceiver` is zero address", async () => {
       const randomConfiguration = randomConfig();
       await expect(ethers.deployContract("LidoLocator", [randomConfiguration])).to.not.be.reverted;
+    });
+  });
+
+  context("validatorsExitBusOracle", () => {
+    it("Returns the same address as `withdrawalsOracle` (deprecated alias)", async () => {
+      expect(await locator.validatorsExitBusOracle()).to.equal(config.withdrawalsOracle);
+      expect(await locator.validatorsExitBusOracle()).to.equal(await locator.withdrawalsOracle());
     });
   });
 

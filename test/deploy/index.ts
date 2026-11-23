@@ -4,6 +4,7 @@ export * from "./locator";
 export * from "./dao";
 export * from "./hashConsensus";
 export * from "./withdrawalQueue";
-export * from "./validatorExitBusOracle";
+export * from "./withdrawalsOracle";
 export * from "./vaults";
 export * from "./stakingRouter";
+export * from "./triggerableWithdrawalsGateway";

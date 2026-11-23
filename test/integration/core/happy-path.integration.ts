@@ -9,10 +9,8 @@ import {
   adjustReportModuleBalances,
   buildModuleAccountingReportParams,
   depositAllocatedValidatorsFromBuffer,
-  ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
-  normalizeWithdrawalVaultBaseline,
   norSdvtEnsureOperators,
   OracleReportParams,
   ProtocolContext,
@@ -20,6 +18,7 @@ import {
   report,
   reportWithoutClActivation,
   setStakingLimit,
+  setWithdrawalVaultBalance,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
@@ -245,8 +244,7 @@ describe("Scenario: Protocol Happy Path", () => {
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
-    await ensureFirstPostMigrationReport(ctx);
-    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+    await setWithdrawalVaultBalance(ctx, 0n);
 
     const depositResult = await depositAllocatedValidatorsFromBuffer(ctx, 1n, NOR_MODULE_ID);
     depositCount = depositResult.depositsCount;

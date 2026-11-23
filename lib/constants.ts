@@ -30,7 +30,7 @@ export const GENESIS_TIME = 100n;
 export const SLOTS_PER_EPOCH = 32n;
 export const BASE_CONSENSUS_VERSION = 1n;
 export const AO_CONSENSUS_VERSION = 3n;
-export const VEBO_CONSENSUS_VERSION = 2n;
+export const WITHDRAWALS_ORACLE_CONSENSUS_VERSION = 2n;
 export const INITIAL_EPOCH = 1n;
 export const INITIAL_FAST_LANE_LENGTH_SLOTS = 0n;
 
@@ -68,7 +68,6 @@ export const ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00n;
 export const MAX_FEE_BP = 65_535n;
 
 export const MAX_RESERVE_RATIO_BP = 99_99n;
-export const LIMITER_PRECISION_BASE = 10n ** 9n;
 
 export const DISCONNECT_NOT_INITIATED = 2n ** 48n - 1n;
 

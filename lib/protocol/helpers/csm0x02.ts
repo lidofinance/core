@@ -7,12 +7,7 @@ import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02 } fr
 
 import { ProtocolContext } from "../types";
 
-import {
-  ensureFirstPostMigrationReport,
-  normalizeWithdrawalVaultBaseline,
-  report,
-  waitNextAvailableReportTime,
-} from "./accounting";
+import { report, setWithdrawalVaultBalance, waitNextAvailableReportTime } from "./accounting";
 import { buildModuleAccountingReportParams, depositAndReportValidators } from "./staking";
 import { randomPubkeys, randomSignatures } from "./staking-module";
 import { buildTopUpData, getTopUpRoleSigner, prepareTopUpWitnesses } from "./topup";
@@ -184,8 +179,7 @@ export const csm0x02EnsureValidatorsBalance = async (ctx: ProtocolContext) => {
     if (totalDepositedValidators === 0n) {
       await csm0x02EnsureDepositedKeys(ctx, 1n);
     } else {
-      await ensureFirstPostMigrationReport(ctx);
-      await normalizeWithdrawalVaultBaseline(ctx, 0n);
+      await setWithdrawalVaultBalance(ctx, 0n);
       await waitNextAvailableReportTime(ctx);
 
       const { clPendingBalanceAtLastReport, depositedForCurrentReport } = await lido.getBalanceStats();

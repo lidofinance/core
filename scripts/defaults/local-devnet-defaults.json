@@ -91,18 +91,15 @@
       "consensusVersion": 7
     }
   },
-  "hashConsensusForValidatorsExitBusOracle": {
+  "hashConsensusForWithdrawalsOracle": {
     "deployParameters": {
       "fastLaneLengthSlots": 10,
       "epochsPerFrame": 4
     }
   },
-  "validatorsExitBusOracle": {
+  "withdrawalsOracle": {
     "deployParameters": {
-      "maxValidatorsPerReport": 600,
-      "maxExitBalanceEth": 416000,
-      "balancePerFrameEth": 32,
-      "frameDurationInSec": 48,
+      "maxRequestsPerReport": 400,
       "consensusVersion": 6
     }
   },
@@ -117,15 +114,16 @@
     "deployParameters": {
       "exitedEthAmountPerDayLimit": 57600,
       "appearedEthAmountPerDayLimit": 57600,
-      "annualBalanceIncreaseBPLimit": 1000,
+      "annualCLRebaseIncreaseSoftBPLimit": 700,
       "simulatedShareRateDeviationBPLimit": 250,
       "maxBalanceExitRequestedPerReportInEth": 19200,
       "maxItemsPerExtraDataTransaction": 8,
       "maxNodeOperatorsPerExtraDataItem": 24,
       "requestTimestampMargin": 128,
-      "maxPositiveTokenRebase": 5000000,
-      "maxCLBalanceDecreaseBP": 360,
-      "clBalanceOraclesErrorUpperBPLimit": 50,
+      "annualCLRebaseIncreaseHardBPLimit": 1700,
+      "clRebaseDecreaseSoftBPLimit": 0,
+      "dailyCLRebaseDecreaseHardBPLimit": 20,
+      "clRebaseDecreaseHardBPLimit": 200,
       "consolidationEthAmountPerDayLimit": 93375,
       "exitedValidatorEthAmountLimit": 32,
       "externalPendingBalanceCapEth": 500
@@ -139,7 +137,13 @@
       "REBASE_CHECK_DISTANT_EPOCH_DISTANCE": 23,
       "PREDICTION_DURATION_IN_SLOTS": 50400,
       "FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT": 1350,
-      "EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS": 100800
+      "EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS": 100800,
+      "EXIT_ITERATION_CHUNK": 32,
+      "ACTIVE_REBALANCING_ENABLED": 0,
+      "ACTIVE_REBALANCING_RATE_LIMIT": 0,
+      "ACTIVE_REBALANCING_OPERATOR_EXCESS_BP": 0,
+      "ACTIVE_REBALANCING_MODULE_EXCESS_BP": 0,
+      "ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS": 0
     }
   },
   "nodeOperatorsRegistry": {

@@ -2,6 +2,10 @@ import { z } from "zod";
 
 // Common schemas
 const EthereumAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
+const NonZeroEthereumAddressSchema = EthereumAddressSchema.refine(
+  (address) => !/^0x0{40}$/i.test(address),
+  "Ethereum address cannot be zero",
+);
 const HexStringSchema = z.string().regex(/^0x[a-fA-F0-9]+$/, "Invalid hex string");
 const BigIntStringSchema = z.string().regex(/^\d+$/, "Invalid BigInt string");
 const BasisPointsSchema = z.number().int().min(0).max(10000);
@@ -18,6 +22,7 @@ const ChainSpecSchema = z.object({
   secondsPerSlot: PositiveIntSchema,
   genesisTime: z.number().int().optional(),
   depositContract: EthereumAddressSchema.optional(),
+  capellaSlot: NonNegativeIntSchema.optional(),
 });
 
 // Validator exit delay verifier schema
@@ -72,11 +77,48 @@ const WithdrawalVaultSchema = z.object({
   consolidationRequestContract: EthereumAddressSchema,
 });
 
-// Triggerable withdrawals gateway schema (used in scratch configs)
+// A quota of the triggerable withdrawals gateway (`LimitConfig`): all zero disables it
+const TriggerableWithdrawalsLimitSchema = z
+  .object({
+    maxLimit: NonNegativeIntSchema,
+    limitPerFrame: NonNegativeIntSchema,
+    frameDurationInSec: NonNegativeIntSchema,
+  })
+  .refine(
+    ({ maxLimit, limitPerFrame, frameDurationInSec }) =>
+      maxLimit === 0
+        ? limitPerFrame === 0 && frameDurationInSec === 0
+        : limitPerFrame > 0 && limitPerFrame <= maxLimit && frameDurationInSec > 0,
+    { message: "a limit is either all zero (disabled) or has 0 < limitPerFrame <= maxLimit and a non-zero frame" },
+  );
+
+// Max partial withdrawal amount in gwei (LIP-38 MAX_PWR_AMOUNT): an enabled PWR limit must hold it
+const MAX_PWR_AMOUNT_GWEI = 2016 * 1e9;
+
+// Limits of one gateway consumer: partial withdrawals in gwei, full withdrawals in validators (LIP-38)
+const TriggerableWithdrawalsConsumerLimitsSchema = z.object({
+  pwr: TriggerableWithdrawalsLimitSchema.refine(({ maxLimit }) => maxLimit === 0 || maxLimit >= MAX_PWR_AMOUNT_GWEI, {
+    message: "an enabled PWR limit must be at least 2016 ETH in gwei",
+  }),
+  fwr: TriggerableWithdrawalsLimitSchema,
+});
+
+// Scratch: gateway limits of the bus, and default limits of a staking module ejector by WC type
 const TriggerableWithdrawalsGatewaySchema = z.object({
-  maxExitRequestsLimit: PositiveIntSchema,
-  exitsPerFrame: PositiveIntSchema,
-  frameDurationInSec: PositiveIntSchema,
+  busLimits: TriggerableWithdrawalsConsumerLimitsSchema,
+  ejectorLimitsWC0x01: TriggerableWithdrawalsConsumerLimitsSchema,
+  ejectorLimitsWC0x02: TriggerableWithdrawalsConsumerLimitsSchema,
+});
+
+// Upgrade: gateway limits the vote sets for the bus and each staking module ejector (LIP-38 "Initial limits")
+const TriggerableWithdrawalsGatewayUpgradeSchema = z.object({
+  busLimits: TriggerableWithdrawalsConsumerLimitsSchema,
+  ejectors: z.array(
+    TriggerableWithdrawalsConsumerLimitsSchema.extend({
+      name: z.string(),
+      address: EthereumAddressSchema,
+    }),
+  ),
 });
 
 // Consolidation gateway schema
@@ -213,6 +255,25 @@ const UpgradeVoteScriptSchema = z.object({
   enabledDaySpanEnd: NonNegativeIntSchema.optional(),
 });
 
+// Keys LIP-38 adds to the OracleDaemonConfig; ACTIVE_REBALANCING_ENABLED is 0 or 1
+const LIP38OracleDaemonConfigSchema = z.object({
+  EXIT_ITERATION_CHUNK: PositiveIntSchema,
+  ACTIVE_REBALANCING_ENABLED: z.number().int().min(0).max(1),
+  ACTIVE_REBALANCING_RATE_LIMIT: NonNegativeIntSchema,
+  ACTIVE_REBALANCING_OPERATOR_EXCESS_BP: NonNegativeIntSchema,
+  ACTIVE_REBALANCING_MODULE_EXCESS_BP: NonNegativeIntSchema,
+  ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS: NonNegativeIntSchema,
+});
+
+// SR phase 2 (LIP-38) vote script params: also removes the Easy Track factories of the exit request hash delivery
+const SRPhase2UpgradeVoteScriptSchema = UpgradeVoteScriptSchema.extend({
+  curatedSubmitExitRequestHashesFactory: EthereumAddressSchema,
+  sdvtSubmitExitRequestHashesFactory: EthereumAddressSchema,
+  maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
+  cmv2StakingModuleId: PositiveIntSchema,
+  oracleDaemonConfig: LIP38OracleDaemonConfigSchema,
+});
+
 // CircuitBreaker schema (for scratch deployment)
 const CircuitBreakerSchema = z.object({
   minPauseDuration: PositiveIntSchema,
@@ -221,6 +282,50 @@ const CircuitBreakerSchema = z.object({
   maxHeartbeatInterval: PositiveIntSchema,
   initialPauseDuration: PositiveIntSchema,
   initialHeartbeatInterval: PositiveIntSchema,
+});
+
+// Dual Governance schema (optional, for scratch deployment).
+// Durations are in seconds; rage quit support values are PercentD16 (1e16 = 1%).
+const DualGovernanceSchema = z.object({
+  tiebreakerActivationTimeout: PositiveIntSchema,
+  sanityCheckParams: z.object({
+    minWithdrawalsBatchSize: PositiveIntSchema,
+    minTiebreakerActivationTimeout: PositiveIntSchema,
+    maxTiebreakerActivationTimeout: PositiveIntSchema,
+    maxSealableWithdrawalBlockersCount: PositiveIntSchema,
+    maxMinAssetsLockDuration: PositiveIntSchema,
+  }),
+  configProvider: z.object({
+    firstSealRageQuitSupport: BigIntStringSchema,
+    secondSealRageQuitSupport: BigIntStringSchema,
+    minAssetsLockDuration: PositiveIntSchema,
+    vetoSignallingMinDuration: PositiveIntSchema,
+    vetoSignallingMinActiveDuration: PositiveIntSchema,
+    vetoSignallingMaxDuration: PositiveIntSchema,
+    vetoSignallingDeactivationMaxDuration: PositiveIntSchema,
+    vetoCooldownDuration: PositiveIntSchema,
+    rageQuitExtensionPeriodDuration: PositiveIntSchema,
+    rageQuitEthWithdrawalsMinDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsMaxDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsDelayGrowth: PositiveIntSchema,
+  }),
+  timelock: z.object({
+    afterSubmitDelay: NonNegativeIntSchema,
+    afterScheduleDelay: NonNegativeIntSchema,
+    sanityCheckParams: z.object({
+      minExecutionDelay: NonNegativeIntSchema,
+      maxAfterSubmitDelay: PositiveIntSchema,
+      maxAfterScheduleDelay: PositiveIntSchema,
+      maxEmergencyModeDuration: PositiveIntSchema,
+      maxEmergencyProtectionDuration: PositiveIntSchema,
+    }),
+    emergencyModeDuration: PositiveIntSchema,
+    // The emergency protection end date is the deploy block timestamp plus this duration
+    emergencyProtectionDuration: PositiveIntSchema,
+  }),
+  tiebreaker: z.object({
+    executionDelay: PositiveIntSchema,
+  }),
 });
 
 // DAO schema
@@ -266,12 +371,9 @@ const OracleSchema = z.object({
   consensusVersion: PositiveIntSchema,
 });
 
-const ValidatorsExitBusOracleSchema = OracleSchema.extend({
-  maxValidatorsPerReport: PositiveIntSchema,
-  maxExitBalanceEth: PositiveIntSchema,
-  balancePerFrameEth: PositiveIntSchema,
-  frameDurationInSec: PositiveIntSchema,
-  consensusVersion: PositiveIntSchema,
+// LIP-38: the exit limits moved to the TriggerableWithdrawalsGateway; the record cap is a constructor immutable
+const WithdrawalsOracleSchema = OracleSchema.extend({
+  maxRequestsPerReport: PositiveIntSchema,
 });
 
 // Deposit security module schema
@@ -283,13 +385,10 @@ const DepositSecurityModuleSchema = z.object({
 
 // Oracle report sanity checker schema
 export const OracleReportSanityCheckerBaseScheme = z.object({
-  annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
-  maxPositiveTokenRebase: PositiveIntSchema,
-  clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
 });
 
 export const OracleReportSanityCheckerUpgradeScheme = z.object({
@@ -301,12 +400,20 @@ export const OracleReportSanityCheckerUpgradeScheme = z.object({
   externalPendingBalanceCapEth: NonNegativeIntSchema,
   consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
   exitedValidatorEthAmountLimit: PositiveIntSchema,
-  maxCLBalanceDecreaseBP: BasisPointsSchema,
+  annualCLRebaseIncreaseSoftBPLimit: BasisPointsSchema,
+  annualCLRebaseIncreaseHardBPLimit: BasisPointsSchema,
+  clRebaseDecreaseSoftBPLimit: BasisPointsSchema,
+  dailyCLRebaseDecreaseHardBPLimit: BasisPointsSchema,
+  clRebaseDecreaseHardBPLimit: BasisPointsSchema,
 });
 
 export const OracleReportSanityCheckerSchema = z.object({
   ...OracleReportSanityCheckerBaseScheme.shape,
   ...OracleReportSanityCheckerUpgradeScheme.shape,
+});
+
+const SecondOpinionOracleSchema = z.object({
+  committee: NonZeroEthereumAddressSchema,
 });
 
 // Oracle daemon config schema
@@ -321,6 +428,7 @@ const OracleDaemonConfigSchema = z.object({
   PREDICTION_DURATION_IN_SLOTS: PositiveIntSchema,
   FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT: PositiveIntSchema,
   EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS: PositiveIntSchema,
+  ...LIP38OracleDaemonConfigSchema.shape,
 });
 
 // Staking module schema
@@ -350,6 +458,7 @@ const LidoSchema = z.object({
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
   circuitBreaker: CircuitBreakerSchema,
+  dualGovernance: DualGovernanceSchema.optional(),
   lidoApm: LidoApmSchema,
   lido: LidoSchema.optional(),
   dao: DaoSchema,
@@ -364,15 +473,14 @@ export const ScratchParametersSchema = z.object({
   }),
   lazyOracle: LazyOracleSchema,
   accountingOracle: OracleSchema,
-  hashConsensusForValidatorsExitBusOracle: HashConsensusSchema,
-  validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
+  hashConsensusForWithdrawalsOracle: HashConsensusSchema,
+  withdrawalsOracle: WithdrawalsOracleSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerSchema,
   oracleDaemonConfig: OracleDaemonConfigSchema,
   nodeOperatorsRegistry: StakingModuleSchema,
   simpleDvt: StakingModuleSchema,
   withdrawalQueueERC721: WithdrawalQueueERC721Schema,
-  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
@@ -389,6 +497,8 @@ export const UpgradeParametersSchema = z.object({
   easyTrack: EasyTrackSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerUpgradeScheme,
+  // Optional until the committee address is approved. The deployment step refuses to proceed without it.
+  secondOpinionOracle: SecondOpinionOracleSchema.optional(),
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
   consolidationMigrator: ConsolidationMigratorSchema,
@@ -396,9 +506,9 @@ export const UpgradeParametersSchema = z.object({
   topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
   withdrawalVault: WithdrawalVaultSchema,
-  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewayUpgradeSchema,
   accountingOracle: OracleSchema,
-  validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
+  withdrawalsOracle: WithdrawalsOracleSchema,
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   predepositGuarantee: PredepositGuaranteeSchema.extend({
     genesisForkVersion: HexStringSchema,
@@ -409,6 +519,7 @@ export const UpgradeParametersSchema = z.object({
   curatedModule: CuratedModuleConfigSchema,
 
   upgradeVoteScript: UpgradeVoteScriptSchema,
+  srPhase2UpgradeVoteScript: SRPhase2UpgradeVoteScriptSchema,
 
   // old and optional
   vaultHub: VaultHubSchema.optional(),
