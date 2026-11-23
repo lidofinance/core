@@ -100,14 +100,9 @@ const CSM_CIRCUIT_BREAKER_PAUSABLES: ExternalArtifactField[] = [
   "VettedGate",
   "IdentifiedDVTClusterGate",
 ];
-// CMv2 uses CuratedVerifier, not Verifier. Its curated gates are paused by their own pause manager.
-const CMV2_CIRCUIT_BREAKER_PAUSABLES: ExternalArtifactField[] = [
-  "CuratedModule",
-  "Accounting",
-  "FeeOracle",
-  "CuratedVerifier",
-  "Ejector",
-];
+// CMv2's verifier is added at plug time by `cmv2VerifierField`. Its curated gates are paused by their own
+// pause manager.
+const CMV2_CIRCUIT_BREAKER_PAUSABLES: ExternalArtifactField[] = ["CuratedModule", "Accounting", "FeeOracle", "Ejector"];
 const CSM0X02_CIRCUIT_BREAKER_PAUSABLES: ExternalArtifactField[] = [
   "CSModule",
   "Accounting",
@@ -143,6 +138,18 @@ function requireArtifactAddress(
     throw new Error(`${moduleLabel} deploy artifact does not contain ${field} address`);
   }
   return value;
+}
+
+/**
+ * The deploy artifact key of CMv2's verifier. The staking modules repo has two layouts:
+ * - `develop` deploys a separate `CuratedVerifier` contract for CMv2 and records it as `CuratedVerifier`;
+ * - `gloas` has a single `Verifier` contract for every module, CMv2 included, and records it as `Verifier`.
+ * This deployment takes the modules from the `gloas` branch (see STAKING_MODULES_REPO_BRANCH), so both
+ * layouts must work. Drop the fallback once `gloas` records `CuratedVerifier` too.
+ */
+function cmv2VerifierField(state: ReturnType<typeof readNetworkState>): ExternalArtifactField {
+  const artifact = getExternalArtifact(state, Sk.sm_CM, CMV2_STAKING_MODULE_NAME);
+  return artifact.CuratedVerifier ? "CuratedVerifier" : "Verifier";
 }
 
 function getExternalModuleSetup(
@@ -339,13 +346,10 @@ export async function main() {
   }
 
   if (state[Sk.sm_CM]?.proxy?.address) {
-    const setup = getExternalModuleSetup(
-      state,
-      Sk.sm_CM,
-      CMV2_STAKING_MODULE_NAME,
-      "CuratedModule",
-      CMV2_CIRCUIT_BREAKER_PAUSABLES,
-    );
+    const setup = getExternalModuleSetup(state, Sk.sm_CM, CMV2_STAKING_MODULE_NAME, "CuratedModule", [
+      ...CMV2_CIRCUIT_BREAKER_PAUSABLES,
+      cmv2VerifierField(state),
+    ]);
     await makeTx(
       stakingRouter,
       "addStakingModule",
