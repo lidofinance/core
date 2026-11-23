@@ -87,11 +87,7 @@ export async function deployAccountingOracleSetup(
 
   const lazyOracle = await deployMockLazyOracle();
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(
-    locatorAddr,
-    accountingAddress,
-    admin,
-  );
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
 
   await updateLidoLocatorImplementation(locatorAddr, {
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
@@ -147,13 +143,12 @@ export async function initAccountingOracle({
   return initTx;
 }
 
-async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, accounting: string, admin: string) {
+async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
   const exitedEthAmountPerDayLimit = 65_535n;
   const appearedEthAmountPerDayLimit = 65_535n;
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
     f.deploy(
       lidoLocator,
-      accounting,
       admin,
       {
         exitedEthAmountPerDayLimit,

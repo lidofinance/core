@@ -73,7 +73,6 @@ describe("OracleReportSanityChecker: module and CL balances", () => {
     ]);
     const checker = await ethers.deployContract("OracleReportSanityChecker", [
       await locator.getAddress(),
-      deployer.address,
       admin.address,
       limits,
       ethers.ZeroAddress,

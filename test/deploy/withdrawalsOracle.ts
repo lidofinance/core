@@ -69,15 +69,10 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForWithdrawalsOracle(
-  lidoLocator: string,
-  accounting: string,
-  admin: string,
-) {
+async function deployOracleReportSanityCheckerForWithdrawalsOracle(lidoLocator: string, admin: string) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
     f.deploy(
       lidoLocator,
-      accounting,
       admin,
       {
         exitedEthAmountPerDayLimit: 0n,
@@ -176,7 +171,6 @@ export async function deployWithdrawalsOracle(
   const triggerableWithdrawalsBus = await deployTWB();
 
   const accountingOracleAddress = await ao.getAddress();
-  const accountingAddress = await locator.accounting();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
@@ -184,11 +178,7 @@ export async function deployWithdrawalsOracle(
     triggerableWithdrawalsBus: await triggerableWithdrawalsBus.getAddress(),
   });
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForWithdrawalsOracle(
-    locatorAddr,
-    accountingAddress,
-    admin,
-  );
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForWithdrawalsOracle(locatorAddr, admin);
 
   await updateLidoLocatorImplementation(locatorAddr, {
     withdrawalsOracle: await oracle.getAddress(),

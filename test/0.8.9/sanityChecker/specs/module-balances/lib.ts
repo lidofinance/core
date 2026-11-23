@@ -7,6 +7,7 @@ export const DAYS_PER_YEAR = 365n;
 export const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
 
 const ANNUAL_BALANCE_INCREASE_DENOMINATOR = MAX_BASIS_POINTS * DAYS_PER_YEAR * DAY;
+const DEFAULT_CL_BALANCE = 10n ** 9n;
 
 export type OracleReportLimits = {
   exitedEthAmountPerDayLimit: bigint;
@@ -118,8 +119,9 @@ export const calcModuleBalanceFormula = (
     fundedPendingBalance > report.postCLPendingBalance ? fundedPendingBalance - report.postCLPendingBalance : 0n;
   const appearedBalanceAllowance = (ether(limits.appearedEthAmountPerDayLimit.toString()) * effectiveTimeElapsed) / DAY;
   const activatedBalanceLimit = appearedBalanceAllowance + MAX_VALIDATOR_EFFECTIVE_BALANCE;
+  const annualAllowanceBase = report.preCLValidatorsBalance + activatedBalance;
   const annualSoftAllowance =
-    ((report.preCLValidatorsBalance + activatedBalance) *
+    ((annualAllowanceBase === 0n ? DEFAULT_CL_BALANCE : annualAllowanceBase) *
       limits.annualCLRebaseIncreaseSoftBPLimit *
       effectiveTimeElapsed) /
     ANNUAL_BALANCE_INCREASE_DENOMINATOR;

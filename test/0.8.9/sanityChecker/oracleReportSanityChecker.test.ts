@@ -85,7 +85,6 @@ describe("OracleReportSanityChecker", () => {
     ]);
     const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
       await locator.getAddress(),
-      accounting.address,
       admin.address,
       limits,
       false,
@@ -116,17 +115,32 @@ describe("OracleReportSanityChecker", () => {
       expect(await checker.getMaxEffectiveBalanceWeightWCType02()).to.equal(limits.maxEffectiveBalanceWeightWCType02);
     });
 
-    it("sets the initial second-opinion provider", async () => {
-      const { accounting, admin, locator, manager } = await loadFixture(deployFixture);
+    it("sets the initial second-opinion provider and emits its event", async () => {
+      const { admin, locator, manager } = await loadFixture(deployFixture);
       const checker = await ethers.deployContract("OracleReportSanityChecker", [
         await locator.getAddress(),
-        accounting.address,
         admin.address,
         limits,
         manager.address,
       ]);
 
       expect(await checker.secondOpinionOracle()).to.equal(manager.address);
+      await expect(checker.deploymentTransaction())
+        .to.emit(checker, "SecondOpinionOracleChanged")
+        .withArgs(manager.address);
+    });
+
+    it("emits no provider event for a zero initial provider", async () => {
+      const { admin, locator } = await loadFixture(deployFixture);
+      const checker = await ethers.deployContract("OracleReportSanityChecker", [
+        await locator.getAddress(),
+        admin.address,
+        limits,
+        ZeroAddress,
+      ]);
+
+      expect(await checker.secondOpinionOracle()).to.equal(ZeroAddress);
+      await expect(checker.deploymentTransaction()).not.to.emit(checker, "SecondOpinionOracleChanged");
     });
 
     it("rejects a zero admin and malformed soft/hard pairs", async () => {
@@ -135,7 +149,6 @@ describe("OracleReportSanityChecker", () => {
       await expect(
         ethers.deployContract("OracleReportSanityChecker", [
           await locator.getAddress(),
-          accounting.address,
           ZeroAddress,
           limits,
           ZeroAddress,
@@ -150,7 +163,6 @@ describe("OracleReportSanityChecker", () => {
       await expect(
         ethers.deployContract("OracleReportSanityChecker", [
           await locator.getAddress(),
-          accounting.address,
           accounting.address,
           malformedLimits,
           ZeroAddress,

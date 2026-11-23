@@ -113,7 +113,7 @@ export async function main(): Promise<void> {
     Sk.oracleReportSanityChecker,
     "OracleReportSanityChecker",
     deployer.address,
-    [locatorAddress, liveLocatorConfig.accounting, agentAddress, limits, secondOpinionOracle.address],
+    [locatorAddress, agentAddress, limits, secondOpinionOracle.address],
   );
   const newLimits = await (
     await loadContract<OracleReportSanityChecker>("OracleReportSanityChecker", checker.address)

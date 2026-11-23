@@ -121,7 +121,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant MAX_VALIDATOR_EFFECTIVE_BALANCE = 2_048 ether;
 
     ILidoLocator private immutable LIDO_LOCATOR;
-    address private immutable ACCOUNTING_ADDRESS;
 
     AccountingCoreLimitsPacked private _accountingCoreLimits;
     OperationalLimitsPacked private _operationalLimits;
@@ -130,23 +129,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ISecondOpinionOracle public secondOpinionOracle;
 
     /// @param _lidoLocator address of the LidoLocator instance
-    /// @param _accounting address of the Accounting instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
     /// @param _secondOpinionOracle initial second-opinion provider; can be zero to leave it disabled
     constructor(
         address _lidoLocator,
-        address _accounting,
         address _admin,
         LimitsList memory _limitsList,
         ISecondOpinionOracle _secondOpinionOracle
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
-        ACCOUNTING_ADDRESS = _accounting;
 
         _updateLimits(_limitsList);
-        secondOpinionOracle = _secondOpinionOracle;
+        _setSecondOpinionOracle(_secondOpinionOracle);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -177,10 +173,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         ISecondOpinionOracle _secondOpinionOracle
     ) external onlyRole(ALL_LIMITS_MANAGER_ROLE) {
         _updateLimits(_limitsList);
-        if (_secondOpinionOracle != secondOpinionOracle) {
-            secondOpinionOracle = _secondOpinionOracle;
-            emit SecondOpinionOracleChanged(_secondOpinionOracle);
-        }
+        _setSecondOpinionOracle(_secondOpinionOracle);
     }
 
     /// @notice Sets the new value for the exitedEthAmountPerDayLimit
@@ -335,10 +328,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function setSecondOpinionOracle(
         ISecondOpinionOracle _secondOpinionOracle
     ) external onlyRole(SECOND_OPINION_MANAGER_ROLE) {
-        if (_secondOpinionOracle != secondOpinionOracle) {
-            secondOpinionOracle = _secondOpinionOracle;
-            emit SecondOpinionOracleChanged(_secondOpinionOracle);
-        }
+        _setSecondOpinionOracle(_secondOpinionOracle);
     }
 
     /// @notice Sets the limits for a negative CL accounting rebase: the soft per-report limit,
@@ -380,10 +370,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
         uint256 _deposits
-    ) external view {
-        if (msg.sender != ACCOUNTING_ADDRESS) {
-            revert CalledNotFromAccounting();
-        }
+    ) external {
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert CalledNotFromAccounting();
         // 1. Withdrawals vault reported balance
         _checkWithdrawalVaultBalance(LIDO_LOCATOR.withdrawalVault().balance, _withdrawalVaultBalance);
         // 2. EL rewards vault reported balance
@@ -405,7 +393,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function _checkAccountingOracleReportCLBalances(
         CLBalanceChangeCheckParams memory _checkParams,
         uint256 _withdrawalVaultBalance
-    ) internal view {
+    ) internal {
         AccountingCoreLimitsPacked memory limitsList = _accountingCoreLimits;
         uint256 preCLBalance =
             _checkParams.preCLValidatorsBalance + _checkParams.preCLPendingBalance + _checkParams.deposits;
@@ -785,10 +773,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _preCLBalance,
         uint256 _timeElapsed
     ) internal pure returns (uint256) {
-        uint256 limitForElapsedTime = (_preCLBalance *
-            uint256(_limitsList.dailyCLRebaseDecreaseHardBPLimit) *
-            Math256.max(_timeElapsed, SECONDS_PER_DAY)) / (MAX_BASIS_POINTS * SECONDS_PER_DAY);
-        uint256 limitPerReport = (_preCLBalance * uint256(_limitsList.clRebaseDecreaseHardBPLimit)) / MAX_BASIS_POINTS;
+        uint256 limitForElapsedTime = _preCLBalance * uint256(_limitsList.dailyCLRebaseDecreaseHardBPLimit)
+            * Math256.max(_timeElapsed, SECONDS_PER_DAY) / (MAX_BASIS_POINTS * SECONDS_PER_DAY);
+        uint256 limitPerReport =
+            _preCLBalance * uint256(_limitsList.clRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
         return Math256.min(limitForElapsedTime, limitPerReport);
     }
 
@@ -825,12 +813,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             effectivePreCLBalance * _annualLimitBP * _effectiveTimeElapsed / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
     }
 
-    function _checkSecondOpinionReportHash() internal view {
+    function _checkSecondOpinionReportHash() internal {
         // slither-disable-next-line unused-return
         (bytes32 consensusReportHash, uint256 refSlot,, bool processingStarted) =
             IBaseOracle(LIDO_LOCATOR.accountingOracle()).getConsensusReport();
         if (!processingStarted) revert ConsensusReportNotProcessing(refSlot);
-        if (address(secondOpinionOracle) == address(0)) revert SecondOpinionReportNotReady(refSlot);
+        if (address(secondOpinionOracle) == address(0)) revert SecondOpinionOracleNotSet();
 
         (bool exists, bytes32 attestedReportHash) = secondOpinionOracle.getReportHash(refSlot);
         if (!exists) revert SecondOpinionReportNotReady(refSlot);
@@ -838,6 +826,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (attestedReportHash != consensusReportHash) {
             revert SecondOpinionReportHashMismatch(refSlot, consensusReportHash, attestedReportHash);
         }
+        emit SecondOpinionReportConfirmed(refSlot, consensusReportHash);
     }
 
     function _checkLastFinalizableId(
@@ -885,6 +874,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (simulatedShareDeviation > _limitsList.simulatedShareRateDeviationBPLimit) {
             revert IncorrectSimulatedShareRate(_simulatedShareRate, actualShareRate);
         }
+    }
+
+    function _setSecondOpinionOracle(ISecondOpinionOracle _secondOpinionOracle) internal {
+        if (_secondOpinionOracle == secondOpinionOracle) return;
+        secondOpinionOracle = _secondOpinionOracle;
+        emit SecondOpinionOracleChanged(_secondOpinionOracle);
     }
 
     function _updateLimits(LimitsList memory _newLimitsList) internal {
@@ -969,6 +964,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event ExitedValidatorEthAmountLimitSet(uint256 exitedValidatorEthAmountLimit);
     event ExternalPendingBalanceCapEthSet(uint256 externalPendingBalanceCapEth);
     event SecondOpinionOracleChanged(ISecondOpinionOracle indexed secondOpinionOracle);
+    event SecondOpinionReportConfirmed(uint256 indexed refSlot, bytes32 reportHash);
     event AnnualCLRebaseIncreaseBPLimitsSet(uint256 softLimitBP, uint256 hardLimitBP);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxBalanceExitRequestedPerReportInEthSet(uint256 maxBalanceExitRequestedPerReportInEth);
@@ -998,6 +994,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error CLRebaseDecreaseAboveHardLimit(uint256 decrease, uint256 hardLimit);
     error AnnualCLRebaseIncreaseAboveHardLimit(uint256 increase, uint256 hardLimit);
     error ConsensusReportNotProcessing(uint256 refSlot);
+    error SecondOpinionOracleNotSet();
     error SecondOpinionReportNotReady(uint256 refSlot);
     error SecondOpinionReportHashMismatch(uint256 refSlot, bytes32 consensusHash, bytes32 attestedHash);
     error CalledNotFromAccounting();

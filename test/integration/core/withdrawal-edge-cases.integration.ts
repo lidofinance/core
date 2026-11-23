@@ -19,7 +19,7 @@ import {
   updateOracleReportLimits,
   waitNextAvailableReportTime,
 } from "lib/protocol";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
+import { adjustReportModuleBalances, toReportedCLGwei } from "lib/protocol/helpers/accounting";
 
 import { Snapshot } from "test/suite";
 
@@ -71,7 +71,10 @@ describe("Integration: Withdrawal edge cases", () => {
       reportElVault: false,
       skipWithdrawals,
       waitNextReportTime: false,
-      ...adjustReportModuleBalances(await buildModuleAccountingReportParams(ctx), toGwei(postCLValidatorsBalanceWei)),
+      ...adjustReportModuleBalances(
+        await buildModuleAccountingReportParams(ctx),
+        toReportedCLGwei(postCLValidatorsBalanceWei),
+      ),
     });
   };
 
@@ -93,7 +96,7 @@ describe("Integration: Withdrawal edge cases", () => {
       clPendingBalanceGwei: toGwei(clPendingBalanceAtLastReport),
       ...adjustReportModuleBalances(
         await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),
-        toGwei(postCLValidatorsBalanceWei),
+        toReportedCLGwei(postCLValidatorsBalanceWei),
       ),
     });
   };

@@ -64,6 +64,15 @@ export const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
 
+/**
+ * Convert a CL-side balance to the gwei that a report submits.
+ *
+ * CL balances are reported in gwei, while the checker adds the wei-denominated WVB back.
+ * Round the CL part up, so a sub-gwei WVB remainder never shows up as a CL decrease:
+ * with a zero soft decrease limit any decrease requires a second-opinion hash.
+ */
+export const toReportedCLGwei = (wei: bigint): bigint => (wei + ONE_GWEI - 1n) / ONE_GWEI;
+
 export function adjustReportModuleBalances(
   {
     stakingModuleIdsWithUpdatedBalance = [],
@@ -199,10 +208,7 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
 
   let isBunkerMode = false;
 
-  // CL balances are reported in gwei, while the checker adds the wei-denominated WVB back.
-  // Round the CL part up, so a sub-gwei WVB remainder never shows up as a CL decrease:
-  // with a zero soft decrease limit any decrease requires a second-opinion hash.
-  const postCLBalanceGwei = (postCLBalance + ONE_GWEI - 1n) / ONE_GWEI;
+  const postCLBalanceGwei = toReportedCLGwei(postCLBalance);
   if (clPendingBalanceGwei > postCLBalanceGwei) {
     throw new Error(
       `Reported CL pending balance ${clPendingBalanceGwei} exceeds total CL balance ${postCLBalanceGwei}`,
