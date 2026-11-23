@@ -79,14 +79,13 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
       },
     ]);
 
+    const secondOpinionOracle = await ethers.deployContract("SecondOpinionOracle", [admin.address, committee.address]);
     const checker = await ethers.deployContract("OracleReportSanityChecker", [
       await locator.getAddress(),
-      accounting.address,
       admin.address,
       limits,
-      ethers.ZeroAddress,
+      await secondOpinionOracle.getAddress(),
     ]);
-    const secondOpinionOracle = await ethers.deployContract("SecondOpinionOracle", [admin.address, committee.address]);
 
     await checker.connect(admin).grantRole(await checker.SECOND_OPINION_MANAGER_ROLE(), admin.address);
 
@@ -244,7 +243,26 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
     );
 
     await fixture.secondOpinionOracle.connect(fixture.committee).setReportHash(REF_SLOT, REPORT_HASH);
-    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - 1n)).not.to.be.reverted;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - 1n))
+      .to.emit(fixture.checker, "SecondOpinionReportConfirmed")
+      .withArgs(REF_SLOT, REPORT_HASH);
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance)).not.to.emit(
+      fixture.checker,
+      "SecondOpinionReportConfirmed",
+    );
+  });
+
+  it("reports a missing second-opinion provider with its own error", async () => {
+    const fixture = await deployFixture();
+    const preCLBalance = ether("1000");
+
+    await fixture.checker.connect(fixture.admin).setSecondOpinionOracle(ethers.ZeroAddress);
+    await fixture.setConsensusReport();
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance - 1n)).to.be.revertedWithCustomError(
+      fixture.checker,
+      "SecondOpinionOracleNotSet",
+    );
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance)).not.to.be.reverted;
   });
 
   it("does not accept an attestation before report processing is frozen", async () => {
@@ -368,7 +386,13 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
       .withArgs(hardIncrease + 1n, hardIncrease);
 
     await fixture.enableSecondOpinion();
-    await expect(checkAggregate(fixture, preCLBalance, preCLBalance + hardIncrease)).not.to.be.reverted;
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance + softIncrease)).not.to.emit(
+      fixture.checker,
+      "SecondOpinionReportConfirmed",
+    );
+    await expect(checkAggregate(fixture, preCLBalance, preCLBalance + hardIncrease))
+      .to.emit(fixture.checker, "SecondOpinionReportConfirmed")
+      .withArgs(REF_SLOT, REPORT_HASH);
   });
 
   it("enforces zero-valued decrease and annual increase limit pairs at runtime", async () => {

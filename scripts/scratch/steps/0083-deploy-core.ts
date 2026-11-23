@@ -548,13 +548,7 @@ export async function main() {
     externalPendingBalanceCapEth: sanityCheckerParams.externalPendingBalanceCapEth,
   };
 
-  const oracleReportSanityCheckerArgs = [
-    locator.address,
-    accounting.address,
-    admin,
-    sanityLimits,
-    secondOpinionOracle.address,
-  ];
+  const oracleReportSanityCheckerArgs = [locator.address, admin, sanityLimits, secondOpinionOracle.address];
 
   await deployWithoutProxy(
     Sk.oracleReportSanityChecker,

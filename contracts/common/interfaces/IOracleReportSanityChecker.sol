@@ -16,7 +16,7 @@ interface IOracleReportSanityChecker {
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
         uint256 _deposits
-    ) external view;
+    ) external;
 
     //
     function checkWithdrawalQueueOracleReport(

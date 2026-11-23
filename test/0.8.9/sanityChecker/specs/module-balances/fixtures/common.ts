@@ -43,6 +43,7 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
       expected: {
         outcome: "accepted",
         formula: {
+          annualSoftAllowance: 273_972n,
           grossPositiveModuleDeltas: 0n,
         },
       },

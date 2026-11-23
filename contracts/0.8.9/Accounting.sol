@@ -410,7 +410,7 @@ contract Accounting {
         Contracts memory _contracts,
         ReportValues calldata _report,
         PreReportState memory _pre
-    ) internal view {
+    ) internal {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
         // Validator count validation removed for MaxEB support - now using balance-based accounting
 

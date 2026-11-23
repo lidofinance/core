@@ -204,7 +204,7 @@ describe("Integration: Second opinion", () => {
   for (const { name, missedTime, expectHardLimit } of scenarios) {
     context(`Hard decrease limit ${name}`, () => {
       it("accepts a decrease at the hard limit with the exact second-opinion hash", async () => {
-        const { accountingOracle } = ctx.contracts;
+        const { accountingOracle, oracleReportSanityChecker } = ctx.contracts;
         const { timeElapsed, principal, hardLimit } = await waitReportFrame(missedTime);
         expect(timeElapsed).to.be.gte(missedTime);
         expectHardLimit(principal, hardLimit);
@@ -213,7 +213,10 @@ describe("Integration: Second opinion", () => {
         const { data, hash } = await prepareDecreaseReport(decrease);
         await setSecondOpinionHash(data.refSlot, hash);
 
-        await submitReportDataWithConsensusAndEmptyExtraData(ctx, data);
+        const { reportTx } = await submitReportDataWithConsensusAndEmptyExtraData(ctx, data);
+        await expect(reportTx)
+          .to.emit(oracleReportSanityChecker, "SecondOpinionReportConfirmed")
+          .withArgs(data.refSlot, hash);
 
         expect(await accountingOracle.getLastProcessingRefSlot()).to.equal(data.refSlot);
         expect(await getCLBalance()).to.equal(principal - decrease);

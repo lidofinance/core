@@ -24,11 +24,10 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
 
     constructor(
         address _lidoLocator,
-        address _accounting,
         address _admin,
         LimitsList memory _limitsList,
         bool
-    ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList, ISecondOpinionOracle(address(0))) {}
+    ) OracleReportSanityChecker(_lidoLocator, _admin, _limitsList, ISecondOpinionOracle(address(0))) {}
 
     function harness__checkCLBalancesConsistency(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
