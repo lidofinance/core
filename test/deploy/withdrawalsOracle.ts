@@ -69,30 +69,32 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForWithdrawalsOracle(
-  lidoLocator: string,
-  accounting: string,
-  admin: string,
-) {
+async function deployOracleReportSanityCheckerForWithdrawalsOracle(lidoLocator: string, admin: string) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accounting, admin, {
-      exitedEthAmountPerDayLimit: 0n,
-      appearedEthAmountPerDayLimit: 0n,
-      annualBalanceIncreaseBPLimit: 0n,
-      simulatedShareRateDeviationBPLimit: 0n,
-      maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
-      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-      maxItemsPerExtraDataTransaction: 0n,
-      maxNodeOperatorsPerExtraDataItem: 0n,
-      requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 1n,
-      maxCLBalanceDecreaseBP: 360n,
-      clBalanceOraclesErrorUpperBPLimit: 0n,
-      consolidationEthAmountPerDayLimit: 0n,
-      exitedValidatorEthAmountLimit: 1n,
-      externalPendingBalanceCapEth: 0n,
-    }),
+    f.deploy(
+      lidoLocator,
+      admin,
+      {
+        exitedEthAmountPerDayLimit: 0n,
+        appearedEthAmountPerDayLimit: 0n,
+        annualCLRebaseIncreaseSoftBPLimit: 0n,
+        simulatedShareRateDeviationBPLimit: 0n,
+        maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+        maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+        maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+        maxItemsPerExtraDataTransaction: 0n,
+        maxNodeOperatorsPerExtraDataItem: 0n,
+        requestTimestampMargin: 0n,
+        annualCLRebaseIncreaseHardBPLimit: 0n,
+        clRebaseDecreaseSoftBPLimit: 0n,
+        dailyCLRebaseDecreaseHardBPLimit: 10_000n,
+        clRebaseDecreaseHardBPLimit: 10_000n,
+        consolidationEthAmountPerDayLimit: 0n,
+        exitedValidatorEthAmountLimit: 1n,
+        externalPendingBalanceCapEth: 0n,
+      },
+      ethers.ZeroAddress,
+    ),
   );
 }
 
@@ -169,7 +171,6 @@ export async function deployWithdrawalsOracle(
   const triggerableWithdrawalsBus = await deployTWB();
 
   const accountingOracleAddress = await ao.getAddress();
-  const accountingAddress = await locator.accounting();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
@@ -177,11 +178,7 @@ export async function deployWithdrawalsOracle(
     triggerableWithdrawalsBus: await triggerableWithdrawalsBus.getAddress(),
   });
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForWithdrawalsOracle(
-    locatorAddr,
-    accountingAddress,
-    admin,
-  );
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForWithdrawalsOracle(locatorAddr, admin);
 
   await updateLidoLocatorImplementation(locatorAddr, {
     withdrawalsOracle: await oracle.getAddress(),
