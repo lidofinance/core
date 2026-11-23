@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { AccountingOracle, LidoLocator, LidoLocator__factory } from "typechain-types";
+import { AccountingOracle, LidoLocator, LidoLocator__factory, OracleReportSanityChecker } from "typechain-types";
 
 import {
   ConstructorArgs,
@@ -22,6 +22,24 @@ import { OracleReportSanityCheckerSchema } from "lib/config-schemas";
 // deliberately use the ABI matching the contract version they upgrade from.
 const PRE_LEAN_REBASE_CHECKER_ABI = [
   "function getOracleReportLimits() external view returns ((uint256 exitedEthAmountPerDayLimit, uint256 appearedEthAmountPerDayLimit, uint256 annualBalanceIncreaseBPLimit, uint256 simulatedShareRateDeviationBPLimit, uint256 maxBalanceExitRequestedPerReportInEth, uint256 maxEffectiveBalanceWeightWCType01, uint256 maxEffectiveBalanceWeightWCType02, uint256 maxItemsPerExtraDataTransaction, uint256 maxNodeOperatorsPerExtraDataItem, uint256 requestTimestampMargin, uint256 maxPositiveTokenRebase, uint256 maxCLBalanceDecreaseBP, uint256 clBalanceOraclesErrorUpperBPLimit, uint256 consolidationEthAmountPerDayLimit, uint256 exitedValidatorEthAmountLimit, uint256 externalPendingBalanceCapEth))",
+] as const;
+
+// Limits outside LIP-39 that the previous checker already has. The new checker keeps their live
+// values, so earlier votes stay in force: SR phase 2 sets maxBalanceExitRequestedPerReportInEth
+// to the bus PWR maxLimit, below the value in the upgrade parameters.
+const LIVE_LIMITS = [
+  "exitedEthAmountPerDayLimit",
+  "appearedEthAmountPerDayLimit",
+  "simulatedShareRateDeviationBPLimit",
+  "maxBalanceExitRequestedPerReportInEth",
+  "maxEffectiveBalanceWeightWCType01",
+  "maxEffectiveBalanceWeightWCType02",
+  "maxItemsPerExtraDataTransaction",
+  "maxNodeOperatorsPerExtraDataItem",
+  "requestTimestampMargin",
+  "consolidationEthAmountPerDayLimit",
+  "exitedValidatorEthAmountLimit",
+  "externalPendingBalanceCapEth",
 ] as const;
 
 /**
@@ -77,14 +95,10 @@ export async function main(): Promise<void> {
   );
   const previousLimits = await previousChecker.getOracleReportLimits();
 
-  // Preserve unrelated live operational limits while taking all LIP-39 limits from
-  // the checked-in upgrade parameters used by the corresponding network.
+  // Only the LIP-39 rebase limits come from the checked-in upgrade parameters of the network.
   const limits = OracleReportSanityCheckerSchema.parse({
     ...parameters.oracleReportSanityChecker,
-    simulatedShareRateDeviationBPLimit: Number(previousLimits.simulatedShareRateDeviationBPLimit),
-    maxItemsPerExtraDataTransaction: Number(previousLimits.maxItemsPerExtraDataTransaction),
-    maxNodeOperatorsPerExtraDataItem: Number(previousLimits.maxNodeOperatorsPerExtraDataItem),
-    requestTimestampMargin: Number(previousLimits.requestTimestampMargin),
+    ...Object.fromEntries(LIVE_LIMITS.map((name) => [name, Number(previousLimits[name])])),
   });
 
   // The Agent acts as both admin and committee only on the ephemeral test fork.
@@ -101,6 +115,14 @@ export async function main(): Promise<void> {
     deployer.address,
     [locatorAddress, liveLocatorConfig.accounting, agentAddress, limits, secondOpinionOracle.address],
   );
+  const newLimits = await (
+    await loadContract<OracleReportSanityChecker>("OracleReportSanityChecker", checker.address)
+  ).getOracleReportLimits();
+  for (const name of LIVE_LIMITS) {
+    if (newLimits[name] !== previousLimits[name]) {
+      throw new Error(`New checker ${name} is ${newLimits[name]}, the live checker has ${previousLimits[name]}`);
+    }
+  }
 
   const accountingImplementation = await deployImplementation(Sk.accounting, "Accounting", deployer.address, [
     locatorAddress,
