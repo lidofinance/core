@@ -437,6 +437,23 @@ describe("StakingRouter.sol:topUp", () => {
         ).to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch");
       });
 
+      it("Reverts when the module returns fewer allocations than requested keys, also for a zero budget", async () => {
+        const [stakingModule, id] = await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          deposited: 100n,
+          totalModuleStake: 100n * 32n * 10n ** 18n,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        });
+
+        // An empty response, as CMv2 at staking-modules develop returns for a zero budget
+        await stakingModule.mock__allocateDeposits([]);
+        await lidoMock.setDepositableEther(0n);
+
+        await expect(
+          stakingRouter.connect(dsmSigner).topUp(id, [0n, 1n], [0n, 0n], [10n * 10n ** 18n, 10n * 10n ** 18n]),
+        ).to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch");
+      });
+
       it("Reverts when the module returns a public key that is not 48 bytes", async () => {
         const [stakingModule, id] = await setupModule(ctx, {
           ...DEFAULT_CONFIG,

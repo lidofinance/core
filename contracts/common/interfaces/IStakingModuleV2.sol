@@ -14,7 +14,7 @@ interface IStakingModuleV2 {
     /// @param topUpLimits Maximum amount that can be deposited per key based on Consensus Layer data and  SR internal logic.
     /// @return pubkeys Public keys of the keys, read from the module storage
     /// @return allocations Amount to deposit to each corresponding key
-    /// @dev pubkeys and allocations have the same length and order
+    /// @dev pubkeys and allocations have the same length and order as keyIndices, also for a zero depositAmount
     /// @dev allocations list can contain zero values
     /// @dev sum of allocations can be less or equal to depositAmount
     /// @dev Values depositAmount, topUpLimits, allocations are denominated in wei
