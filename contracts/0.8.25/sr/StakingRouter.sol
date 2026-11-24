@@ -655,7 +655,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             .allocateDeposits(smDepositableEthAmountRounded, _keyIndices, _operatorIds, _topUpLimits);
 
         // One public key and one allocation per requested key, in the request order.
-        // BeaconChainDepositor checks the length of each public key before the deposit.
         if (pubkeys.length != _keyIndices.length || allocations.length != _keyIndices.length) {
             revert ArraysLengthMismatch();
         }
