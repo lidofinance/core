@@ -63,7 +63,15 @@ type OracleReportResults = {
 export const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
-const CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS = 37n * 24n * 60n * 60n;
+
+/**
+ * Convert a CL-side balance to the gwei that a report submits.
+ *
+ * CL balances are reported in gwei, while the checker adds the wei-denominated WVB back.
+ * Round the CL part up, so a sub-gwei WVB remainder never shows up as a CL decrease:
+ * with a zero soft decrease limit any decrease requires a second-opinion hash.
+ */
+export const toReportedCLGwei = (wei: bigint): bigint => (wei + ONE_GWEI - 1n) / ONE_GWEI;
 
 export function adjustReportModuleBalances(
   {
@@ -136,8 +144,7 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
     reportElVault = true,
     reportWithdrawalsVault = true,
   } = params;
-  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle, oracleReportSanityChecker } =
-    ctx.contracts;
+  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
 
   if (waitNextReportTime) {
     await waitNextAvailableReportTime(ctx);
@@ -171,44 +178,17 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
     reportElVault = false;
   }
 
-  // Keep report() honest about WVB history.
-  //
-  // ORSC stores the WithdrawalVault balance left after the previous report in
-  // `lastVaultBalanceAfterTransfer`. When this report includes WVB, only the
-  // growth over that baseline is a fresh CL withdrawal and must be subtracted
-  // from generated CL balance. Reporting a lower WVB would describe an
-  // impossible negative withdrawal delta, so fail the test setup explicitly.
-  //
-  // When a test opts out of WVB reporting, report() must not hide an existing
-  // ORSC baseline by silently reporting zero. The caller must first normalize
-  // WVB history to zero, otherwise this report would skip real WVB state by
-  // accident.
-  const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
-  let freshCLWithdrawals = 0n;
-  if (reportWithdrawalsVault) {
-    if (withdrawalVaultBalance < lastVaultBalanceAfterTransfer) {
-      throw new Error(
-        `Reported withdrawal vault balance ${withdrawalVaultBalance} is below ORSC baseline ${lastVaultBalanceAfterTransfer}`,
-      );
-    }
-    freshCLWithdrawals = withdrawalVaultBalance - lastVaultBalanceAfterTransfer;
-  } else {
-    if (lastVaultBalanceAfterTransfer !== 0n) {
-      throw new Error(
-        `Cannot report withdrawal vault as zero while ORSC baseline is ${lastVaultBalanceAfterTransfer}; call normalizeWithdrawalVaultBaseline(ctx, 0n) first`,
-      );
-    }
-    withdrawalVaultBalance = 0n;
-  }
+  if (!reportWithdrawalsVault) withdrawalVaultBalance = 0n;
   elRewardsVaultBalance = reportElVault ? elRewardsVaultBalance : 0n;
 
   let postCLBalance = preCLBalance + clDiff;
-  // ORSC treats only WVB growth over the previous post-transfer baseline as
-  // fresh CL withdrawals for this report.
-  if (freshCLWithdrawals > postCLBalance) {
-    throw new Error(`Fresh WVB withdrawals ${freshCLWithdrawals} exceed generated post CL balance ${postCLBalance}`);
+  // Direct settlement transfers the full reported WVB amount. The same value is
+  // restored by the checker when it constructs the post-report CL accounting
+  // balance, so report helpers subtract it from the CL-side balance here.
+  if (withdrawalVaultBalance > postCLBalance) {
+    throw new Error(`Reported WVB ${withdrawalVaultBalance} exceeds generated post CL balance ${postCLBalance}`);
   }
-  postCLBalance -= freshCLWithdrawals;
+  postCLBalance -= withdrawalVaultBalance;
 
   log.debug("Beacon", {
     "Beacon validators delta": clAppearedValidators,
@@ -228,7 +208,7 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
 
   let isBunkerMode = false;
 
-  const postCLBalanceGwei = postCLBalance / ONE_GWEI;
+  const postCLBalanceGwei = toReportedCLGwei(postCLBalance);
   if (clPendingBalanceGwei > postCLBalanceGwei) {
     throw new Error(
       `Reported CL pending balance ${clPendingBalanceGwei} exceeds total CL balance ${postCLBalanceGwei}`,
@@ -236,27 +216,29 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
   }
   const clValidatorsBalanceGwei = postCLBalanceGwei - clPendingBalanceGwei;
   const clPendingBalance = clPendingBalanceGwei * ONE_GWEI;
-  const clValidatorsBalance = postCLBalance - clPendingBalance;
+  const clValidatorsBalance = clValidatorsBalanceGwei * ONE_GWEI;
 
+  // Simulate exactly the values that are submitted, including the full Burner request.
   const simulatedReport = await simulateReport(ctx, {
     refSlot,
     clValidatorsBalance,
     clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
+    sharesRequestedToBurn: sharesRequestedToBurn ?? 0n,
   });
 
   if (!simulatedReport) {
     throw new Error("Failed to simulate report");
   }
 
-  const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = simulatedReport;
+  const { postTotalPooledEther, postTotalShares } = simulatedReport;
 
   log.debug("Simulated report", {
     "Post Total Pooled Ether": formatEther(postTotalPooledEther),
     "Post Total Shares": postTotalShares,
-    "Withdrawals": formatEther(withdrawals),
-    "El Rewards": formatEther(elRewards),
+    "Withdrawals": formatEther(withdrawalVaultBalance),
+    "El Rewards": formatEther(elRewardsVaultBalance),
   });
 
   const simulatedShareRate =
@@ -267,8 +249,8 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
       withdrawalFinalizationBatches = await getFinalizationBatches(ctx, {
         refSlot,
         shareRate: simulatedShareRate,
-        limitedWithdrawalVaultBalance: withdrawals,
-        limitedElRewardsVaultBalance: elRewards,
+        withdrawalVaultBalance,
+        elRewardsVaultBalance,
       });
     }
 
@@ -312,7 +294,7 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
 
   return submitReport(ctx, {
     ...reportData,
-    clBalance: postCLBalance,
+    clBalance: postCLBalanceGwei * ONE_GWEI,
     extraDataList,
   });
 };
@@ -372,113 +354,9 @@ export const reportWithoutClActivation = async (
   });
 };
 
-/**
- * Finish the one-time post-migration Accounting report, if needed.
- *
- * ORSC treats the first report after migration as a special baseline report.
- * WVB baseline setup must run after that point, because it edits the normal
- * ORSC report history. This helper sends a real Accounting report with zero
- * effective CL rebase when the migration report is still pending. It is not
- * vault-neutral: WVB already present in the current state is reported through
- * the normal Accounting path. If the first report was already done, this is a
- * no-op.
- */
-export const ensureFirstPostMigrationReport = async (ctx: ProtocolContext): Promise<void> => {
-  const { oracleReportSanityChecker } = ctx.contracts;
-  if (await oracleReportSanityChecker.isPostMigrationFirstReportDone()) return;
-
-  // This is a real AccountingOracle report: it consumes the migration-only
-  // module-balance skip and may process WVB already present on the fork.
-  await reportWithoutClActivation(ctx, {
-    reportBurner: false,
-    reportElVault: false,
-    reportWithdrawalsVault: true,
-    skipWithdrawals: true,
-  });
-};
-
-/**
- * Align actual WVB and ORSC WVB history to the same value.
- *
- * ORSC compares the reported WithdrawalVault balance with
- * `lastVaultBalanceAfterTransfer`. Any positive difference is treated as fresh
- * CL withdrawals. Accounting cap tests need the next report to see no fresh
- * withdrawal delta and then cap the full WVB inside `smoothenTokenRebase()`.
- *
- * Use this only as explicit test setup after the first post-migration report.
- */
-export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, target: bigint = 0n): Promise<void> => {
-  const { accounting, lido, oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
-
-  const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
-  const actualWithdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
-
-  if (lastVaultBalanceAfterTransfer === target && actualWithdrawalVaultBalance === target) return;
-
-  if (!(await oracleReportSanityChecker.isPostMigrationFirstReportDone())) {
-    throw new Error("Cannot normalize WVB baseline before the first post-migration AccountingOracle report");
-  }
-
-  if (lastVaultBalanceAfterTransfer === target) {
-    await setBalance(withdrawalVault.address, target);
-  } else {
-    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-    const accountingSigner = await impersonate(accounting.address, ether("1"));
-
-    let preCLValidatorsBalance = clValidatorsBalanceAtLastReport;
-    let reportedWithdrawalVaultBalance = lastVaultBalanceAfterTransfer;
-    let withdrawalsVaultTransfer = lastVaultBalanceAfterTransfer - target;
-
-    if (lastVaultBalanceAfterTransfer < target) {
-      const freshBaseline = target - lastVaultBalanceAfterTransfer;
-      preCLValidatorsBalance += freshBaseline;
-      reportedWithdrawalVaultBalance = target;
-      withdrawalsVaultTransfer = 0n;
-    }
-
-    await setBalance(withdrawalVault.address, reportedWithdrawalVaultBalance);
-
-    // Direct ORSC setup intentionally appends reportData and finalizes the WVB
-    // baseline, but only after the first real post-migration report is done.
-    await oracleReportSanityChecker
-      .connect(accountingSigner)
-      .checkAccountingOracleReport(
-        0n,
-        preCLValidatorsBalance,
-        clPendingBalanceAtLastReport,
-        clValidatorsBalanceAtLastReport,
-        clPendingBalanceAtLastReport,
-        reportedWithdrawalVaultBalance,
-        0n,
-        0n,
-        0n,
-        withdrawalsVaultTransfer,
-      );
-
-    await setBalance(withdrawalVault.address, target);
-  }
-
-  expect(await oracleReportSanityChecker.lastVaultBalanceAfterTransfer()).to.equal(
-    target,
-    "WVB baseline normalization mismatch",
-  );
-  expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
-    target,
-    "Withdrawal vault balance normalization mismatch",
-  );
-};
-
-export const resetCLBalanceDecreaseWindow = async (
-  ctx: ProtocolContext,
-  params: Omit<OracleReportParams, "clDiff" | "clPendingBalanceGwei"> = {},
-): Promise<OracleReportResults> => {
-  // Move report timestamp beyond the 36-day window and submit an effective neutral report.
-  await advanceChainTime(CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS);
-  return reportWithoutClActivation(ctx, {
-    reportElVault: false,
-    skipWithdrawals: true,
-    ...params,
-  });
+/** Set the Withdrawal Vault balance in local/fork test state. */
+export const setWithdrawalVaultBalance = async (ctx: ProtocolContext, balance: bigint = 0n): Promise<void> => {
+  await setBalance(ctx.contracts.withdrawalVault.address, balance);
 };
 
 /**
@@ -489,9 +367,8 @@ export const resetCLBalanceDecreaseWindow = async (
  * report, and returns the values needed for the later extra-data submit.
  *
  * It reports EL and WVB as zero because vault balances are not part of these
- * scenarios. That zero must still match a valid ORSC WVB history. Callers must
- * reach that state through explicit setup, such as a prior report or documented
- * baseline normalization, not by passing an unexplained vault number.
+ * scenarios. Callers are responsible for ensuring that the corresponding live
+ * vault balances are also zero.
  */
 export async function reportWithoutExtraData(
   ctx: ProtocolContext,
@@ -646,13 +523,12 @@ type SimulateReportParams = {
   clPendingBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
+  sharesRequestedToBurn?: bigint;
 };
 
 type SimulateReportResult = {
   postTotalPooledEther: bigint;
   postTotalShares: bigint;
-  withdrawals: bigint;
-  elRewards: bigint;
 };
 
 /**
@@ -666,6 +542,7 @@ export const simulateReport = async (
     clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
+    sharesRequestedToBurn = 0n,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -689,26 +566,21 @@ export const simulateReport = async (
     clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    sharesRequestedToBurn: 0n,
+    sharesRequestedToBurn,
     withdrawalFinalizationBatches: [],
     simulatedShareRate: 10n ** 27n,
   };
   const update = await accounting.simulateOracleReport(reportValues);
-  const { postTotalPooledEther, postTotalShares, withdrawalsVaultTransfer, elRewardsVaultTransfer } = update;
+  const { postTotalPooledEther, postTotalShares } = update;
 
   log.debug("Simulation result", {
     "Post Total Pooled Ether": formatEther(postTotalPooledEther),
     "Post Total Shares": postTotalShares,
-    "Withdrawals": formatEther(withdrawalsVaultTransfer),
-    "El Rewards": formatEther(elRewardsVaultTransfer),
+    "Withdrawals": formatEther(withdrawalVaultBalance),
+    "El Rewards": formatEther(elRewardsVaultBalance),
   });
 
-  return {
-    postTotalPooledEther,
-    postTotalShares,
-    withdrawals: withdrawalsVaultTransfer,
-    elRewards: elRewardsVaultTransfer,
-  };
+  return { postTotalPooledEther, postTotalShares };
 };
 
 type HandleOracleReportParams = {
@@ -767,8 +639,8 @@ export const handleOracleReport = async (
 type FinalizationBatchesParams = {
   refSlot: bigint;
   shareRate: bigint;
-  limitedWithdrawalVaultBalance: bigint;
-  limitedElRewardsVaultBalance: bigint;
+  withdrawalVaultBalance: bigint;
+  elRewardsVaultBalance: bigint;
 };
 
 /**
@@ -776,7 +648,7 @@ type FinalizationBatchesParams = {
  */
 const getFinalizationBatches = async (
   ctx: ProtocolContext,
-  { refSlot, shareRate, limitedWithdrawalVaultBalance, limitedElRewardsVaultBalance }: FinalizationBatchesParams,
+  { refSlot, shareRate, withdrawalVaultBalance, elRewardsVaultBalance }: FinalizationBatchesParams,
 ): Promise<bigint[]> => {
   const { hashConsensus, oracleReportSanityChecker, lido, withdrawalQueue } = ctx.contracts;
 
@@ -785,7 +657,7 @@ const getFinalizationBatches = async (
   const bufferedEther = await lido.getBufferedEther();
   const unfinalizedSteth = await withdrawalQueue.unfinalizedStETH();
   const reservedBuffer = await lido.getWithdrawalsReserve();
-  const availableEth = limitedWithdrawalVaultBalance + limitedElRewardsVaultBalance + reservedBuffer;
+  const availableEth = withdrawalVaultBalance + elRewardsVaultBalance + reservedBuffer;
 
   // The sanity checker measures the margin from the report timestamp (the ref slot time), not from the
   // block time. The block time is later, so a request created inside the margin would pass here and revert there.

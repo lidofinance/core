@@ -40,12 +40,7 @@ import {
 import { ether } from "../../units";
 import { LoadedContract, ProtocolContext } from "../types";
 
-import {
-  ensureFirstPostMigrationReport,
-  normalizeWithdrawalVaultBaseline,
-  reportWithoutClActivation,
-  waitNextAvailableReportTime,
-} from "./accounting";
+import { reportWithoutClActivation, setWithdrawalVaultBalance, waitNextAvailableReportTime } from "./accounting";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -223,10 +218,6 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
     log.success("Setting max external ratio to 20%");
   }
 
-  // Initialize LazyOracle timestamp after the upgrade without activating
-  // existing CL pending validators from the migrated state.
-  await ensureFirstPostMigrationReport(ctx);
-
   // A live fork can start after HashConsensus enters a new frame but before
   // AccountingOracle reports it. LazyOracle is one frame behind in that window.
   // Vault tests then advance another frame and can revert with VaultReportStale,
@@ -247,7 +238,7 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
   const [, fixtureVaultReportRefSlot] = await lazyOracle.latestReportData();
   expect(fixtureVaultReportRefSlot).to.equal(currentRefSlot, "Vault fixture report is not from the current frame");
 
-  await normalizeWithdrawalVaultBaseline(ctx, 0n);
+  await setWithdrawalVaultBalance(ctx, 0n);
 }
 
 export type VaultReportItem = {

@@ -1,12 +1,10 @@
 import { ZeroAddress } from "ethers";
 
 import { certainAddress, ether, impersonate, log } from "lib";
-import { LIMITER_PRECISION_BASE } from "lib/constants";
 
 import { ProtocolContext } from "../types";
 
-import { ensureFirstPostMigrationReport, reportWithoutClActivation } from "./accounting";
-import { setMaxPositiveTokenRebase } from "./sanity-checker";
+import { reportWithoutClActivation } from "./accounting";
 import { removeStakingLimit, setStakingLimit } from "./staking";
 
 /**
@@ -32,11 +30,7 @@ export const finalizeWQViaElVault = async (ctx: ProtocolContext) => {
   const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000000"));
   const elRewardsVaultAddress = await locator.elRewardsVault();
 
-  const initialMaxPositiveTokenRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE);
-
   const ethToSubmit = ether("1000000"); // don't calculate required eth from withdrawal queue to accelerate tests
-  await ensureFirstPostMigrationReport(ctx);
-
   const lastRequestId = await withdrawalQueue.getLastRequestId();
   while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
     await ethHolder.sendTransaction({
@@ -45,7 +39,6 @@ export const finalizeWQViaElVault = async (ctx: ProtocolContext) => {
     });
     await reportWithoutClActivation(ctx, { reportElVault: true });
   }
-  await setMaxPositiveTokenRebase(ctx, initialMaxPositiveTokenRebase);
   await reportWithoutClActivation(ctx, { reportElVault: true });
 };
 
@@ -57,8 +50,6 @@ export const finalizeWQViaSubmit = async (ctx: ProtocolContext) => {
 
   const stakeLimitInfo = await lido.getStakeLimitFullInfo();
   await removeStakingLimit(ctx);
-  await ensureFirstPostMigrationReport(ctx);
-
   const lastRequestId = await withdrawalQueue.getLastRequestId();
   while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
     await lido.connect(ethHolder).submit(ZeroAddress, { value: ethToSubmit });

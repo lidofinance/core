@@ -16,10 +16,10 @@ import {
   ProtocolContext,
   report,
   reportWithoutClActivation,
-  resetCLBalanceDecreaseWindow,
+  updateOracleReportLimits,
   waitNextAvailableReportTime,
 } from "lib/protocol";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
+import { adjustReportModuleBalances, toReportedCLGwei } from "lib/protocol/helpers/accounting";
 
 import { Snapshot } from "test/suite";
 
@@ -50,16 +50,7 @@ describe("Integration: Withdrawal edge cases", () => {
   };
 
   const getFreshCLWithdrawals = async () => {
-    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
-    const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
-    const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
-
-    expect(withdrawalVaultBalance).to.be.gte(
-      lastVaultBalanceAfterTransfer,
-      "WithdrawalVault balance should not be below ORSC baseline",
-    );
-
-    return withdrawalVaultBalance - lastVaultBalanceAfterTransfer;
+    return ethers.provider.getBalance(ctx.contracts.withdrawalVault.address);
   };
 
   const reportWithoutClActivationUsingCurrentModuleBalances = async (
@@ -80,7 +71,10 @@ describe("Integration: Withdrawal edge cases", () => {
       reportElVault: false,
       skipWithdrawals,
       waitNextReportTime: false,
-      ...adjustReportModuleBalances(await buildModuleAccountingReportParams(ctx), toGwei(postCLValidatorsBalanceWei)),
+      ...adjustReportModuleBalances(
+        await buildModuleAccountingReportParams(ctx),
+        toReportedCLGwei(postCLValidatorsBalanceWei),
+      ),
     });
   };
 
@@ -102,7 +96,7 @@ describe("Integration: Withdrawal edge cases", () => {
       clPendingBalanceGwei: toGwei(clPendingBalanceAtLastReport),
       ...adjustReportModuleBalances(
         await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),
-        toGwei(postCLValidatorsBalanceWei),
+        toReportedCLGwei(postCLValidatorsBalanceWei),
       ),
     });
   };
@@ -119,6 +113,14 @@ describe("Integration: Withdrawal edge cases", () => {
 
     await finalizeWQViaSubmit(ctx);
 
+    // These scenarios exercise Withdrawal Queue and bunker-mode behavior rather than
+    // the exceptional-report path, which has dedicated second-opinion tests.
+    const { clRebaseDecreaseHardBPLimit } = await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits();
+    await updateOracleReportLimits(ctx, {
+      dailyCLRebaseDecreaseHardBPLimit: clRebaseDecreaseHardBPLimit,
+      clRebaseDecreaseSoftBPLimit: clRebaseDecreaseHardBPLimit,
+    });
+
     const agent = await ctx.getSigner("agent");
     await lido.connect(agent).setDepositsReserveTarget(DEPOSITS_RESERVE_TARGET);
   });
@@ -129,7 +131,7 @@ describe("Integration: Withdrawal edge cases", () => {
     beforeEach(async () => (originalState = await Snapshot.take()));
     afterEach(async () => await Snapshot.restore(originalState));
     it("Should handle bunker mode with multiple batches", async () => {
-      await resetCLBalanceDecreaseWindow(ctx);
+      await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
 
       const amount = ether("100");
       const withdrawalAmount = ether("10");
@@ -272,7 +274,7 @@ describe("Integration: Withdrawal edge cases", () => {
     after(async () => await Snapshot.restore(originalState));
 
     it("should handle first rebase correctly", async () => {
-      await resetCLBalanceDecreaseWindow(ctx);
+      await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
 
       const amount = ether("100");
 
