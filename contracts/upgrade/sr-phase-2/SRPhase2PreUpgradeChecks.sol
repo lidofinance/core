@@ -188,8 +188,9 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
     }
 
     /// @dev The new DSM is a copy of the old one: the same guardians, quorum and parameters, the top-up depositor
-    ///      of the config, the Agent as its owner, and not paused. A pause of the old DSM must not be lifted by
-    ///      the switch, so the vote reverts while the old DSM is paused.
+    ///      of the config, the Agent as its owner, and not paused. The depositor of the config is the only account
+    ///      that tops up through the TopUpGateway today. A pause of the old DSM must not be lifted by the switch,
+    ///      so the vote reverts while the old DSM is paused.
     function _assertDepositSecurityModules(SRPhase2UpgradeConfig config) private view {
         IDepositSecurityModule oldDsm = IDepositSecurityModule(config.OLD_DEPOSIT_SECURITY_MODULE());
         IDepositSecurityModule newDsm = IDepositSecurityModule(config.NEW_DEPOSIT_SECURITY_MODULE());
@@ -199,6 +200,12 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertAddress("new-dsm-staking-router", newDsm.STAKING_ROUTER(), config.STAKING_ROUTER());
         _assertAddress("new-dsm-deposit-contract", newDsm.DEPOSIT_CONTRACT(), oldDsm.DEPOSIT_CONTRACT());
         _assertAddress("new-dsm-top-up-depositor", newDsm.getTopUpDepositor(), config.TOP_UP_DEPOSITOR());
+        _assertSingleRoleHolder(
+            "top-up-gateway-depositor",
+            IAccessControlEnumerable(config.TOP_UP_GATEWAY()),
+            TOP_UP_ROLE,
+            config.TOP_UP_DEPOSITOR()
+        );
         _assertUint("new-dsm-quorum", newDsm.getGuardianQuorum(), oldDsm.getGuardianQuorum());
         _assertUint(
             "new-dsm-pause-intent",

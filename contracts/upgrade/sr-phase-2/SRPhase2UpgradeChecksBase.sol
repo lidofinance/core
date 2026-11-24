@@ -37,6 +37,7 @@ abstract contract SRPhase2UpgradeChecksBase {
         keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
     bytes32 internal constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
 
     /// @dev The DSM with `topUpBufferedEther`.
     uint256 internal constant DEPOSIT_SECURITY_MODULE_VERSION = 6;
