@@ -265,6 +265,30 @@ const LIP38OracleDaemonConfigSchema = z.object({
   ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS: NonNegativeIntSchema,
 });
 
+// Inclusive bounds of one ACTIVE_REBALANCING_* key
+const ActiveRebalancingBoundsSchema = z
+  .object({ min: NonNegativeIntSchema, max: NonNegativeIntSchema })
+  .refine(({ min, max }) => min <= max, { message: "min must not exceed max" });
+
+// ActiveRebalancingConfigManager: the bounds within which the CMC updates the ACTIVE_REBALANCING_* keys (LIP-38)
+const ActiveRebalancingConfigManagerBoundsSchema = z.object({
+  rateLimit: ActiveRebalancingBoundsSchema,
+  operatorExcessBP: ActiveRebalancingBoundsSchema,
+  moduleExcessBP: ActiveRebalancingBoundsSchema,
+  gracePeriodEpochs: ActiveRebalancingBoundsSchema,
+});
+
+// Scratch: no CMC exists, so the manager role is granted only when a committee is given
+const ActiveRebalancingConfigManagerSchema = z.object({
+  committee: EthereumAddressSchema.optional(),
+  bounds: ActiveRebalancingConfigManagerBoundsSchema,
+});
+
+// Upgrade: the vote grants the manager role to the CMC multisig
+const ActiveRebalancingConfigManagerUpgradeSchema = ActiveRebalancingConfigManagerSchema.extend({
+  committee: NonZeroEthereumAddressSchema,
+});
+
 // SR phase 2 (LIP-38) vote script params: also removes the Easy Track factories of the exit request hash delivery
 const SRPhase2UpgradeVoteScriptSchema = UpgradeVoteScriptSchema.extend({
   curatedSubmitExitRequestHashesFactory: EthereumAddressSchema,
@@ -478,6 +502,7 @@ export const ScratchParametersSchema = z.object({
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerSchema,
   oracleDaemonConfig: OracleDaemonConfigSchema,
+  activeRebalancingConfigManager: ActiveRebalancingConfigManagerSchema,
   nodeOperatorsRegistry: StakingModuleSchema,
   simpleDvt: StakingModuleSchema,
   withdrawalQueueERC721: WithdrawalQueueERC721Schema,
@@ -520,6 +545,7 @@ export const UpgradeParametersSchema = z.object({
 
   upgradeVoteScript: UpgradeVoteScriptSchema,
   srPhase2UpgradeVoteScript: SRPhase2UpgradeVoteScriptSchema,
+  activeRebalancingConfigManager: ActiveRebalancingConfigManagerUpgradeSchema,
 
   // old and optional
   vaultHub: VaultHubSchema.optional(),

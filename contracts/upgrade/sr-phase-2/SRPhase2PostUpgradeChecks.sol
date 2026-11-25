@@ -154,12 +154,24 @@ contract SRPhase2PostUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertDaemonConfigValue(
             daemonConfig, ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS, daemonConfigValues.activeRebalancingGracePeriodEpochs
         );
+        // The manager replaces the Easy Track factory of LIP-38, so the EVMScriptExecutor has no role.
         IAccessControlEnumerable daemonConfigAcl = IAccessControlEnumerable(address(daemonConfig));
+        address rebalancingManager = config.ACTIVE_REBALANCING_CONFIG_MANAGER();
         if (daemonConfigAcl.hasRole(CONFIG_MANAGER_ROLE, agent)) revert InvalidFlag("daemon-config-agent", agent);
+        if (!daemonConfigAcl.hasRole(CONFIG_MANAGER_ROLE, rebalancingManager)) {
+            revert InvalidFlag("daemon-config-ar-manager", rebalancingManager);
+        }
         address evmScriptExecutor = config.EASY_TRACK_EVM_SCRIPT_EXECUTOR();
-        if (!daemonConfigAcl.hasRole(CONFIG_MANAGER_ROLE, evmScriptExecutor)) {
+        if (daemonConfigAcl.hasRole(CONFIG_MANAGER_ROLE, evmScriptExecutor)) {
             revert InvalidFlag("daemon-config-executor", evmScriptExecutor);
         }
+
+        // --- ActiveRebalancingConfigManager: the CMC is its only manager ---
+        IAccessControlEnumerable rebalancingManagerAcl = IAccessControlEnumerable(rebalancingManager);
+        _assertSingleRoleHolder("ar-manager-admin", rebalancingManagerAcl, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleRoleHolder(
+            "ar-manager-role", rebalancingManagerAcl, ACTIVE_REBALANCING_MANAGER_ROLE, config.CURATED_MODULE_COMMITTEE()
+        );
 
         // --- New gateway ---
         IAccessControlEnumerable gatewayAcl = IAccessControlEnumerable(newGateway);

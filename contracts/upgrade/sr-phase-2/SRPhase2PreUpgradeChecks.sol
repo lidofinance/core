@@ -13,6 +13,7 @@ import {SRPhase2UpgradeChecksBase} from "./SRPhase2UpgradeChecksBase.sol";
 import {SRPhase2UpgradeConfig} from "./SRPhase2UpgradeConfig.sol";
 import {
     GatewayConsumerLimits,
+    IActiveRebalancingConfigManager,
     IEjector,
     ILidoLocatorWithVerifier,
     IStakingRouter,
@@ -28,6 +29,7 @@ import {
 contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
     error LocatorChangedBeyondUpgrade();
     error ConsumerLimitsAlreadySet(address consumer);
+    error InvalidActiveRebalancingBounds();
 
     function validate(SRPhase2UpgradeConfig config) external view {
         address agent = config.AGENT();
@@ -172,6 +174,20 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
         _assertSingleRoleHolder("bus-admin", busAcl, DEFAULT_ADMIN_ROLE, agent);
         _assertUint("bus-publisher-members", busAcl.getRoleMemberCount(ADD_WITHDRAWAL_INTENTS_ROLE), 0);
         _assertUint("bus-clear-members", busAcl.getRoleMemberCount(CLEAR_WITHDRAWAL_INTENTS_ROLE), 0);
+
+        // --- ActiveRebalancingConfigManager: the Agent is its admin, it has the agreed bounds and no manager yet ---
+        // The vote gives it CONFIG_MANAGER_ROLE, so its bounds are the only limits on the CMC.
+        IActiveRebalancingConfigManager rebalancingManager =
+            IActiveRebalancingConfigManager(config.ACTIVE_REBALANCING_CONFIG_MANAGER());
+        _assertAddress("ar-manager-daemon-config", rebalancingManager.ORACLE_DAEMON_CONFIG(), config.ORACLE_DAEMON_CONFIG());
+        if (keccak256(abi.encode(rebalancingManager.getBounds())) != keccak256(abi.encode(config.getActiveRebalancingBounds()))) {
+            revert InvalidActiveRebalancingBounds();
+        }
+        IAccessControlEnumerable rebalancingManagerAcl = IAccessControlEnumerable(address(rebalancingManager));
+        _assertSingleRoleHolder("ar-manager-admin", rebalancingManagerAcl, DEFAULT_ADMIN_ROLE, agent);
+        _assertUint(
+            "ar-manager-members", rebalancingManagerAcl.getRoleMemberCount(ACTIVE_REBALANCING_MANAGER_ROLE), 0
+        );
     }
 
     /// @dev Every locator member except the gateway, the bus and the verifier this upgrade replaces.
