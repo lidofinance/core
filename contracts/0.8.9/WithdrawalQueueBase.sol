@@ -192,7 +192,8 @@ abstract contract WithdrawalQueueBase {
     /// @notice Offchain view for the oracle daemon that calculates how many requests can be finalized within
     /// the given budget, time period and share rate limits. Returned requests are split into batches.
     /// Each batch consists of the requests placed during the same report period. Such requests share
-    /// the protocol share rate, so they all have the share rate below the `_maxShareRate` or above it.
+    /// the protocol share rate, so the batch as a whole is either below the `_maxShareRate` (nominal) or above it
+    /// (discounted).
     /// Below you can see an example how 14 requests placed during 6 report periods (A-F) will be split
     /// into 6 batches by this method
     ///
@@ -227,12 +228,13 @@ abstract contract WithdrawalQueueBase {
         WithdrawalRequest memory prevRequest;
         // the request preceding the last batch and the ether that `prefinalize()` locks for the last batch
         WithdrawalRequest memory batchPreStart;
-        uint256 batchEth;
+        uint256 batchEth = 0;
 
         if (_state.batchesLength == 0) {
             currentId = getLastFinalizedRequestId() + 1;
 
             prevRequest = _getQueue()[currentId - 1];
+            batchPreStart = prevRequest;
         } else {
             uint256 lastHandledRequestId = _state.batches[_state.batchesLength - 1];
             currentId = lastHandledRequestId + 1;
@@ -244,9 +246,11 @@ abstract contract WithdrawalQueueBase {
             (batchEth,) = _calcBatchToFinalize(batchPreStart, prevRequest, _maxShareRate);
         }
 
-        uint256 nextCallRequestId = currentId + _maxRequestsPerCall;
+        // the request to stop before: the end of the queue or the limit of requests per call
+        uint256 endRequestId = getLastRequestId() + 1;
+        if (endRequestId > currentId + _maxRequestsPerCall) endRequestId = currentId + _maxRequestsPerCall;
 
-        while (currentId <= getLastRequestId() && currentId < nextCallRequestId) {
+        while (currentId < endRequestId) {
             WithdrawalRequest memory request = _getQueue()[currentId];
 
             if (request.timestamp > _maxTimestamp) break; // max timestamp break
@@ -286,7 +290,8 @@ abstract contract WithdrawalQueueBase {
             unchecked{ ++currentId; }
         }
 
-        _state.finished = currentId > getLastRequestId() || currentId < nextCallRequestId;
+        // finished if the loop stopped early on a limit or has reached the end of the queue
+        _state.finished = currentId < endRequestId || currentId > getLastRequestId();
 
         return _state;
     }
