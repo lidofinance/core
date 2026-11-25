@@ -177,7 +177,7 @@ library SSZ {
     /// @notice Modified version of `verify` from Solady `MerkleProofLib` to support generalized indices and sha256 precompile.
     /// @dev Reverts if `leaf` doesn't exist in the Merkle tree with `root`, given `proof`.
     function verifyProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf, GIndex gI) internal view {
-        uint256 index = gI.index();
+        uint256 index = gI.unwrap();
 
         /// @solidity memory-safe-assembly
         assembly {

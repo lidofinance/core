@@ -77,7 +77,10 @@ A detailed overview of the deployment script's process:
 - Initialize non-Aragon Lido contracts
 - Set parameters of `OracleDaemonConfig`
 - Setup non-Aragon permissions
-- Plug NodeOperatorsRegistry as Curated staking module
+- (optional) Deploy CSM and CMv2 from the external `community-staking-module` repo
+  - Skipped on the in-memory Hardhat network and with `SKIP_STAKING_MODULES=true`, see
+    [Deployment Without CSM and CMv2](#deployment-without-csm-and-cmv2)
+- Plug staking modules: NodeOperatorsRegistry as Curated, SimpleDVT, and CSM/CMv2 if they were deployed
 - Transfer all admin roles from deployer to `Agent`
   - OpenZeppelin admin roles: `Burner`, `HashConsensus` for `AccountingOracle`, `HashConsensus` for
     `ValidatorsExitBusOracle`,
@@ -129,7 +132,9 @@ To do a testnet deployment, the following parameters must be set up via env vari
   on whether specific components of the environment, such as the DepositContract, are deployed or not.
 - `RPC_URL`. Address of the Ethereum RPC node to use, e.g.: `https://<network>.infura.io/v3/<yourProjectId>`
 - `GENESIS_FORK_VERSION`. Genesis fork version of the network to use, e.g. `0x00000000` for Mainnet, `0x90000069` for Sepolia,
-  `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network.
+  `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network. Required on every chain except
+  chainId `1` (Mainnet, also the CI scratch node) and `31337` (local Hardhat/Anvil nodes), where it defaults to
+  `0x00000000`.
 - `GAS_PRIORITY_FEE`. Gas priority fee. By default set to `2`
 - `GAS_MAX_FEE`. Gas max fee. By default set to `100`
 - `WITHDRAWAL_QUEUE_BASE_URI`. BaseURI for WithdrawalQueueERC721. By default not set (left an empty string)
@@ -146,6 +151,31 @@ bash scripts/scratch/dao-<network>-deploy.sh
 ```
 
 Deployment artifacts information will be stored in `deployed-<network>.json`.
+
+### Deployment Without CSM and CMv2
+
+CSM and CMv2 live in the [community-staking-module](https://github.com/lidofinance/community-staking-module) repo and
+are deployed from there. The default steps file `scripts/scratch/steps.json` includes step
+`0135-deploy-staking-modules`, which clones that repo (`develop` branch) and deploys both modules with parameters taken
+from the core deployment state. It exists so the integration tests in this repo get a protocol with all modules.
+
+For environments where CSM and CMv2 are deployed by their own flow (e.g. devnets), skip step 0135:
+
+```shell
+SKIP_STAKING_MODULES=true
+```
+
+The skip takes effect only with `ALLOW_SKIP_STEPS=true`, which `scripts/utils/migration-env.sh` sets by default, so it
+works for deployments run via `scripts/dao-deploy.sh`. Step `0140-plug-staking-modules` then plugs only
+NodeOperatorsRegistry and SimpleDVT. Adding CSM and CMv2 to `StakingRouter` and activating them is left to their
+deployment flow.
+
+> [!IMPORTANT]
+> The `ConsolidationMigrator` is deployed with immutable source and target module ids (`[consolidationMigrator]` in
+> the scratch deploy params, by default `1` for NodeOperatorsRegistry and `4` for CMv2). When the modules are added
+> separately, keep the order NodeOperatorsRegistry, SimpleDVT, CSM, CMv2, or set
+> `CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID` and `CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID` before the deployment.
+> Without step 0135 nothing checks the actual CMv2 id.
 
 ## Post-Deployment Tasks
 

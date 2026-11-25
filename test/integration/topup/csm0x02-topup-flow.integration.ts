@@ -1,6 +1,7 @@
 import { expect } from "chai";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, findEventsWithInterfaces, ONE_GWEI } from "lib";
 import {
@@ -43,6 +44,10 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CSM 0x0
 
     await topUpEnsureDepositableEther(ctx, 2n * TOP_UP_PER_KEY + ether("32"));
     await topUpEnsureModuleAllocation(ctx, target.moduleId, 2n * TOP_UP_PER_KEY);
+
+    // A live top-up shortly before the fork block makes the gateway reject the next one
+    await mine(await ctx.contracts.topUpGateway.getMinBlockDistance());
+    expect(await ctx.contracts.topUpGateway.isBlockDistancePassed()).to.equal(true);
   });
 
   beforeEach(async () => (testSnapshot = await Snapshot.take()));
