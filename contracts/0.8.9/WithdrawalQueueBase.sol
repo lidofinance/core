@@ -191,9 +191,11 @@ abstract contract WithdrawalQueueBase {
 
     /// @notice Offchain view for the oracle daemon that calculates how many requests can be finalized within
     /// the given budget, time period and share rate limits. Returned requests are split into batches.
-    /// Each batch consist of the requests that all have the share rate below the `_maxShareRate` or above it.
-    /// Below you can see an example how 14 requests with different share rates will be split into 5 batches by
-    /// this method
+    /// Each batch consists of the requests placed during the same report period. Such requests share
+    /// the protocol share rate, so the batch as a whole is either below the `_maxShareRate` (nominal) or above it
+    /// (discounted).
+    /// Below you can see an example how 14 requests placed during 6 report periods (A-F) will be split
+    /// into 6 batches by this method
     ///
     /// ^ share rate
     /// |
@@ -203,7 +205,9 @@ abstract contract WithdrawalQueueBase {
     /// |   •          •        • • •
     /// | •
     /// +-------------------------------> requestId
-    ///  | 1st|  2nd  |3| 4th | 5th  |
+    ///  | A  |  B  |C|D|  E  |   F  |
+    ///
+    /// The budget is charged with exactly the ether that `prefinalize()` locks for the returned batches.
     ///
     /// @param _maxShareRate current share rate of the protocol (1e27 precision)
     /// @param _maxTimestamp max timestamp of the request that can be finalized
@@ -218,69 +222,76 @@ abstract contract WithdrawalQueueBase {
         uint256 _maxRequestsPerCall,
         BatchesCalculationState memory _state
     ) external view returns (BatchesCalculationState memory) {
-        if (_state.finished || _state.remainingEthBudget == 0) revert InvalidState();
+        if (_state.finished) revert InvalidState();
 
         uint256 currentId;
         WithdrawalRequest memory prevRequest;
-        uint256 prevRequestShareRate;
+        // the request preceding the last batch and the ether that `prefinalize()` locks for the last batch
+        WithdrawalRequest memory batchPreStart;
+        uint256 batchEth = 0;
 
         if (_state.batchesLength == 0) {
             currentId = getLastFinalizedRequestId() + 1;
 
             prevRequest = _getQueue()[currentId - 1];
+            batchPreStart = prevRequest;
         } else {
             uint256 lastHandledRequestId = _state.batches[_state.batchesLength - 1];
             currentId = lastHandledRequestId + 1;
 
             prevRequest = _getQueue()[lastHandledRequestId];
-            (prevRequestShareRate,,) = _calcBatch(_getQueue()[lastHandledRequestId - 1], prevRequest);
+            batchPreStart = _getQueue()[
+                _state.batchesLength == 1 ? getLastFinalizedRequestId() : _state.batches[_state.batchesLength - 2]
+            ];
+            (batchEth,) = _calcBatchToFinalize(batchPreStart, prevRequest, _maxShareRate);
         }
 
-        uint256 nextCallRequestId = currentId + _maxRequestsPerCall;
-        uint256 queueLength = getLastRequestId() + 1;
+        // the request to stop before: the end of the queue or the limit of requests per call
+        uint256 endRequestId = getLastRequestId() + 1;
+        if (endRequestId > currentId + _maxRequestsPerCall) endRequestId = currentId + _maxRequestsPerCall;
 
-        while (currentId < queueLength && currentId < nextCallRequestId) {
+        while (currentId < endRequestId) {
             WithdrawalRequest memory request = _getQueue()[currentId];
 
             if (request.timestamp > _maxTimestamp) break; // max timestamp break
 
-            (uint256 requestShareRate, uint256 ethToFinalize, uint256 shares) = _calcBatch(prevRequest, request);
+            // Requests placed during the same report period share the protocol share rate, so they are all
+            // nominal or all discounted. Their own share rates can still differ because of the rounding
+            // (issue: https://github.com/lidofinance/lido-dao/issues/442 ), so a single request is not reliable
+            // to determine the side of the line. That's why a batch consists of exactly one report period:
+            // a batch that mixes nominal and discounted requests locks more ether than its requests can claim.
+            bool extendBatch = _state.batchesLength != 0 && prevRequest.reportTimestamp == request.reportTimestamp;
 
-            if (requestShareRate > _maxShareRate) {
-                // discounted
-                ethToFinalize = (shares * _maxShareRate) / E27_PRECISION_BASE;
-            }
-
-            if (ethToFinalize > _state.remainingEthBudget) break; // budget break
-            _state.remainingEthBudget -= ethToFinalize;
-
-            if (_state.batchesLength != 0 && (
-                // share rate of requests in the same batch can differ by 1-2 wei because of the rounding error
-                // (issue: https://github.com/lidofinance/lido-dao/issues/442 )
-                // so we're taking requests that are placed during the same report
-                // as equal even if their actual share rate are different
-                prevRequest.reportTimestamp == request.reportTimestamp ||
-                // both requests are below the line
-                prevRequestShareRate <= _maxShareRate && requestShareRate <= _maxShareRate ||
-                // both requests are above the line
-                prevRequestShareRate > _maxShareRate && requestShareRate > _maxShareRate
-            )) {
-                _state.batches[_state.batchesLength - 1] = currentId; // extend the last batch
-            } else {
+            if (!extendBatch) {
                 // to be able to check batches on-chain we need array to have limited length
                 if (_state.batchesLength == MAX_BATCHES_LENGTH) break;
 
+                batchPreStart = prevRequest;
+                batchEth = 0;
+            }
+
+            // `prefinalize()` prices a batch as a whole, so the request costs the growth of its batch price
+            // rather than its own price. The batch price never decreases when the batch is extended
+            (uint256 newBatchEth,) = _calcBatchToFinalize(batchPreStart, request, _maxShareRate);
+
+            if (newBatchEth - batchEth > _state.remainingEthBudget) break; // budget break
+            _state.remainingEthBudget -= newBatchEth - batchEth;
+            batchEth = newBatchEth;
+
+            if (extendBatch) {
+                _state.batches[_state.batchesLength - 1] = currentId; // extend the last batch
+            } else {
                 // create a new batch
                 _state.batches[_state.batchesLength] = currentId;
                 ++_state.batchesLength;
             }
 
-            prevRequestShareRate = requestShareRate;
             prevRequest = request;
             unchecked{ ++currentId; }
         }
 
-        _state.finished = currentId == queueLength || currentId < nextCallRequestId;
+        // finished if the loop stopped early on a limit or has reached the end of the queue
+        _state.finished = currentId < endRequestId || currentId > getLastRequestId();
 
         return _state;
     }
@@ -310,15 +321,9 @@ abstract contract WithdrawalQueueBase {
 
             WithdrawalRequest memory batchEnd = _getQueue()[batchEndRequestId];
 
-            (uint256 batchShareRate, uint256 stETH, uint256 shares) = _calcBatch(prevBatchEnd, batchEnd);
+            (uint256 eth, uint256 shares) = _calcBatchToFinalize(prevBatchEnd, batchEnd, _maxShareRate);
 
-            if (batchShareRate > _maxShareRate) {
-                // discounted
-                ethToLock += shares * _maxShareRate / E27_PRECISION_BASE;
-            } else {
-                // nominal
-                ethToLock += stETH;
-            }
+            ethToLock += eth;
             sharesToBurn += shares;
 
             prevBatchEndRequestId = batchEndRequestId;
@@ -503,12 +508,7 @@ abstract contract WithdrawalQueueBase {
             if (nextCheckpoint.fromRequestId <= _requestId) revert InvalidHint(_hint);
         }
 
-        WithdrawalRequest memory prevRequest = _getQueue()[_requestId - 1];
-        (uint256 batchShareRate, uint256 eth, uint256 shares) = _calcBatch(prevRequest, _request);
-
-        if (batchShareRate > checkpoint.maxShareRate) {
-            eth = shares * checkpoint.maxShareRate / E27_PRECISION_BASE;
-        }
+        (uint256 eth,) = _calcBatchToFinalize(_getQueue()[_requestId - 1], _request, checkpoint.maxShareRate);
 
         return eth;
     }
@@ -540,6 +540,22 @@ abstract contract WithdrawalQueueBase {
         shares = _endRequest.cumulativeShares - _preStartRequest.cumulativeShares;
 
         shareRate = stETH * E27_PRECISION_BASE / shares;
+    }
+
+    /// @dev calculate the ether to lock and the shares to burn on finalization of the range of
+    ///  `(_preStartRequest, _endRequest]` as a single batch with the given `_maxShareRate`
+    function _calcBatchToFinalize(
+        WithdrawalRequest memory _preStartRequest,
+        WithdrawalRequest memory _endRequest,
+        uint256 _maxShareRate
+    ) internal pure returns (uint256 eth, uint256 shares) {
+        uint256 batchShareRate;
+        (batchShareRate, eth, shares) = _calcBatch(_preStartRequest, _endRequest);
+
+        if (batchShareRate > _maxShareRate) {
+            // discounted
+            eth = shares * _maxShareRate / E27_PRECISION_BASE;
+        }
     }
 
     //

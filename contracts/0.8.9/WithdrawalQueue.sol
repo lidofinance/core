@@ -172,7 +172,7 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
         external
         returns (uint256[] memory requestIds)
     {
-        STETH.permit(msg.sender, address(this), _permit.value, _permit.deadline, _permit.v, _permit.r, _permit.s);
+        _usePermit(STETH, _permit);
         return requestWithdrawals(_amounts, _owner);
     }
 
@@ -188,7 +188,7 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
         address _owner,
         PermitInput calldata _permit
     ) external returns (uint256[] memory requestIds) {
-        WSTETH.permit(msg.sender, address(this), _permit.value, _permit.deadline, _permit.v, _permit.r, _permit.s);
+        _usePermit(WSTETH, _permit);
         return requestWithdrawalsWstETH(_amounts, _owner);
     }
 
@@ -305,7 +305,8 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
         for (uint256 i = 0; i < _requestIds.length; ++i) {
             if (_requestIds[i] < prevRequestId) revert RequestIdsNotSorted();
             hintIds[i] = _findCheckpointHint(_requestIds[i], _firstIndex, _lastIndex);
-            _firstIndex = hintIds[i];
+            // the hints of sorted requests are non-decreasing, so the next search starts from the found one
+            if (hintIds[i] != NOT_FOUND) _firstIndex = hintIds[i];
             prevRequestId = _requestIds[i];
         }
     }
@@ -368,6 +369,27 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
         BUNKER_MODE_SINCE_TIMESTAMP_POSITION.setStorageUint256(BUNKER_MODE_DISABLED_TIMESTAMP);
 
         emit InitializedV1(_admin);
+    }
+
+    /// @dev Calls `permit()` on the token tolerating the front-run of the same signature
+    ///  (issue: https://github.com/lidofinance/core/issues/803 ): if anyone has already submitted the signature,
+    ///  `permit()` reverts on the used nonce, but the allowance that the signature grants is already in place.
+    ///  The fallback to the allowance holds only until the permit deadline, so the deadline still bounds
+    ///  the time when the transaction can be executed
+    function _usePermit(IERC20Permit _token, PermitInput calldata _permit) internal {
+        try _token.permit(msg.sender, address(this), _permit.value, _permit.deadline, _permit.v, _permit.r, _permit.s) {
+            return;
+        } catch (bytes memory reason) {
+            if (
+                block.timestamp <= _permit.deadline &&
+                IERC20(address(_token)).allowance(msg.sender, address(this)) >= _permit.value
+            ) return;
+
+            // bubble up the original revert reason
+            assembly {
+                revert(add(reason, 32), mload(reason))
+            }
+        }
     }
 
     function _requestWithdrawal(uint256 _amountOfStETH, address _owner) internal returns (uint256 requestId) {

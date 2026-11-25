@@ -86,6 +86,11 @@ contract StETH__HarnessForWithdrawalQueue is IStETH {
         return true;
     }
 
+    // StETH::allowance
+    function allowance(address _owner, address _spender) external view returns (uint256) {
+        return allowances[_owner][_spender];
+    }
+
     // StETHPermit interface implementation
 
     // @dev Overrides the actual permit function to allow testing without signatures based on `isSignatureValid` flag.

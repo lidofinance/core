@@ -54,6 +54,11 @@ contract WstETH__MockForWithdrawalQueue {
     }
 
     // openzeppelin/contracts/token/ERC20/ERC20.sol
+    function allowance(address owner, address spender) public view returns (uint256) {
+        return _allowances[owner][spender];
+    }
+
+    // openzeppelin/contracts/token/ERC20/ERC20.sol
     function transferFrom(address sender, address recipient, uint256 amount) public virtual returns (bool) {
         _transfer(sender, recipient, amount);
         require(amount <= _allowances[sender][msg.sender], "ERC20: transfer amount exceeds allowance");

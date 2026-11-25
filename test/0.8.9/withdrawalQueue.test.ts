@@ -434,11 +434,47 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Reverts bad permit with `INVALID_SIGNATURE`", async () => {
+        await stEth.connect(alice).approve(queueAddress, 0n);
         await stEth.mock__setIsSignatureValid(false);
 
         await expect(queue.connect(alice).requestWithdrawalsWithPermit(requests, owner, permit)).to.be.revertedWith(
           "INVALID_SIGNATURE",
         );
+      });
+
+      it("Reverts bad permit if the allowance is less than the permit value", async () => {
+        await stEth.connect(alice).approve(queueAddress, amount - 1n);
+        await stEth.mock__setIsSignatureValid(false);
+
+        await expect(queue.connect(alice).requestWithdrawalsWithPermit(requests, owner, permit)).to.be.revertedWith(
+          "INVALID_SIGNATURE",
+        );
+      });
+
+      it("Reverts expired permit with `DEADLINE_EXPIRED` even if the allowance is sufficient", async () => {
+        // the allowance from `beforeEach` covers the permit value
+        const expiredPermit = { ...permit, deadline: BigInt(await time.latest()) };
+
+        await expect(
+          queue.connect(alice).requestWithdrawalsWithPermit(requests, owner, expiredPermit),
+        ).to.be.revertedWith("DEADLINE_EXPIRED");
+      });
+
+      it("Creates requests if the permit was front-run", async () => {
+        await stEth.connect(alice).approve(queueAddress, 0n);
+
+        // a third party submits the signature from the pending transaction
+        await stEth
+          .connect(stranger)
+          .permit(alice, queueAddress, permit.value, permit.deadline, permit.v, permit.r, permit.s);
+        // the signature is used now, so the next permit() with it reverts
+        await stEth.mock__setIsSignatureValid(false);
+
+        await expect(queue.connect(alice).requestWithdrawalsWithPermit(requests, owner, permit))
+          .to.emit(queue, "WithdrawalRequested")
+          .withArgs(1, alice.address, owner.address, requests[0], await stEth.getSharesByPooledEth(requests[0]))
+          .to.emit(queue, "WithdrawalRequested")
+          .withArgs(2, alice.address, owner.address, requests[1], await stEth.getSharesByPooledEth(requests[1]));
       });
 
       it("Creates requests for multiple amounts with valid permit", async () => {
@@ -497,11 +533,50 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Reverts bad permit with `ERC20Permit: invalid signature`", async () => {
+        await wstEth.connect(alice).approve(queueAddress, 0n);
         await wstEth.mock__setIsSignatureValid(false);
 
         await expect(
           queue.connect(alice).requestWithdrawalsWstETHWithPermit(requests, owner, permit),
         ).to.be.revertedWith("ERC20Permit: invalid signature");
+      });
+
+      it("Reverts bad permit if the allowance is less than the permit value", async () => {
+        await wstEth.connect(alice).approve(queueAddress, amount - 1n);
+        await wstEth.mock__setIsSignatureValid(false);
+
+        await expect(
+          queue.connect(alice).requestWithdrawalsWstETHWithPermit(requests, owner, permit),
+        ).to.be.revertedWith("ERC20Permit: invalid signature");
+      });
+
+      it("Reverts expired permit with `ERC20Permit: expired deadline` even if the allowance is sufficient", async () => {
+        // the allowance from `beforeEach` covers the permit value
+        const expiredPermit = { ...permit, deadline: BigInt(await time.latest()) };
+
+        await expect(
+          queue.connect(alice).requestWithdrawalsWstETHWithPermit(requests, owner, expiredPermit),
+        ).to.be.revertedWith("ERC20Permit: expired deadline");
+      });
+
+      it("Creates requests if the permit was front-run", async () => {
+        await wstEth.connect(alice).approve(queueAddress, 0n);
+
+        // a third party submits the signature from the pending transaction
+        await wstEth
+          .connect(stranger)
+          .permit(alice, queueAddress, permit.value, permit.deadline, permit.v, permit.r, permit.s);
+        // the signature is used now, so the next permit() with it reverts
+        await wstEth.mock__setIsSignatureValid(false);
+
+        const stEthAmount = await wstEth.getStETHByWstETH(requests[0]);
+        const sharesToWithdraw = await stEth.getSharesByPooledEth(stEthAmount);
+
+        await expect(queue.connect(alice).requestWithdrawalsWstETHWithPermit(requests, owner, permit))
+          .to.emit(queue, "WithdrawalRequested")
+          .withArgs(1, alice.address, owner.address, stEthAmount, sharesToWithdraw)
+          .to.emit(queue, "WithdrawalRequested")
+          .withArgs(2, alice.address, owner.address, stEthAmount, sharesToWithdraw);
       });
 
       it("Creates requests for multiple amounts with valid permit", async () => {
@@ -790,6 +865,22 @@ describe("WithdrawalQueue.sol", () => {
       const hints = await queue.findCheckpointHints(requests, 1, lastCheckpointIndex);
 
       expect(hints).to.deep.equal([1n, 2n]);
+    });
+
+    it("Returns NOT_FOUND for unfinalized requests without reverting", async () => {
+      await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
+      await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
+
+      const hints = await queue.findCheckpointHints([1, 3, 4], 1, lastCheckpointIndex);
+
+      expect(hints).to.deep.equal([1n, 0n, 0n]);
+    });
+
+    it("Keeps searching after a NOT_FOUND hint", async () => {
+      // request 1 is placed before the search range, so it's not found there
+      const hints = await queue.findCheckpointHints(requests, 2, lastCheckpointIndex);
+
+      expect(hints).to.deep.equal([0n, 2n]);
     });
   });
 

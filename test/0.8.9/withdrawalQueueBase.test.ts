@@ -41,6 +41,27 @@ describe("WithdrawalQueueBase.sol", () => {
     }
   };
 
+  // Runs `calculateFinalizationBatches` until the state is finished, the way the oracle daemon does
+  const calculateBatches = async (maxShareRate: bigint, budget: bigint, maxRequestsPerCall: number) => {
+    let state = buildBatchCalculationState(budget, false, Array(MAX_BATCHES).fill(0n), 0);
+    do {
+      const calc = await queue.calculateFinalizationBatches(maxShareRate, 10000000000, maxRequestsPerCall, state);
+      state = buildBatchCalculationState(
+        calc.remainingEthBudget,
+        calc.finished,
+        (calc.batches as Result).toArray(),
+        calc.batchesLength,
+      );
+    } while (!state.finished);
+
+    return {
+      remainingEthBudget: state.remainingEthBudget,
+      finished: state.finished,
+      batchesLength: Number(state.batchesLength),
+      batches: (state.batches as unknown as bigint[]).slice(0, Number(state.batchesLength)),
+    };
+  };
+
   before(async () => {
     ({ provider } = ethers);
     [owner, stranger] = await ethers.getSigners();
@@ -149,15 +170,53 @@ describe("WithdrawalQueueBase.sol", () => {
           buildBatchCalculationState(ether("10.00"), true, Array(MAX_BATCHES).fill(0n), 0),
         ),
       ).to.be.revertedWithCustomError(queue, "InvalidState");
+    });
 
-      await expect(
-        queue.calculateFinalizationBatches(
-          shareRate(300n),
-          100000,
-          1000,
-          buildBatchCalculationState(0, false, Array(MAX_BATCHES).fill(0n), 36),
+    it("Does not revert on zero budget", async () => {
+      await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
+
+      const calc = await queue.calculateFinalizationBatches(
+        shareRate(1n),
+        10000000000,
+        1000,
+        buildBatchCalculationState(0n, false, Array(MAX_BATCHES).fill(0n), 0),
+      );
+
+      expect(calc.remainingEthBudget).to.equal(0);
+      expect(calc.finished).to.equal(true);
+      expect(calc.batchesLength).to.equal(0);
+    });
+
+    it("Continues the calculation after a call that spent the whole budget", async () => {
+      await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
+      await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
+
+      const calc1 = await queue.calculateFinalizationBatches(
+        shareRate(1n),
+        10000000000,
+        1,
+        buildBatchCalculationState(ether("1.00"), false, Array(MAX_BATCHES).fill(0n), 0),
+      );
+
+      expect(calc1.remainingEthBudget).to.equal(0);
+      expect(calc1.finished).to.equal(false);
+
+      const calc2 = await queue.calculateFinalizationBatches(
+        shareRate(1n),
+        10000000000,
+        1,
+        buildBatchCalculationState(
+          calc1.remainingEthBudget,
+          calc1.finished,
+          (calc1.batches as Result).toArray(),
+          calc1.batchesLength,
         ),
-      ).to.be.revertedWithCustomError(queue, "InvalidState");
+      );
+
+      expect(calc2.remainingEthBudget).to.equal(0);
+      expect(calc2.finished).to.equal(true);
+      expect(calc2.batches[0]).to.equal(1);
+      expect(calc2.batchesLength).to.equal(1);
     });
 
     it("Stops on max timestamp", async () => {
@@ -244,7 +303,7 @@ describe("WithdrawalQueueBase.sol", () => {
       expect(calc2.batchesLength).to.equal(1, "calc2->batchesLength");
     });
 
-    it("Works for multiple requests above max share rate in different reports", async () => {
+    it("Splits requests above max share rate in different reports into separate batches", async () => {
       const maxShareRate = parseUnits("1", 26); // 0.1
 
       await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
@@ -279,11 +338,12 @@ describe("WithdrawalQueueBase.sol", () => {
 
       expect(calc2.remainingEthBudget).to.equal(ether("19.80"), "calc2->remainingEthBudget");
       expect(calc2.finished).to.equal(true, "calc2->finished");
-      expect(calc2.batches[0]).to.equal(2, "calc2->batches[0]");
-      expect(calc2.batchesLength).to.equal(1, "calc2->batchesLength");
+      expect(calc2.batches[0]).to.equal(1, "calc2->batches[0]");
+      expect(calc2.batches[1]).to.equal(2, "calc2->batches[1]");
+      expect(calc2.batchesLength).to.equal(2, "calc2->batchesLength");
     });
 
-    it("Works for multiple requests below max share rate in different reports", async () => {
+    it("Splits requests below max share rate in different reports into separate batches", async () => {
       const maxShareRate = shareRate(1n);
 
       await queue.harness__enqueue(ether("10.00"), shares(500n), owner);
@@ -318,8 +378,9 @@ describe("WithdrawalQueueBase.sol", () => {
 
       expect(calc2.remainingEthBudget).to.equal(ether("0.00"), "calc2->remainingEthBudget");
       expect(calc2.finished).to.equal(true, "calc2->finished");
-      expect(calc2.batches[0]).to.equal(2, "calc2->batches[0]");
-      expect(calc2.batchesLength).to.equal(1, "calc2->batchesLength");
+      expect(calc2.batches[0]).to.equal(1, "calc2->batches[0]");
+      expect(calc2.batches[1]).to.equal(2, "calc2->batches[1]");
+      expect(calc2.batchesLength).to.equal(2, "calc2->batchesLength");
     });
 
     it("Works for budget break", async () => {
@@ -339,8 +400,149 @@ describe("WithdrawalQueueBase.sol", () => {
       expect(calc.batchesLength).to.equal(0);
     });
 
-    it.skip("Works for on-chain batch limiter", async () => {
-      // TODO: Implement this test L271: if (_state.batchesLength == MAX_BATCHES_LENGTH) break;
+    it("Works for on-chain batch limiter", async () => {
+      for (let i = 0; i <= MAX_BATCHES; i++) {
+        await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
+        await queue.harness__setLastReportTimestamp(i + 1);
+      }
+
+      const calc = await calculateBatches(shareRate(1n), ether("100.00"), 1000);
+
+      expect(calc.batchesLength).to.equal(MAX_BATCHES);
+      expect(calc.batches).to.deep.equal(Array.from({ length: MAX_BATCHES }, (_, i) => BigInt(i + 1)));
+      expect(calc.finished).to.equal(true);
+      // the request that has no batch left is not charged
+      expect(calc.remainingEthBudget).to.equal(ether("100.00") - ether("1.00") * BigInt(MAX_BATCHES));
+    });
+
+    context("Budget matches prefinalize", () => {
+      // share rate of 1.2738 with which the requests are placed
+      const placeRequest = (stETH: bigint) => queue.harness__enqueue(stETH, (stETH * 10000n) / 12738n, owner);
+
+      const expectBudgetToMatchPrefinalize = async (maxShareRate: bigint, budget: bigint) => {
+        const calc = await calculateBatches(maxShareRate, budget, 1000);
+        // a paged calculation must give the same result
+        const pagedCalc = await calculateBatches(maxShareRate, budget, 1);
+        expect(pagedCalc.batches).to.deep.equal(calc.batches);
+        expect(pagedCalc.remainingEthBudget).to.equal(calc.remainingEthBudget);
+
+        const [ethToLock] = await queue.prefinalize(calc.batches, maxShareRate);
+        expect(ethToLock).to.equal(budget - calc.remainingEthBudget);
+
+        return { ...calc, ethToLock };
+      };
+
+      it("Charges the budget with the batch price for dust requests in a nominal batch", async () => {
+        const maxShareRate = parseUnits("1.274", 27);
+        // 100 wei requests get 78 shares, so their own share rate is above the max share rate
+        for (let i = 0; i < 4; i++) await placeRequest(100n);
+        await placeRequest(ether("19.00"));
+
+        // the budget that covers each request at its own price: 4 * 99 wei + 19 ETH
+        const { batches, ethToLock } = await expectBudgetToMatchPrefinalize(maxShareRate, ether("19.00") + 396n);
+        expect(batches).to.deep.equal([4n]);
+        expect(ethToLock).to.equal(397n);
+
+        const full = await expectBudgetToMatchPrefinalize(maxShareRate, ether("19.00") + 400n);
+        expect(full.batches).to.deep.equal([5n]);
+        expect(full.remainingEthBudget).to.equal(0n);
+      });
+
+      it("Charges the budget with the batch price after already finalized requests", async () => {
+        const maxShareRate = parseUnits("1.274", 27);
+        await placeRequest(ether("5.00"));
+        await queue.harness__finalize(1, ether("5.00"), maxShareRate);
+
+        for (let i = 0; i < 4; i++) await placeRequest(100n);
+        await placeRequest(ether("19.00"));
+
+        // the paged calculation resumes the first batch, which starts after the last finalized request
+        const { batches, ethToLock } = await expectBudgetToMatchPrefinalize(maxShareRate, ether("19.00") + 396n);
+        expect(batches).to.deep.equal([5n]);
+        expect(ethToLock).to.equal(397n);
+
+        await expectBudgetToMatchPrefinalize(maxShareRate, ether("19.00") + 400n);
+      });
+
+      it("Charges the budget with the batch price for a discounted batch", async () => {
+        const maxShareRate = parseUnits("1.26", 27);
+        for (let i = 1n; i <= 40n; i++) await placeRequest(ether("1.00") * i + i * 7919n);
+
+        const [fullPrice] = await queue.prefinalize([40n], maxShareRate);
+        const { batches, remainingEthBudget } = await expectBudgetToMatchPrefinalize(maxShareRate, fullPrice);
+        expect(batches).to.deep.equal([40n]);
+        expect(remainingEthBudget).to.equal(0n);
+
+        await expectBudgetToMatchPrefinalize(maxShareRate, fullPrice - 1n);
+      });
+
+      it("Charges the budget with the batch prices over several report periods", async () => {
+        const maxShareRate = parseUnits("1.274", 27);
+        for (let period = 1; period <= 3; period++) {
+          for (let i = 0; i < 3; i++) await placeRequest(100n);
+          await placeRequest(ether("1.00") * BigInt(period));
+          await queue.harness__setLastReportTimestamp(period);
+        }
+
+        const [fullPrice] = await queue.prefinalize([4n, 8n, 12n], maxShareRate);
+        for (const budget of [fullPrice, fullPrice - 1n, ether("3.00"), ether("1.00")]) {
+          await expectBudgetToMatchPrefinalize(maxShareRate, budget);
+        }
+      });
+    });
+
+    context("Batches of report periods", () => {
+      const maxShareRate = parseUnits("1.2705", 27);
+
+      const finalizeAndGetExcessLock = async (batches: bigint[]) => {
+        const lastId = batches[batches.length - 1];
+        const [ethToLock] = await queue.prefinalize(batches, maxShareRate);
+        await queue.harness__finalize(lastId, ethToLock, maxShareRate);
+
+        let claimable = 0n;
+        for (let id = 1n; id <= lastId; id++) {
+          claimable += await queue.harness__calculateClaimableEther(id, 1n);
+        }
+        return { ethToLock, excess: ethToLock - claimable };
+      };
+
+      it("Does not join a discounted report period with a nominal one through a dust request", async () => {
+        await queue.harness__enqueue(ether("127.1"), ether("100"), owner); // discounted
+        await queue.harness__setLastReportTimestamp(1);
+        await queue.harness__enqueue(100n, 78n, owner); // dust, own share rate is above the line
+        await queue.harness__enqueue(ether("127"), ether("100"), owner); // nominal
+
+        const { batches } = await calculateBatches(maxShareRate, ether("1000"), 1000);
+        expect(batches).to.deep.equal([1n, 3n]);
+
+        const { ethToLock, excess } = await finalizeAndGetExcessLock(batches);
+        expect(ethToLock).to.equal(ether("127.05") + ether("127") + 100n);
+        // only the rounding of the dust request's claim stays locked
+        expect(excess).to.be.lte(1n);
+      });
+
+      it("Does not join a nominal report period with a discounted one through a dust request", async () => {
+        await queue.harness__enqueue(ether("127"), ether("100"), owner); // nominal
+        await queue.harness__enqueue(100n, 78n, owner); // dust, own share rate is above the line
+        await queue.harness__setLastReportTimestamp(1);
+        await queue.harness__enqueue(ether("127.1"), ether("100"), owner); // discounted
+
+        const { batches } = await calculateBatches(maxShareRate, ether("1000"), 1000);
+        expect(batches).to.deep.equal([2n, 3n]);
+
+        const { ethToLock, excess } = await finalizeAndGetExcessLock(batches);
+        expect(ethToLock).to.equal(ether("127") + 100n + ether("127.05"));
+        expect(excess).to.be.lte(1n);
+      });
+
+      it("Keeps the requests of one report period in one batch regardless of their own share rates", async () => {
+        await queue.harness__enqueue(ether("127"), ether("100"), owner); // nominal
+        await queue.harness__enqueue(100n, 78n, owner); // dust, own share rate is above the line
+        await queue.harness__enqueue(ether("127"), ether("100"), owner); // nominal
+
+        const { batches } = await calculateBatches(maxShareRate, ether("1000"), 1);
+        expect(batches).to.deep.equal([3n]);
+      });
     });
   });
 
