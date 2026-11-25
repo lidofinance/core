@@ -60,7 +60,9 @@ struct ProvableBeaconBlockHeader {
 // A witness for a block header which root is accessible via `historical_summaries` field.
 struct HistoricalHeaderWitness {
     BeaconBlockHeader header;
-    bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
+    // Merkle proof of the old block root against the recent block's state root (`beaconBlock.header.stateRoot`),
+    // via `historical_summaries[i].block_summary_root`.
+    bytes32[] proof;
 }
 
 /**
