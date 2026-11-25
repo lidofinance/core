@@ -19,10 +19,11 @@ contract WQInvariants is Test {
         wq = new WQ();
         handler = new WQHandler(wq);
 
-        bytes4[] memory selectors = new bytes4[](3);
+        bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = WQHandler.request.selector;
         selectors[1] = WQHandler.finalize.selector;
         selectors[2] = WQHandler.claim.selector;
+        selectors[3] = WQHandler.report.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
 
@@ -95,7 +96,7 @@ contract WQInvariants is Test {
     function invariant_totalLockedEthNaiveCheck() public view {
         assertLe(
             handler.ghost_totalLockedEth() - handler.naiveSumOfFinalizedRequestsEth(),
-            wq.getLastFinalizedRequestId(),
+            handler.ghost_maxRoundingLoss(),
             "total locked eth should be equal to sum of all finalized request in the queue"
         );
     }
@@ -122,30 +123,47 @@ contract WQHandler is CommonBase, StdAssertions, StdUtils {
     uint256 public ghost_totalRequestNum;
     uint256 public ghost_totalLockedEth;
     uint256 public ghost_totalClaimedEth;
+    // a request can claim less than its share of the locked ether only because of the rounding of its shares:
+    // a few wei per request, proportional to the share rate
+    uint256 public ghost_maxRoundingLoss;
+
+    // protocol share rate of the current report period; it changes only on report
+    uint256 public periodShareRate = 1.2 * 10 ** 27;
 
     constructor(WQ _wq) {
         wq = _wq;
     }
 
-    function request(uint256 amountOfStEth, uint256 amountOfShares) public {
-        amountOfStEth = bound(amountOfStEth, 100, 1000 * 1e18);
-        amountOfShares = bound(amountOfShares, 1, 1e7 * 1e18);
+    // starts a new report period with a new protocol share rate
+    function report(uint256 newShareRate) public {
+        periodShareRate = bound(newShareRate, 0.01 * 10 ** 27, 10 * 10 ** 27);
+        wq.incrementRebaseTimestamp();
+    }
+
+    // places a request within the current report period, rounding the shares down like stETH does
+    function request(uint256 amountOfStEth, bool dust) public {
+        amountOfStEth = bound(amountOfStEth, 100, dust ? 1000 : 1000 * 1e18);
+        uint256 amountOfShares = (amountOfStEth * 10 ** 27) / periodShareRate;
 
         wq.request(uint128(amountOfStEth), uint128(amountOfShares));
 
         ghost_totalRequestedEth += amountOfStEth;
         ghost_totalRequestNum += 1;
-        wq.incrementRebaseTimestamp(); // TODO: make several requests in rebase
     }
 
-    function finalize(uint256 maxShareRate, uint256 ethBudget) public {
-        ethBudget = bound(ethBudget, 1, type(uint64).max); // todo: check real bounds
-        maxShareRate = bound(maxShareRate, 0.0001 * 10 ** 27, 100 * 10 ** 27);
+    function finalize(uint256 maxShareRate, uint256 ethBudget, bool atPeriodShareRate) public {
+        ethBudget = bound(ethBudget, 0, 2000 * 1e18);
+        // the share rate may stay the same since the last report, that is the edge between nominal and discounted
+        maxShareRate = atPeriodShareRate ? periodShareRate : bound(maxShareRate, 0.01 * 10 ** 27, 10 * 10 ** 27);
 
-        uint256[] memory batches = calculateBatches(ethBudget, maxShareRate);
+        (uint256[] memory batches, uint256 remainingEthBudget) = calculateBatches(ethBudget, maxShareRate);
 
         if (batches.length > 0) {
             (uint256 eth, ) = wq.prefinalize(batches, maxShareRate);
+            ghost_maxRoundingLoss +=
+                (batches[batches.length - 1] - wq.getLastFinalizedRequestId()) *
+                (maxShareRate / 10 ** 27 + 2);
+            assertEq(eth, ethBudget - remainingEthBudget, "budget is charged with the ether locked by prefinalize");
 
             vm.deal(address(this), eth);
             wq.finalize{value: eth}(batches[batches.length - 1], maxShareRate);
@@ -171,10 +189,13 @@ contract WQHandler is CommonBase, StdAssertions, StdUtils {
 
     receive() external payable {}
 
-    function calculateBatches(uint256 ethBudget, uint256 maxShareRate) public view returns (uint256[] memory batches) {
+    function calculateBatches(
+        uint256 ethBudget,
+        uint256 maxShareRate
+    ) public view returns (uint256[] memory batches, uint256 remainingEthBudget) {
         uint256[36] memory emptyBatches;
         WQBase.BatchesCalculationState memory state = WQBase.BatchesCalculationState(ethBudget, false, emptyBatches, 0);
-        while (!state.finished && state.remainingEthBudget > 0) {
+        while (!state.finished) {
             state = wq.calculateFinalizationBatches(maxShareRate, block.timestamp, 3, state);
         }
 
@@ -182,6 +203,7 @@ contract WQHandler is CommonBase, StdAssertions, StdUtils {
         for (uint256 i; i < state.batchesLength; ++i) {
             batches[i] = state.batches[i];
         }
+        remainingEthBudget = state.remainingEthBudget;
     }
 
     function sumOfStETHInQueue(uint256 start, uint256 end) public view returns (uint256 stETHSum) {
