@@ -872,6 +872,62 @@ describe("DepositSecurityModule.sol", () => {
       const tx2 = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
       await expect(tx2).to.not.emit(dsm, "DepositsPaused");
     });
+
+    context("After an unpause", () => {
+      async function pauseAndUnpause() {
+        const blockNumber = await time.latestBlock();
+        const sig = new DSMPauseMessage(guardian2.address, blockNumber).sign(guardian2.privateKey);
+        await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.emit(dsm, "DepositsPaused");
+
+        const unpauseReceipt = await (await dsm.unpauseDeposits()).wait();
+        return { blockNumber, sig, unpauseBlock: unpauseReceipt!.blockNumber };
+      }
+
+      it("Reverts if the guardian signature that paused before is replayed", async () => {
+        const { blockNumber, sig, unpauseBlock } = await pauseAndUnpause();
+        expect(blockNumber + PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS).to.be.greaterThan(await time.latestBlock());
+        expect(blockNumber).to.be.lessThan(unpauseBlock);
+
+        await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
+          dsm,
+          "PauseIntentBeforeUnpause",
+        );
+      });
+
+      it("Reverts if a guardian calls with a block before the unpause", async () => {
+        const { blockNumber } = await pauseAndUnpause();
+        const data = dsm.interface.encodeFunctionData("pauseDeposits", [blockNumber, emptyGuardianSignature()]);
+
+        await expect(executeAsGuardian(guardian1, data)).to.be.revertedWithCustomError(dsm, "PauseIntentBeforeUnpause");
+      });
+
+      it("Reverts if the pause intent is one block before the unpause", async () => {
+        const { unpauseBlock } = await pauseAndUnpause();
+        const sig = new DSMPauseMessage(guardian1.address, unpauseBlock - 1).sign(guardian1.privateKey);
+
+        await expect(dsm.connect(stranger).pauseDeposits(unpauseBlock - 1, sig)).to.be.revertedWithCustomError(
+          dsm,
+          "PauseIntentBeforeUnpause",
+        );
+      });
+
+      it("Pauses with a pause intent for the block of the unpause", async () => {
+        const { unpauseBlock } = await pauseAndUnpause();
+        const sig = new DSMPauseMessage(guardian1.address, unpauseBlock).sign(guardian1.privateKey);
+
+        await expect(dsm.connect(stranger).pauseDeposits(unpauseBlock, sig))
+          .to.emit(dsm, "DepositsPaused")
+          .withArgs(guardian1.address);
+      });
+
+      it("Pauses if a guardian calls with a block after the unpause", async () => {
+        const { unpauseBlock } = await pauseAndUnpause();
+        await mineUpTo(unpauseBlock + 1);
+        const data = dsm.interface.encodeFunctionData("pauseDeposits", [unpauseBlock + 1, emptyGuardianSignature()]);
+
+        await expect(executeAsGuardian(guardian1, data)).to.emit(dsm, "DepositsPaused").withArgs(guardian1.address);
+      });
+    });
   });
 
   context("Function `unpauseDeposits`", () => {
@@ -908,6 +964,14 @@ describe("DepositSecurityModule.sol", () => {
       const tx = await dsm.unpauseDeposits();
       await expect(tx).to.emit(dsm, "DepositsUnpaused").withArgs();
       await expect(dsm.unpauseDeposits()).to.be.revertedWithCustomError(dsm, "DepositsNotPaused");
+    });
+
+    it("Records the block of the unpause", async () => {
+      expect(await dsm.getLastUnpauseBlock()).to.equal(0);
+
+      const receipt = await (await dsm.unpauseDeposits()).wait();
+
+      expect(await dsm.getLastUnpauseBlock()).to.equal(receipt!.blockNumber);
     });
   });
 

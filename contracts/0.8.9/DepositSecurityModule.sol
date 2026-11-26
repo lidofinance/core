@@ -70,6 +70,7 @@ contract DepositSecurityModule {
     error DepositsNotPaused();
     error ModuleNonceChanged();
     error PauseIntentExpired();
+    error PauseIntentBeforeUnpause();
     error UnvetPayloadInvalid();
     error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
@@ -101,6 +102,9 @@ contract DepositSecurityModule {
     bool public isDepositsPaused;
 
     uint256 internal lastDepositBlock;
+
+    /// @dev The block of the last `unpauseDeposits` call. `pauseDeposits` rejects a pause intent for an earlier block.
+    uint256 internal lastUnpauseBlock;
 
     uint256 internal pauseIntentValidityPeriodBlocks;
     uint256 internal maxOperatorsPerUnvetting;
@@ -403,6 +407,7 @@ contract DepositSecurityModule {
      *
      * Reverts if:
      *  - the pause intent is expired;
+     *  - the pause intent is for a block before the last unpause;
      *  - the caller is not a guardian and signature is invalid or not from a guardian.
      *
      * The signature, if present, must be produced for the keccak256 hash of the following
@@ -425,6 +430,8 @@ contract DepositSecurityModule {
         }
 
         if (block.number - blockNumber > pauseIntentValidityPeriodBlocks) revert PauseIntentExpired();
+        /// @dev An unpause revokes the earlier pause intents, so a published signature cannot pause deposits again.
+        if (blockNumber < lastUnpauseBlock) revert PauseIntentBeforeUnpause();
 
         isDepositsPaused = true;
         emit DepositsPaused(guardianAddr);
@@ -434,11 +441,23 @@ contract DepositSecurityModule {
      * @notice Unpauses deposits.
      * @dev Only callable by the owner.
      * Reverts if deposits are not paused.
+     *
+     * Revokes the pause intents for the blocks before the current one: `pauseDeposits` rejects them.
      */
     function unpauseDeposits() external onlyOwner {
         if (!isDepositsPaused) revert DepositsNotPaused();
         isDepositsPaused = false;
+        lastUnpauseBlock = block.number;
         emit DepositsUnpaused();
+    }
+
+    /**
+     * @notice Returns the block of the last unpause.
+     * @return lastUnpauseBlock The block number of the last `unpauseDeposits` call, or zero before the first one.
+     * @dev `pauseDeposits` rejects a pause intent for a block before this one.
+     */
+    function getLastUnpauseBlock() external view returns (uint256) {
+        return lastUnpauseBlock;
     }
 
     /**
