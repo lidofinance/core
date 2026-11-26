@@ -120,6 +120,35 @@ describe("Integration: DSM pause deposits", () => {
     await ownerUnpauseDeposits();
   });
 
+  it("Should reject a guardian signature from before the last unpause", async function () {
+    // A deployed DSM without the unpause rule has no such getter
+    const hasUnpauseRule = await dsm.getLastUnpauseBlock().then(
+      () => true,
+      () => false,
+    );
+    if (!hasUnpauseRule) this.skip();
+
+    const guardianDelegate = Wallet.createRandom();
+    const guardian = await deployGuardian(guardianDelegate.address);
+
+    const blockNumber = await time.latestBlock();
+    const sig = await new DSMPauseMessage(guardian.address, blockNumber).sign(guardianDelegate.privateKey);
+
+    await pauseDeposits(stranger, BigInt(blockNumber), sig, guardian.address);
+    const unpauseReceipt = await (await ownerUnpauseDeposits()).wait();
+    expect(await dsm.getLastUnpauseBlock()).to.equal(unpauseReceipt!.blockNumber);
+
+    await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
+      dsm,
+      "PauseIntentBeforeUnpause",
+    );
+
+    // A new pause intent after the unpause still pauses
+    const newBlockNumber = await time.latestBlock();
+    const newSig = await new DSMPauseMessage(guardian.address, newBlockNumber).sign(guardianDelegate.privateKey);
+    await pauseDeposits(stranger, BigInt(newBlockNumber), newSig, guardian.address);
+  });
+
   it("Should reject direct DSM calls from the delegate EOA", async () => {
     await deployGuardian();
 
