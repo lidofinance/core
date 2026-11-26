@@ -25,6 +25,7 @@ export async function main() {
     { name: "WithdrawalsOracle", address: state[Sk.withdrawalsOracle].proxy.address },
     { name: "WithdrawalQueueERC721", address: state[Sk.withdrawalQueueERC721].proxy.address },
     { name: "OracleDaemonConfig", address: state[Sk.oracleDaemonConfig].address },
+    { name: "ActiveRebalancingConfigManager", address: state[Sk.activeRebalancingConfigManager].address },
     { name: "OracleReportSanityChecker", address: state[Sk.oracleReportSanityChecker].address },
     { name: "TriggerableWithdrawalsGateway", address: state[Sk.triggerableWithdrawalsGateway].address },
     { name: "TriggerableWithdrawalsBus", address: state[Sk.triggerableWithdrawalsBus].proxy.address },

@@ -1,6 +1,7 @@
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
+  ActiveRebalancingConfigManager__factory,
   LidoLocator,
   LidoLocator__factory,
   StakingRouter__factory,
@@ -37,6 +38,8 @@ import { encodeFunctionCall, InitializeArgs } from "lib/contract";
  * `TriggerableWithdrawalsBus` is deployed behind a proxy. `WithdrawalVault` holds the gateway in an
  * immutable and `LidoLocator` lists it, so both get a new implementation; `StakingRouter` gets one
  * without the exit hooks, and `WithdrawalsOracle` one that publishes its reports to the bus.
+ * `ActiveRebalancingConfigManager` is new: the vote makes it the CMC's only path to the ACTIVE_REBALANCING_*
+ * keys of the OracleDaemonConfig.
  *
  * @dev No `skip()`: the state entries touched here are already filled by earlier releases. The outgoing
  *      addresses are read from the live locator rather than from the state file, which this step overwrites.
@@ -98,6 +101,26 @@ export async function main() {
     await encodeFunctionCall<InitializeArgs<TriggerableWithdrawalsBus>>("TriggerableWithdrawalsBus", "initialize", [
       agentAddress,
     ]),
+  );
+
+  //
+  // ActiveRebalancingConfigManager: the vote grants it CONFIG_MANAGER_ROLE and grants its manager role to the CMC
+  //
+  const activeRebalancingConfigManagerArgs: ConstructorArgs<ActiveRebalancingConfigManager__factory> = [
+    agentAddress,
+    await locator.oracleDaemonConfig(),
+    parameters.activeRebalancingConfigManager.bounds,
+  ];
+
+  logStartReview();
+  await logArgs("ActiveRebalancingConfigManager", activeRebalancingConfigManagerArgs);
+  await logConfirmReview();
+
+  await deployWithoutProxy(
+    Sk.activeRebalancingConfigManager,
+    "ActiveRebalancingConfigManager",
+    deployer,
+    activeRebalancingConfigManagerArgs,
   );
 
   //

@@ -3,12 +3,17 @@
 
 pragma solidity 0.8.25;
 
-import {GatewayConsumerLimits, OracleDaemonConfigValues, SRPhase2UpgradeParameters} from "./SRPhase2UpgradeTypes.sol";
+import {
+    GatewayConsumerLimits,
+    IActiveRebalancingConfigManager,
+    OracleDaemonConfigValues,
+    SRPhase2UpgradeParameters
+} from "./SRPhase2UpgradeTypes.sol";
 
 /// @title SRPhase2UpgradeConfig
 /// @notice Immutable address book for the SR phase 2 (LIP-38) upgrade, validated once at deployment.
-/// @dev The gateway consumer limits are an array and the OracleDaemonConfig values are `bytes`; neither can be
-///      `immutable`, so they live in storage. Nothing changes them after deployment.
+/// @dev The gateway consumer limits are an array, the OracleDaemonConfig values are `bytes` and the rebalancing
+///      bounds are a struct; none can be `immutable`, so they live in storage. Nothing changes them after deployment.
 contract SRPhase2UpgradeConfig {
     error ZeroAddress(string field);
     error ZeroValue(string field);
@@ -70,8 +75,14 @@ contract SRPhase2UpgradeConfig {
     /// @notice The only staking module with partial withdrawals allowed after the vote
     uint256 public immutable CMV2_STAKING_MODULE_ID;
 
+    /// @notice Gets CONFIG_MANAGER_ROLE on the OracleDaemonConfig instead of the Easy Track EVMScriptExecutor
+    address public immutable ACTIVE_REBALANCING_CONFIG_MANAGER;
+    /// @notice The CM Committee multisig (CMC), the only holder of the manager role on it
+    address public immutable CURATED_MODULE_COMMITTEE;
+
     GatewayConsumerLimits[] internal _gatewayConsumers;
     OracleDaemonConfigValues internal _oracleDaemonConfigValues;
+    IActiveRebalancingConfigManager.KeyBounds internal _activeRebalancingBounds;
 
     constructor(SRPhase2UpgradeParameters memory params) {
         if (params.chainId == 0) revert InvalidChainId(params.chainId);
@@ -130,6 +141,10 @@ contract SRPhase2UpgradeConfig {
         MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH = params.maxBalanceExitRequestedPerReportInEth;
         CMV2_STAKING_MODULE_ID = _nonZeroUint(params.cmv2StakingModuleId, "cmv2StakingModuleId");
         _oracleDaemonConfigValues = params.oracleDaemonConfigValues;
+        ACTIVE_REBALANCING_CONFIG_MANAGER =
+            _nonZero(params.activeRebalancingConfigManager, "activeRebalancingConfigManager");
+        CURATED_MODULE_COMMITTEE = _nonZero(params.curatedModuleCommittee, "curatedModuleCommittee");
+        _activeRebalancingBounds = params.activeRebalancingBounds;
 
         // A parameters file that repeats an address on both sides would make the vote a no-op
         // and the template's pre/post checks contradictory, so reject it here.
@@ -149,6 +164,11 @@ contract SRPhase2UpgradeConfig {
     /// @notice Values of the keys the vote adds to the OracleDaemonConfig; the config itself rejects an empty one.
     function getOracleDaemonConfigValues() external view returns (OracleDaemonConfigValues memory) {
         return _oracleDaemonConfigValues;
+    }
+
+    /// @notice Bounds the ActiveRebalancingConfigManager must carry; the manager itself rejects min > max.
+    function getActiveRebalancingBounds() external view returns (IActiveRebalancingConfigManager.KeyBounds memory) {
+        return _activeRebalancingBounds;
     }
 
     /// @dev The limit values are checked by the gateway itself when the vote sets them.

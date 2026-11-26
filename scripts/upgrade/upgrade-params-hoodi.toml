@@ -206,3 +206,17 @@ ACTIVE_REBALANCING_RATE_LIMIT = 0            # ETH per report
 ACTIVE_REBALANCING_OPERATOR_EXCESS_BP = 0    # BP
 ACTIVE_REBALANCING_MODULE_EXCESS_BP = 0      # BP
 ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS = 0   # epochs
+
+# Holds CONFIG_MANAGER_ROLE on the OracleDaemonConfig after the vote: the CMC updates the five ACTIVE_REBALANCING_* keys
+# through it, each numeric value within the bounds below (LIP-38, in place of the Easy Track factory)
+[activeRebalancingConfigManager]
+committee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" # Curated Module Committee (CMC) multisig: the only ACTIVE_REBALANCING_MANAGER_ROLE holder
+
+# Inclusive bounds, fixed at deployment; changing them needs a new manager and a DAO vote.
+# TODO: placeholders, LIP-38 has "TBD" for every bound. With min = max = 0 the CMC can only switch
+# ACTIVE_REBALANCING_ENABLED. Set the real bounds once the LIP authors fix them.
+[activeRebalancingConfigManager.bounds]
+rateLimit = { min = 0, max = 0 }          # ETH per report
+operatorExcessBP = { min = 0, max = 0 }   # BP
+moduleExcessBP = { min = 0, max = 0 }     # BP
+gracePeriodEpochs = { min = 0, max = 0 }  # epochs

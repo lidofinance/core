@@ -107,6 +107,9 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     oracleDaemonConfig: {
       deployParameters: params.oracleDaemonConfig,
     },
+    [Sk.activeRebalancingConfigManager]: {
+      deployParameters: params.activeRebalancingConfigManager,
+    },
     nodeOperatorsRegistry: {
       deployParameters: params.nodeOperatorsRegistry,
     },

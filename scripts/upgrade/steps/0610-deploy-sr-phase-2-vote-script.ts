@@ -156,6 +156,9 @@ export async function main() {
       activeRebalancingModuleExcessBp: en0x(daemonConfigValues.ACTIVE_REBALANCING_MODULE_EXCESS_BP),
       activeRebalancingGracePeriodEpochs: en0x(daemonConfigValues.ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS),
     },
+    activeRebalancingConfigManager: getAddress(Sk.activeRebalancingConfigManager, state),
+    curatedModuleCommittee: parameters.activeRebalancingConfigManager.committee,
+    activeRebalancingBounds: parameters.activeRebalancingConfigManager.bounds,
   };
 
   const preUpgradeChecks = await deployWithoutProxy(

@@ -83,6 +83,7 @@ export enum Sk {
   hashConsensusForAccountingOracle = "hashConsensusForAccountingOracle",
   hashConsensusForWithdrawalsOracle = "hashConsensusForWithdrawalsOracle",
   oracleDaemonConfig = "oracleDaemonConfig",
+  activeRebalancingConfigManager = "activeRebalancingConfigManager",
   oracleReportSanityChecker = "oracleReportSanityChecker",
   secondOpinionOracle = "secondOpinionOracle",
   withdrawalsOracle = "withdrawalsOracle",
@@ -211,6 +212,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.lidoTemplate:
     case Sk.miniMeTokenFactory:
     case Sk.oracleDaemonConfig:
+    case Sk.activeRebalancingConfigManager:
     case Sk.oracleReportSanityChecker:
     case Sk.secondOpinionOracle:
     case Sk.wstETH:

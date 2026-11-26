@@ -36,6 +36,7 @@ abstract contract SRPhase2UpgradeChecksBase {
     bytes32 internal constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
         keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
     bytes32 internal constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+    bytes32 internal constant ACTIVE_REBALANCING_MANAGER_ROLE = keccak256("ACTIVE_REBALANCING_MANAGER_ROLE");
 
     /// @dev The StakingRouter implementation is swapped without a reinitializer.
     uint256 internal constant STAKING_ROUTER_CONTRACT_VERSION = 4;

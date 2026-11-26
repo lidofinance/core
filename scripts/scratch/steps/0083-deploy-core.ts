@@ -1,6 +1,8 @@
 import { ethers } from "hardhat";
 
 import {
+  ActiveRebalancingConfigManager,
+  ActiveRebalancingConfigManager__factory,
   ConsolidationBus,
   ConsolidationGateway,
   ConsolidationMigrator,
@@ -11,7 +13,7 @@ import {
 } from "typechain-types";
 
 import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib";
-import { encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
+import { ConstructorArgs, encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
   deployContract,
@@ -90,6 +92,39 @@ export async function main() {
     await makeTx(oracleDaemonConfig, "set", [key, en0x(value as number)], { from: deployer });
   }
   await makeTx(oracleDaemonConfig, "renounceRole", [CONFIG_MANAGER_ROLE, deployer], { from: deployer });
+
+  //
+  // Deploy ActiveRebalancingConfigManager: the only path to the ACTIVE_REBALANCING_* keys (LIP-38)
+  //
+
+  const activeRebalancingParams = state[Sk.activeRebalancingConfigManager].deployParameters;
+  const activeRebalancingConfigManagerArgs: ConstructorArgs<ActiveRebalancingConfigManager__factory> = [
+    admin,
+    oracleDaemonConfig_.address,
+    activeRebalancingParams.bounds,
+  ];
+  const activeRebalancingConfigManager_ = await deployWithoutProxy(
+    Sk.activeRebalancingConfigManager,
+    "ActiveRebalancingConfigManager",
+    deployer,
+    activeRebalancingConfigManagerArgs,
+  );
+  await makeTx(oracleDaemonConfig, "grantRole", [CONFIG_MANAGER_ROLE, activeRebalancingConfigManager_.address], {
+    from: deployer,
+  });
+  // A scratch deploy has no CMC: the manager role is granted only when a committee is configured
+  if (activeRebalancingParams.committee) {
+    const activeRebalancingConfigManager = await loadContract<ActiveRebalancingConfigManager>(
+      "ActiveRebalancingConfigManager",
+      activeRebalancingConfigManager_.address,
+    );
+    await makeTx(
+      activeRebalancingConfigManager,
+      "grantRole",
+      [await activeRebalancingConfigManager.ACTIVE_REBALANCING_MANAGER_ROLE(), activeRebalancingParams.committee],
+      { from: deployer },
+    );
+  }
 
   //
   // Deploy WstETH

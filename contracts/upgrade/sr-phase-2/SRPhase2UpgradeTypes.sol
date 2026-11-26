@@ -65,6 +65,11 @@ struct SRPhase2UpgradeParameters {
     uint256 maxBalanceExitRequestedPerReportInEth;
     // values of the keys the vote adds to the OracleDaemonConfig
     OracleDaemonConfigValues oracleDaemonConfigValues;
+    // the only CONFIG_MANAGER_ROLE holder the vote adds: the CMC updates the ACTIVE_REBALANCING_* keys through it
+    address activeRebalancingConfigManager;
+    address curatedModuleCommittee;
+    // bounds the manager must carry, checked before the vote
+    IActiveRebalancingConfigManager.KeyBounds activeRebalancingBounds;
 }
 
 /// @notice Encoded values of the new OracleDaemonConfig keys, one field per key.
@@ -215,6 +220,25 @@ interface IOracleDaemonConfig {
     function set(string calldata _key, bytes calldata _value) external;
 
     function get(string calldata _key) external view returns (bytes memory);
+}
+
+/// @dev Mirrors `contracts/0.8.25/ActiveRebalancingConfigManager.sol`.
+interface IActiveRebalancingConfigManager {
+    struct Bounds {
+        uint256 min;
+        uint256 max;
+    }
+
+    struct KeyBounds {
+        Bounds rateLimit;
+        Bounds operatorExcessBP;
+        Bounds moduleExcessBP;
+        Bounds gracePeriodEpochs;
+    }
+
+    function ORACLE_DAEMON_CONFIG() external view returns (address);
+
+    function getBounds() external view returns (KeyBounds memory);
 }
 
 /// @dev Factory changes are gated by the Easy Track admin role, which the Aragon Voting holds, not the Agent.

@@ -140,6 +140,18 @@ ACTIVE_REBALANCING_OPERATOR_EXCESS_BP = 0             # Operator-level rebalanci
 ACTIVE_REBALANCING_MODULE_EXCESS_BP = 0               # Module-level rebalancing trigger (BP) (LIP-38)
 ACTIVE_REBALANCING_GRACE_PERIOD_EPOCHS = 0            # New operator grace period in epochs (LIP-38)
 
+# Holds CONFIG_MANAGER_ROLE on the OracleDaemonConfig: the manager role updates the five ACTIVE_REBALANCING_* keys
+# through it, each numeric value within the bounds below (LIP-38). Set `committee` to grant the manager role;
+# a scratch deploy has no CMC, so by default nobody holds it.
+[activeRebalancingConfigManager]
+
+# Inclusive bounds, fixed at deployment. Test values, not the release ones: LIP-38 has "TBD" for every bound.
+[activeRebalancingConfigManager.bounds]
+rateLimit = { min = 32, max = 11520 }                 # ETH per report: one iterator chunk .. the bus PWR quota
+operatorExcessBP = { min = 100, max = 5000 }          # BP
+moduleExcessBP = { min = 100, max = 5000 }            # BP
+gracePeriodEpochs = { min = 225, max = 6750 }         # epochs: 1 day .. 30 days
+
 # Node operators registry configuration
 [nodeOperatorsRegistry]
 stakingModuleName = "curated-onchain-v1" # Staking module name

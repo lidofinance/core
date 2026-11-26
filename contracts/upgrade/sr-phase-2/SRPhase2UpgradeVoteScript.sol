@@ -53,7 +53,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
     uint256 public constant DG_ITEMS_COUNT = 4;
     uint256 public constant VOTING_ITEMS_COUNT = 2;
     /// @notice Agent actions of the first Dual Governance call
-    uint256 public constant RAW_ACTIONS_COUNT = 32;
+    uint256 public constant RAW_ACTIONS_COUNT = 33;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -67,6 +67,7 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
         keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
     bytes32 internal constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+    bytes32 internal constant ACTIVE_REBALANCING_MANAGER_ROLE = keccak256("ACTIVE_REBALANCING_MANAGER_ROLE");
 
     address public immutable TEMPLATE;
     address public immutable CONFIG;
@@ -109,8 +110,6 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
                 abi.encodeCall(IEasyTrack.removeEVMScriptFactory, (config.SDVT_SUBMIT_EXIT_REQUEST_HASHES_FACTORY()))
             )
         });
-
-        // TODO add the Easy Track factory for the ACTIVE_REBALANCING_* OracleDaemonConfig keys once it exists.
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory items) {
@@ -395,11 +394,18 @@ contract SRPhase2UpgradeVoteScript is OmnibusBase {
             daemonConfig,
             abi.encodeCall(IAccessControl.revokeRole, (CONFIG_MANAGER_ROLE, AGENT))
         );
-        // For the ACTIVE_REBALANCING_* Easy Track factory.
+        // The CMC updates the ACTIVE_REBALANCING_* keys through the manager, which checks the key list and the bounds.
+        // It replaces the Easy Track factory of LIP-38, so the Easy Track EVMScriptExecutor gets no role here.
+        address rebalancingManager = config.ACTIVE_REBALANCING_CONFIG_MANAGER();
         items[i++] = _item(
-            "1.1.32. Grant CONFIG_MANAGER_ROLE on the OracleDaemonConfig to the Easy Track EVMScriptExecutor",
+            "1.1.32. Grant CONFIG_MANAGER_ROLE on the OracleDaemonConfig to the ActiveRebalancingConfigManager",
             daemonConfig,
-            abi.encodeCall(IAccessControl.grantRole, (CONFIG_MANAGER_ROLE, config.EASY_TRACK_EVM_SCRIPT_EXECUTOR()))
+            abi.encodeCall(IAccessControl.grantRole, (CONFIG_MANAGER_ROLE, rebalancingManager))
+        );
+        items[i++] = _item(
+            "1.1.33. Grant ACTIVE_REBALANCING_MANAGER_ROLE on the ActiveRebalancingConfigManager to the Curated Module Committee",
+            rebalancingManager,
+            abi.encodeCall(IAccessControl.grantRole, (ACTIVE_REBALANCING_MANAGER_ROLE, config.CURATED_MODULE_COMMITTEE()))
         );
 
         if (i != RAW_ACTIONS_COUNT) revert InvalidItemsCount(i, RAW_ACTIONS_COUNT);
