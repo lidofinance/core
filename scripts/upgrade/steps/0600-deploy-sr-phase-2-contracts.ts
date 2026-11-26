@@ -1,6 +1,8 @@
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
+  DepositSecurityModule,
+  DepositSecurityModule__factory,
   LidoLocator,
   LidoLocator__factory,
   StakingRouter__factory,
@@ -25,6 +27,7 @@ import {
   logConfirmReview,
   logScriptHeader,
   logStartReview,
+  makeTx,
   readNetworkState,
   Sk,
 } from "lib";
@@ -37,6 +40,10 @@ import { encodeFunctionCall, InitializeArgs } from "lib/contract";
  * `TriggerableWithdrawalsBus` is deployed behind a proxy. `WithdrawalVault` holds the gateway in an
  * immutable and `LidoLocator` lists it, so both get a new implementation; `StakingRouter` gets one
  * without the exit hooks, and `WithdrawalsOracle` one that publishes its reports to the bus.
+ *
+ * `DepositSecurityModule` is not upgradeable either: the new one adds optimistic top-ups. It copies the
+ * guardians and the quorum of the live DSM, takes the top-up caller from the parameters, and is handed
+ * to the Agent before the vote. On mainnet the operator sends these deployer transactions.
  *
  * @dev No `skip()`: the state entries touched here are already filled by earlier releases. The outgoing
  *      addresses are read from the live locator rather than from the state file, which this step overwrites.
@@ -60,6 +67,43 @@ export async function main() {
   const lidoAddress = await locator.lido();
   const treasuryAddress = await locator.treasury();
   const consolidationGatewayAddress = await locator.consolidationGateway();
+
+  //
+  // DepositSecurityModule with optimistic top-ups: a copy of the live DSM, owned by the Agent
+  //
+  const liveDsm = await loadContract<DepositSecurityModule>(
+    "DepositSecurityModule",
+    await locator.depositSecurityModule(),
+  );
+  // A plain copy: ethers rejects its read-only `Result` as a call argument
+  const guardians = [...(await liveDsm.getGuardians())];
+  const quorum = await liveDsm.getGuardianQuorum();
+  const { topUpDepositor } = parameters.depositSecurityModule;
+
+  const dsmConstructorArgs: ConstructorArgs<DepositSecurityModule__factory> = [
+    await liveDsm.DEPOSIT_CONTRACT(),
+    await locator.stakingRouter(),
+    parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
+    parameters.depositSecurityModule.maxOperatorsPerUnvetting,
+    topUpDepositor,
+  ];
+
+  logStartReview();
+  await logArgs("DepositSecurityModule", dsmConstructorArgs);
+  log("DepositSecurityModule guardians, copied from the live DSM:", guardians.join(", "));
+  log("DepositSecurityModule quorum, copied from the live DSM:", quorum.toString());
+  log("DepositSecurityModule owner after the setup:", agentAddress);
+  await logConfirmReview();
+
+  const dsmDeployment = await deployWithoutProxy(
+    Sk.depositSecurityModule,
+    "DepositSecurityModule",
+    deployer,
+    dsmConstructorArgs,
+  );
+  const dsm = await loadContract<DepositSecurityModule>("DepositSecurityModule", dsmDeployment.address);
+  await makeTx(dsm, "addGuardians", [guardians, quorum], { from: deployer });
+  await makeTx(dsm, "setOwner", [agentAddress], { from: deployer });
 
   //
   // TriggerableWithdrawalsGateway and TriggerableWithdrawalsBus
@@ -164,11 +208,11 @@ export async function main() {
   await deployImplementation(Sk.withdrawalsOracle, "WithdrawalsOracle", deployer, withdrawalsOracleConstructorArgs);
 
   //
-  // LidoLocator: the new gateway and the bus, no ValidatorExitDelayVerifier
+  // LidoLocator: the new DSM, gateway and bus, no ValidatorExitDelayVerifier, no TopUpGateway
   //
   const locatorConfig: LidoLocator.ConfigStruct = {
     accountingOracle: await locator.accountingOracle(),
-    depositSecurityModule: await locator.depositSecurityModule(),
+    depositSecurityModule: dsm.address,
     elRewardsVault: await locator.elRewardsVault(),
     lido: lidoAddress,
     oracleReportSanityChecker: await locator.oracleReportSanityChecker(),
@@ -190,7 +234,6 @@ export async function main() {
     vaultFactory: await locator.vaultFactory(),
     lazyOracle: await locator.lazyOracle(),
     operatorGrid: await locator.operatorGrid(),
-    topUpGateway: await locator.topUpGateway(),
   };
 
   const lidoLocatorConstructorArgs: ConstructorArgs<LidoLocator__factory> = [locatorConfig];

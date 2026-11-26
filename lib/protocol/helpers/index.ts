@@ -67,16 +67,14 @@ export type { CMv2OperatorKeys } from "./cmv2";
 export { csm0x02EnsureDepositedKeys, csm0x02EnsureValidatorsBalance, getCSM0x02Module } from "./csm0x02";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";
 export {
-  buildTopUpData,
   depositEventAmountWei,
   depositEventInterface,
-  expectedTopUpLimitWei,
-  getTopUpRoleSigner,
-  prepareTopUpWitnesses,
+  getTopUpDepositorSigner,
+  topUpEnsureBatchCap,
   topUpEnsureDepositableEther,
+  topUpEnsureDistancePassed,
   topUpEnsureModuleAllocation,
 } from "./topup";
-export type { TopUpValidatorState, TopUpWitnessBundle } from "./topup";
 export { calcNodeOperatorRewards } from "./staking-module";
 export {
   DISABLED_TRIGGERABLE_WITHDRAWALS_LIMIT,

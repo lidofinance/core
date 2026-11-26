@@ -80,7 +80,6 @@ describe("OracleReportSanityChecker", () => {
         vaultFactory: deployer.address,
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
-        topUpGateway: deployer.address,
       },
     ]);
     const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [

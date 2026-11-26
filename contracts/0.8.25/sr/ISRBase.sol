@@ -25,7 +25,6 @@ interface ISRBase {
     event StakingModuleMinDepositBlockDistanceSet(
         uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
-    event MaxTopUpPerBlockGweiSet(uint256 maxTopUpPerBlockGwei, address setBy);
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
     event StakingModulePartialWithdrawalsAllowedSet(uint256 indexed stakingModuleId, bool allowed, address setBy);
 
@@ -88,7 +87,6 @@ interface ISRBase {
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
-    error InvalidMaxTopUpPerBlockGwei();
     error LidoDepositsPaused();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();

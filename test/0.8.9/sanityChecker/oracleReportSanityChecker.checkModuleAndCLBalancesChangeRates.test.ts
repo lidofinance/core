@@ -68,7 +68,6 @@ describe("OracleReportSanityChecker: module and CL balances", () => {
         vaultFactory: deployer.address,
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
-        topUpGateway: deployer.address,
       },
     ]);
     const checker = await ethers.deployContract("OracleReportSanityChecker", [

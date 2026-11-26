@@ -68,6 +68,11 @@ const PAIRS_TO_SKIP: {
     contractFqn: "contracts/0.8.9/oracle/WithdrawalsOracle.sol:WithdrawalsOracle",
     reason: "LIP-38: frozen pre-LIP-38 verifier for the Gloas upgrade, remove together with contracts/upgrade/gloas",
   },
+  {
+    interfaceFqn: "contracts/upgrade/gloas/legacy/TopUpGateway.sol:IStakingRouter",
+    contractFqn: "contracts/0.8.25/sr/StakingRouter.sol:StakingRouter",
+    reason: "LIP-44: frozen TopUpGateway for the Gloas upgrade, remove together with contracts/upgrade/gloas",
+  },
 ];
 
 task("check-interfaces").setAction(async (_, hre) => {

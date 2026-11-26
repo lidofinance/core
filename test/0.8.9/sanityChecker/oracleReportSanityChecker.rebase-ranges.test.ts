@@ -75,7 +75,6 @@ describe("OracleReportSanityChecker: CL rebase ranges", () => {
         vaultFactory: deployer.address,
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
-        topUpGateway: deployer.address,
       },
     ]);
 

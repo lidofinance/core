@@ -6,14 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter } from "typechain-types";
 
-import {
-  certainAddress,
-  getNextBlock,
-  MAX_TOP_UP_PER_BLOCK_GWEI,
-  randomString,
-  randomWCType1,
-  WithdrawalCredentialsType,
-} from "lib";
+import { certainAddress, getNextBlock, randomString, randomWCType1, WithdrawalCredentialsType } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 
@@ -31,7 +24,6 @@ describe("StakingRouter.sol:module-management", () => {
 
   const withdrawalCredentials = randomWCType1();
   const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
-  const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   beforeEach(async () => {
@@ -39,14 +31,13 @@ describe("StakingRouter.sol:module-management", () => {
 
     locator = await deployLidoLocator({
       lido,
-      topUpGateway,
       depositSecurityModule,
     });
 
     ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
     // initialize staking router
-    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
+    await stakingRouter.initialize(admin, withdrawalCredentials);
 
     // grant roles
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);

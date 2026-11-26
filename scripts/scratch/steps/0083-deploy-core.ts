@@ -5,12 +5,10 @@ import {
   ConsolidationGateway,
   ConsolidationMigrator,
   StakingRouter,
-  TopUpGateway,
   TriggerableWithdrawalsBus,
   TriggerableWithdrawalsGateway,
 } from "typechain-types";
 
-import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib";
 import { encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
@@ -167,7 +165,6 @@ export async function main() {
 
   const stakingRouterParams = state[Sk.stakingRouter].deployParameters;
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
-  const maxTopUpPerBlockGwei = stakingRouterParams.maxTopUpPerBlockGwei || MAX_TOP_UP_PER_BLOCK_GWEI;
 
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
@@ -186,7 +183,6 @@ export async function main() {
     await encodeFunctionCall<InitializeArgs<StakingRouter>>("StakingRouter", "initialize", [
       admin,
       withdrawalCredentials,
-      maxTopUpPerBlockGwei,
     ]),
   );
 
@@ -202,6 +198,8 @@ export async function main() {
         stakingRouter_.address,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,
         depositSecurityModuleParams.maxOperatorsPerUnvetting,
+        // Devnet activation sets the top-up depositor, as it sets the guardians
+        ethers.ZeroAddress,
       ])
     ).address;
   } else {
@@ -209,38 +207,6 @@ export async function main() {
       `NB: skipping deployment of DepositSecurityModule - using the predefined address ${depositSecurityModuleAddress} instead`,
     );
   }
-
-  //
-  // Deploy TopUpGateway behind OssifiableProxy (before StakingRouter initialization)
-  //
-
-  const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
-
-  const topUpGateway_ = await deployBehindOssifiableProxy(
-    Sk.topUpGateway,
-    "TopUpGateway",
-    proxyContractsOwner,
-    deployer,
-    [
-      locator.address,
-      topUpGatewayParams.gloasSlot,
-      chainSpec.slotsPerEpoch,
-      chainSpec.secondsPerSlot,
-      chainSpec.genesisTime,
-    ],
-    null, // implementation
-    true, // withStateFile
-    undefined, // factoryOptions
-    await encodeFunctionCall<InitializeArgs<TopUpGateway>>("TopUpGateway", "initialize", [
-      admin,
-      topUpGatewayParams.maxValidatorsPerTopUp,
-      topUpGatewayParams.minBlockDistance,
-      topUpGatewayParams.maxRootAge,
-      topUpGatewayParams.targetBalanceGwei,
-      topUpGatewayParams.minTopUpGwei,
-    ]),
-  );
-  await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
 
   //
   // Deploy Accounting

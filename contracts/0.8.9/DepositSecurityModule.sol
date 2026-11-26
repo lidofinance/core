@@ -22,11 +22,22 @@ interface IStakingRouter {
         bytes calldata _vettedSigningKeysCounts
     ) external;
     function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function topUp(
+        uint256 _stakingModuleId,
+        uint256[] calldata _keyIndices,
+        uint256[] calldata _operatorIds,
+        uint256[] calldata _topUpLimits
+    ) external;
 }
 
 /**
  * @title DepositSecurityModule
  * @dev The contract represents a security module for handling deposits.
+ *
+ * Seed deposits need a quorum of guardian signatures. Top-ups of keys that already
+ * received a seed deposit need no signatures: only the top-up depositor can send them,
+ * and the staking module checks the keys. Both kinds share one pause and one
+ * minimum deposit distance.
  */
 contract DepositSecurityModule {
     struct GuardianSignature {
@@ -43,6 +54,7 @@ contract DepositSecurityModule {
     event DepositsPaused(address indexed guardian);
     event DepositsUnpaused();
     event LastDepositBlockChanged(uint256 newValue);
+    event TopUpDepositorChanged(address newValue);
 
     error ZeroAddress(string field);
     error DuplicateAddress(address addr);
@@ -62,9 +74,10 @@ contract DepositSecurityModule {
     error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
     error ZeroParameter(string parameter);
+    error NotATopUpDepositor(address caller);
 
     /// @notice Represents the code version to help distinguish contract interfaces.
-    uint256 public constant VERSION = 5;
+    uint256 public constant VERSION = 6;
 
     /// @dev Byte length of one packed node operator id (uint64) in `nodeOperatorIds`.
     ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
@@ -98,9 +111,12 @@ contract DepositSecurityModule {
     address[] internal guardians;
     mapping(address => uint256) internal guardianIndicesOneBased; // 1-based
 
+    address internal topUpDepositor;
+
     /**
      * @notice Initializes the contract with the given parameters.
-     * @dev Reverts if any of the addresses is zero.
+     * @dev Reverts if the deposit contract or the staking router address is zero.
+     * A zero top-up depositor blocks top-ups until the owner sets one.
      *
      * Sets the last deposit block to the current block number.
      */
@@ -108,7 +124,8 @@ contract DepositSecurityModule {
         address _depositContract,
         address _stakingRouter,
         uint256 _pauseIntentValidityPeriodBlocks,
-        uint256 _maxOperatorsPerUnvetting
+        uint256 _maxOperatorsPerUnvetting,
+        address _topUpDepositor
     ) {
         if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
         if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
@@ -147,6 +164,7 @@ contract DepositSecurityModule {
         _setLastDepositBlock(block.number);
         _setPauseIntentValidityPeriodBlocks(_pauseIntentValidityPeriodBlocks);
         _setMaxOperatorsPerUnvetting(_maxOperatorsPerUnvetting);
+        _setTopUpDepositor(_topUpDepositor);
     }
 
     /**
@@ -354,6 +372,30 @@ contract DepositSecurityModule {
     }
 
     /**
+     * @notice Returns the address allowed to call `topUpBufferedEther`.
+     * @return topUpDepositor The top-up depositor address, or zero if it is not set.
+     */
+    function getTopUpDepositor() external view returns (address) {
+        return topUpDepositor;
+    }
+
+    /**
+     * @notice Sets the address allowed to call `topUpBufferedEther`.
+     * @param newValue The new top-up depositor address.
+     * @dev Only callable by the owner.
+     * Reverts if the address is zero.
+     */
+    function setTopUpDepositor(address newValue) external onlyOwner {
+        if (newValue == address(0)) revert ZeroAddress("_newTopUpDepositor");
+        _setTopUpDepositor(newValue);
+    }
+
+    function _setTopUpDepositor(address newValue) internal {
+        topUpDepositor = newValue;
+        emit TopUpDepositorChanged(newValue);
+    }
+
+    /**
      * @notice Pauses deposits if both conditions are satisfied.
      * @param blockNumber The block number at which the pause intent was created.
      * @param sig The signature of the guardian.
@@ -416,14 +458,14 @@ contract DepositSecurityModule {
      * @notice Returns whether the deposit distance is greater than the minimum required.
      * @param stakingModuleId The ID of the staking module.
      * @return isMinDepositDistancePassed Whether the deposit distance is greater than the minimum required.
-     * @dev Checks the distance for the last deposit to any staking module.
+     * @dev Checks the distance for the last deposit or top-up to any staking module.
      */
     function isMinDepositDistancePassed(uint256 stakingModuleId) external view returns (bool) {
         return _isMinDepositDistancePassed(stakingModuleId);
     }
 
     function _isMinDepositDistancePassed(uint256 stakingModuleId) internal view returns (bool) {
-        /// @dev The distance is reset when a deposit is made to any module. This prevents a front-run attack
+        /// @dev The distance is reset when a deposit or a top-up is made to any module. This prevents a front-run attack
         /// by colluding guardians on several modules at once, providing the necessary window for an honest
         /// guardian to react and pause deposits to all modules.
         uint256 lastDepositToModuleBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
@@ -483,6 +525,37 @@ contract DepositSecurityModule {
 
         // Call StakingRouter instead of Lido - SR will pull ETH from Lido
         STAKING_ROUTER.deposit(stakingModuleId, "");
+
+        _setLastDepositBlock(block.number);
+    }
+
+    /**
+     * @notice Calls STAKING_ROUTER.topUp with the given keys and limits.
+     * @param stakingModuleId The ID of the staking module.
+     * @param keyIndices The indices of the keys in the staking module.
+     * @param operatorIds The node operator IDs of the keys.
+     * @param topUpLimits The maximum amount in wei to top up per key.
+     * @dev Reverts if any of the following is true:
+     *   - the caller is not the top-up depositor;
+     *   - deposits are paused;
+     *   - min deposit distance is not passed.
+     *
+     * No guardian signatures are checked. The caller names a key by its node operator and index, and the
+     * staking module returns its public key. A top-up goes only to keys that already received a seed
+     * deposit through this contract: the staking module rejects unused keys and caps the amount per key.
+     * The min deposit distance after the seed deposit gives the guardians time to pause on a front-run.
+     */
+    function topUpBufferedEther(
+        uint256 stakingModuleId,
+        uint256[] calldata keyIndices,
+        uint256[] calldata operatorIds,
+        uint256[] calldata topUpLimits
+    ) external {
+        if (msg.sender != topUpDepositor) revert NotATopUpDepositor(msg.sender);
+        if (isDepositsPaused) revert DepositsArePaused();
+        if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
+
+        STAKING_ROUTER.topUp(stakingModuleId, keyIndices, operatorIds, topUpLimits);
 
         _setLastDepositBlock(block.number);
     }

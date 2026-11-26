@@ -24,7 +24,6 @@ import {
   OracleReportSanityChecker,
   PredepositGuarantee,
   StakingRouter,
-  TopUpGateway,
   TriggerableWithdrawalsBus,
   TriggerableWithdrawalsGateway,
   UpgradeableBeacon,
@@ -63,7 +62,6 @@ export type ProtocolNetworkItems = {
   consolidationGateway: string;
   consolidationBus: string;
   consolidationMigrator: string;
-  topUpGateway: string;
   withdrawalQueue: string;
   withdrawalVault: string;
   oracleDaemonConfig: string;
@@ -113,7 +111,6 @@ export interface ContractTypes {
   ConsolidationGateway: ConsolidationGateway;
   ConsolidationBus: ConsolidationBus;
   ConsolidationMigrator: ConsolidationMigrator;
-  TopUpGateway: TopUpGateway;
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
@@ -151,7 +148,6 @@ export type CoreContracts = {
   consolidationGateway: LoadedContract<ConsolidationGateway>;
   consolidationBus: LoadedContract<ConsolidationBus>;
   consolidationMigrator: LoadedContract<ConsolidationMigrator>;
-  topUpGateway: LoadedContract<TopUpGateway>;
 };
 
 export type AragonContracts = {

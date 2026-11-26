@@ -38,7 +38,6 @@ export async function main() {
     vaultFactory: getAddress(Sk.stakingVaultFactory, state),
     lazyOracle: getAddress(Sk.lazyOracle, state),
     operatorGrid: getAddress(Sk.operatorGrid, state),
-    topUpGateway: getAddress(Sk.topUpGateway, state),
   };
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locatorAddress, proxyContractsOwner, [locatorConfig]);
 }

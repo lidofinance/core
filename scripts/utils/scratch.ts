@@ -138,9 +138,6 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     operatorGrid: {
       deployParameters: params.operatorGrid,
     },
-    [Sk.topUpGateway]: {
-      deployParameters: params.topUpGateway,
-    },
     [Sk.stakingRouter]: {
       deployParameters: params.stakingRouter,
     },

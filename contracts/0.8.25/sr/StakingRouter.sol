@@ -104,14 +104,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice Initializes the contract.
     /// @param _admin Lido DAO Aragon agent contract address.
     /// @param _withdrawalCredentials credentials to withdraw ETH on Consensus Layer side.
-    /// @param _maxTopUpPerBlockGwei  Initial value for the global per-block top-up cap (in Gwei).
     /// @dev Proxy initialization method.
-    function initialize(address _admin, bytes32 _withdrawalCredentials, uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
+    function initialize(address _admin, bytes32 _withdrawalCredentials) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddress();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setWithdrawalCredentials(_withdrawalCredentials);
-        _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
     }
 
     /// @dev Prohibit direct transfer to contract.
@@ -611,33 +609,32 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @param _keyIndices List of keys' indices
     /// @param _operatorIds List of operator indices
-    /// @param _pubkeys List of validator public keys to top up
-    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key based on CL data and TopUpGateway logic
+    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key, set by the top-up depositor
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        bytes[] calldata _pubkeys,
         uint256[] calldata _topUpLimits
     ) external {
-        _checkAppAuth(_getTopUpGateway());
-        _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimits, _pubkeys);
+        _checkAppAuth(_getDepositSecurityModule());
+        _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimits);
 
-        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
+        (ModuleState storage state, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
         if (stateConfig.status != StakingModuleStatus.Active) revert StakingModuleNotActive();
 
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
-        uint256 maxTopUpPerBlockWei = uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei;
+        // The ETH limit of a seed deposit call to this module
+        uint256 maxTopUpWei = state.deposits.maxDepositsPerBlock * MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
         uint256 depositableEther = LIDO.getDepositableEther();
 
         // Get allocation based on target share
-        uint256 smDepositableEthAmount = Math.min(_getModuleDepositAllocation(_stakingModuleId, depositableEther, true), maxTopUpPerBlockWei);
+        uint256 smDepositableEthAmount = Math.min(_getModuleDepositAllocation(_stakingModuleId, depositableEther, true), maxTopUpWei);
 
         // Call allocateDeposits on the staking module to determine for what amount deposit each key
-        // The module verifies keys belong to it and reverts if invalid.
+        // The module returns the public keys from its storage and reverts for a key it has not deposited.
         // Even if smDepositableEthAmount is 0, we still call the module
         // to allow CSM queue cursor advancement.
         uint256 smDepositableEthAmountRounded = smDepositableEthAmount - (smDepositableEthAmount % 1 gwei);
@@ -651,8 +648,16 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             revert LidoDepositsPaused();
         }
 
-        uint256[] memory allocations = IStakingModuleV2(stateConfig.moduleAddress)
-            .allocateDeposits(smDepositableEthAmountRounded, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
+        // The DepositSecurityModule reads the module last deposit block for the min deposit distance
+        SRLib._updateModuleLastDepositState(_stakingModuleId);
+
+        (bytes[] memory pubkeys, uint256[] memory allocations) = IStakingModuleV2(stateConfig.moduleAddress)
+            .allocateDeposits(smDepositableEthAmountRounded, _keyIndices, _operatorIds, _topUpLimits);
+
+        // One public key and one allocation per requested key, in the request order.
+        if (pubkeys.length != _keyIndices.length || allocations.length != _keyIndices.length) {
+            revert ArraysLengthMismatch();
+        }
 
         // Calculate total amount from allocations returned by module (in wei)
         uint256 amount;
@@ -684,7 +689,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
 
             // Make beacon chain top-up deposits
-            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, _pubkeys, allocations);
+            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, pubkeys, allocations);
 
             uint256 etherBalanceAfterDeposits = address(this).balance;
 
@@ -698,8 +703,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     function _validateTopUpInputs(
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        uint256[] calldata _topUpLimits,
-        bytes[] calldata _pubkeys
+        uint256[] calldata _topUpLimits
     ) internal pure {
         uint256 n = _keyIndices.length;
 
@@ -707,14 +711,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             revert EmptyKeysList();
         }
 
-        if (_operatorIds.length != n || _topUpLimits.length != n || _pubkeys.length != n) {
+        if (_operatorIds.length != n || _topUpLimits.length != n) {
             revert ArraysLengthMismatch();
-        }
-
-        for (uint256 i; i < n; ++i) {
-            if (_pubkeys[i].length != PUBKEY_LENGTH) {
-                revert WrongPubkeyLength();
-            }
         }
     }
 
@@ -950,26 +948,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         return SRStorage.getRouterState().withdrawalCredentials;
     }
 
-    /// @notice Set per-block top up limit for top-ups (in Gwei).
-    /// @param _newValue top-up limit value in Gwei (must be > 0 and fit into uint64).
-    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
-    function setMaxTopUpPerBlockGwei(uint256 _newValue) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        _setMaxTopUpPerBlockGwei(_newValue);
-    }
-
-    function _setMaxTopUpPerBlockGwei(uint256 _newValue) internal {
-        if (_newValue == 0 || _newValue > type(uint64).max) {
-            revert InvalidMaxTopUpPerBlockGwei();
-        }
-        SRStorage.getRouterState().maxTopUpPerBlockGwei = uint64(_newValue);
-        emit MaxTopUpPerBlockGweiSet(_newValue, _msgSender());
-    }
-
-    /// @notice Returns the top up limit for top-ups (in Gwei).
-    function getMaxTopUpPerBlockGwei() external view returns (uint64) {
-        return SRStorage.getRouterState().maxTopUpPerBlockGwei;
-    }
-
     function _setWithdrawalCredentials(bytes32 wc) internal {
         SRUtils._requireNotZero(WithdrawalCredentials.getAddr(wc));
         SRUtils._requireWCTypeValid(WithdrawalCredentials.getType(wc));
@@ -1101,10 +1079,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             summary.totalDepositedValidators,
             summary.depositableValidatorsCount
         ) = _stakingModule.getNodeOperatorSummary(_nodeOperatorId);
-    }
-
-    function _getTopUpGateway() internal view returns (address) {
-        return LIDO_LOCATOR.topUpGateway();
     }
 
     function _getDepositSecurityModule() internal view returns (address) {

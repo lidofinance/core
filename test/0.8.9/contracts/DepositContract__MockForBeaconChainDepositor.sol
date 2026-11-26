@@ -4,7 +4,7 @@
 pragma solidity 0.8.9;
 
 contract DepositContract__MockForBeaconChainDepositor {
-    event Deposited__MockEvent();
+    event Deposited__MockEvent(bytes pubkey);
 
     function deposit(
         bytes calldata pubkey, // 48 bytes
@@ -12,6 +12,6 @@ contract DepositContract__MockForBeaconChainDepositor {
         bytes calldata signature, // 96 bytes
         bytes32 deposit_data_root
     ) external payable {
-        emit Deposited__MockEvent();
+        emit Deposited__MockEvent(pubkey);
     }
 }

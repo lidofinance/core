@@ -85,7 +85,6 @@ export async function main(): Promise<void> {
     vaultFactory: await locator.vaultFactory(),
     lazyOracle: await locator.lazyOracle(),
     operatorGrid: await locator.operatorGrid(),
-    topUpGateway: await locator.topUpGateway(),
   };
 
   const previousChecker = new ethers.Contract(
