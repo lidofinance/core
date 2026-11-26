@@ -120,6 +120,13 @@ describe("WithdrawalsOracle: pause checks", () => {
     await expect(oracle.connect(resumer).resume()).to.be.revertedWithCustomError(oracle, "PausedExpected");
   });
 
+  it("resume by a stranger when not paused → the role check comes first", async () => {
+    await expect(oracle.connect(stranger).resume()).to.be.revertedWithOZAccessControlError(
+      stranger.address,
+      await oracle.RESUME_ROLE(),
+    );
+  });
+
   it("pauseUntil blocks only until the timestamp", async () => {
     const report = await prepareReport();
     const oracleVersion = await oracle.getContractVersion();

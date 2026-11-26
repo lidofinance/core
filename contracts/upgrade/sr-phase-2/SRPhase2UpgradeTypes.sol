@@ -176,6 +176,8 @@ interface IWithdrawalsOracle {
 
     function MAX_REQUESTS_PER_REPORT() external view returns (uint256);
 
+    function LOCATOR() external view returns (address);
+
     function getContractVersion() external view returns (uint256);
 
     function getConsensusVersion() external view returns (uint256);

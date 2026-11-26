@@ -184,7 +184,7 @@ contract WithdrawalsOracle is BaseOracle, PausableUntil {
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
-    ILidoLocator internal immutable LOCATOR;
+    ILidoLocator public immutable LOCATOR;
 
     /// @notice Maximum number of records in a single report
     uint256 public immutable MAX_REQUESTS_PER_REPORT;
@@ -211,7 +211,7 @@ contract WithdrawalsOracle is BaseOracle, PausableUntil {
         uint256 lastProcessingRefSlot
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
-        _setupRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
 
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
@@ -239,7 +239,7 @@ contract WithdrawalsOracle is BaseOracle, PausableUntil {
     /// @dev Reverts with `PausedExpected()` if contract is already resumed
     /// @dev Reverts with `AccessControl:...` reason if sender has no `RESUME_ROLE`
     ///
-    function resume() external whenPaused onlyRole(RESUME_ROLE) {
+    function resume() external onlyRole(RESUME_ROLE) {
         _resume();
     }
 
@@ -328,7 +328,6 @@ contract WithdrawalsOracle is BaseOracle, PausableUntil {
     function submitReportData(ReportData calldata data, uint256 contractVersion) external whenResumed {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
-        // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
@@ -367,6 +366,7 @@ contract WithdrawalsOracle is BaseOracle, PausableUntil {
 
     /// @notice Returns the total number of withdrawal requests (full and partial) ever processed
     /// across all received reports. Before v4 it counted validator exit requests only.
+    /// @dev It counts report records, not unique validators: one validator can be requested more than once.
     ///
     function getTotalRequestsProcessed() external view returns (uint256) {
         return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();

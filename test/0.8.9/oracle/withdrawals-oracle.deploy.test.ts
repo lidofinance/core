@@ -49,6 +49,7 @@ describe("WithdrawalsOracle.sol:deploy", () => {
     context("deployment and init finishes successfully (default setup)", async () => {
       let consensus: HashConsensus__Harness;
       let oracle: WithdrawalsOracle__Harness;
+      let locatorAddr: string;
 
       before(async () => {
         const deployed = await deployWithdrawalsOracle(admin.address);
@@ -61,6 +62,7 @@ describe("WithdrawalsOracle.sol:deploy", () => {
 
         consensus = deployed.consensus;
         oracle = deployed.oracle;
+        locatorAddr = deployed.locatorAddr;
       });
 
       it("mock time-travellable setup is correct", async () => {
@@ -80,6 +82,7 @@ describe("WithdrawalsOracle.sol:deploy", () => {
         expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
         expect(await oracle.getContractVersion()).to.equal(4);
         expect(await oracle.MAX_REQUESTS_PER_REPORT()).to.equal(MAX_REQUESTS_PER_REPORT);
+        expect(await oracle.LOCATOR()).to.equal(locatorAddr);
         expect(await oracle.isPaused()).to.equal(true);
       });
 
