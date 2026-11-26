@@ -89,7 +89,8 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
             locator.consolidationGateway()
         );
 
-        // The WithdrawalsOracle candidate keeps the chain spec of the live oracle and carries the configured record cap
+        // The WithdrawalsOracle candidate keeps the chain spec of the live oracle, carries the configured record cap
+        // and reads the live locator
         IWithdrawalsOracle withdrawalsOracle = IWithdrawalsOracle(config.WITHDRAWALS_ORACLE());
         IWithdrawalsOracle candidateWithdrawalsOracle = IWithdrawalsOracle(config.NEW_WITHDRAWALS_ORACLE_IMPL());
         _assertNotYetUpgraded(
@@ -112,6 +113,7 @@ contract SRPhase2PreUpgradeChecks is SRPhase2UpgradeChecksBase {
             candidateWithdrawalsOracle.MAX_REQUESTS_PER_REPORT(),
             config.WITHDRAWALS_ORACLE_MAX_REQUESTS_PER_REPORT()
         );
+        _assertAddress("wo-candidate-locator", candidateWithdrawalsOracle.LOCATOR(), locatorAddr);
 
         // The module id allowed partial withdrawals belongs to the CMv2 ejector, consumer 3 of the config
         GatewayConsumerLimits[] memory consumers = config.getGatewayConsumers();
